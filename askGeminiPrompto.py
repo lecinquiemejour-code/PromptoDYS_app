@@ -26,6 +26,7 @@ Fonctionnalités:
 
 import eel
 import os
+import sys
 import threading
 import time
 from datetime import datetime
@@ -65,9 +66,46 @@ historique_llm = []
 logs_complets = []
 
 
+
+# Classe pour rediriger stdout vers la GUI
+# Classe pour rediriger stdout/stderr vers la GUI tout en gardant la console
+class RedirectText(object):
+    def __init__(self, text_widget_updater, is_stderr=False):
+        self.updater = text_widget_updater
+        self.is_stderr = is_stderr
+        # On garde une référence vers le VRAI stdout/stderr d'origine
+        if is_stderr:
+            self.terminal = sys.__stderr__
+        else:
+            self.terminal = sys.__stdout__
+
+    def write(self, message):
+        # Écrire dans la console réelle (si disponible)
+        if self.terminal:
+            try:
+                self.terminal.write(message)
+                self.terminal.flush()
+            except:
+                pass
+        
+        # Mettre à jour la GUI
+        try:
+            self.updater(message)
+        except:
+            pass # Éviter de planter si la GUI est fermée
+
+    def flush(self):
+        if self.terminal:
+            try:
+                self.terminal.flush()
+            except:
+                pass
+
+
 def log_message(message):
     """Log un message dans la console ET le capture pour les rapports"""
     print(message, flush=True)
+    # Les prints sont maintenant redirigés vers la GUI via stdout mais on garde l'ajout explicite aux logs complets
     # Capturer aussi dans les logs complets
     logs_complets.append(message)
 
@@ -129,6 +167,49 @@ def set_markdown(markdown_content):
     except Exception as e:
         print(f'❌ ÉCHEC: Erreur écriture: {e}')
         return False
+
+
+# --- Fonctions de tracking état éditeur (appelées par React) ---
+# Variables globales pour accès depuis les callbacks Eel
+root_global = None
+status_label_global = None
+streaming_text_global = None  # Zone de texte pour le streaming IA
+
+
+def update_streaming_text(text, clear=False):
+    """Met à jour la zone de texte du streaming IA (thread-safe)"""
+    global root_global, streaming_text_global
+    if root_global and streaming_text_global:
+        def _update():
+            streaming_text_global.configure(state="normal")
+            if clear:
+                streaming_text_global.delete("1.0", "end")
+            streaming_text_global.insert("end", text)
+            streaming_text_global.see("end")  # Auto-scroll
+            streaming_text_global.configure(state="disabled")
+        root_global.after(0, _update)
+
+
+@eel.expose
+def on_editor_open():
+    """Appelé par React quand l'éditeur est monté"""
+    global editeur_lance, root_global, status_label_global
+    editeur_lance = True
+    print("✅ Éditeur ouvert (notifié par React)")
+    # Mettre à jour la GUI si disponible
+    if root_global and status_label_global:
+        root_global.after(0, lambda: status_label_global.config(text="✅ Éditeur ouvert"))
+
+
+@eel.expose
+def on_editor_close():
+    """Appelé par React avant la fermeture de la fenêtre"""
+    global editeur_lance, root_global, status_label_global
+    editeur_lance = False
+    print("🔴 Éditeur fermé (notifié par React)")
+    # Mettre à jour la GUI si disponible
+    if root_global and status_label_global:
+        root_global.after(0, lambda: status_label_global.config(text="🔴 Éditeur fermé"))
 
 
 def preparer_contenu_rapport_complet(contenu_original, logs_etapes, streaming_gemini, contenu_traite,
@@ -450,7 +531,7 @@ def init_gemini_client():
     try:
         with open("GeminiKey.txt", "r") as f:
             api_key = f.readline().strip()
-            print (api_key)
+            log_message(f"🔑 INFO: Clé API chargée ({api_key[:10]}...)")
         return genai.Client(api_key=api_key)
     except FileNotFoundError:
         log_message("❌ ÉCHEC: Fichier GeminiKey.txt introuvable")
@@ -586,6 +667,9 @@ def traitement_gemini():
     full_answer = ""
     last_response = None
 
+    # Effacer la zone de texte avant de commencer
+    update_streaming_text("", clear=True)
+
     try:
         for chunk in client.models.generate_content_stream(
                 model="gemini-2.5-flash",
@@ -604,10 +688,11 @@ def traitement_gemini():
                     continue
                 if part.thought:
                     thinking_text = f"💭 {part.text}"
-                    print(thinking_text, flush=True)
+                    log_message(thinking_text)
                     streaming_gemini_complet += thinking_text + "\n"
                 else:
-                    print(part.text, end="", flush=True)
+                    # Pour le streaming de la réponse, on affiche directement
+                    log_message(part.text)
                     full_answer += part.text
                     streaming_gemini_complet += part.text
 
@@ -709,9 +794,9 @@ def lire_contenu():
 def ecrire_contenu():
     """Interface console pour écrire du contenu"""
     log_message("\n✏️ ÉTAPE: ÉCRITURE dans l'éditeur...")
-    print("💡 Tapez votre contenu Markdown (lignes multiples autorisées)")
-    print("💡 Tapez 'EOF' sur une ligne vide pour terminer")
-    print("-" * 50)
+    log_message("💡 Tapez votre contenu Markdown (lignes multiples autorisées)")
+    log_message("💡 Tapez 'EOF' sur une ligne vide pour terminer")
+    log_message("-" * 50)
 
     lignes = []
     while True:
@@ -743,23 +828,23 @@ def ecrire_contenu():
 def menu_console():
     """Menu console qui s'exécute en parallèle (OBSOLÈTE - remplacé par GUI)"""
     # Attendre que l'éditeur soit prêt
-    print("⏳ Attente que l'éditeur soit prêt...")
+    log_message("⏳ Attente que l'éditeur soit prêt...")
     time.sleep(5)
 
-    print("\n" + "=" * 50)
-    print("🎮 ÉDITEUR MARKDOWN + IA GEMINI")
-    print("💾 Sauvegarde automatique: PDF uniquement (CAPTURE COMPLÈTE)")
-    print("🔧 PDF généré avec reportlab + TOUS LES LOGS")
-    print("=" * 50)
+    log_message("\n" + "=" * 50)
+    log_message("🎮 ÉDITEUR MARKDOWN + IA GEMINI")
+    log_message("💾 Sauvegarde automatique: PDF uniquement (CAPTURE COMPLÈTE)")
+    log_message("🔧 PDF généré avec reportlab + TOUS LES LOGS")
+    log_message("=" * 50)
 
     while True:
         try:
-            print(f"\n📋 Options:")
-            print(f"  1 - Lire le contenu de l'éditeur")
-            print(f"  2 - Écrire dans l'éditeur")
-            print(f"  3 - 🤖 Traitement de la note par l'IA de PromptoDYS")
-            print(f"  0 - Quitter")
-            print("-" * 30)
+            log_message(f"\n📋 Options:")
+            log_message(f"  1 - Lire le contenu de l'éditeur")
+            log_message(f"  2 - Écrire dans l'éditeur")
+            log_message(f"  3 - 🤖 Traitement de la note par l'IA de PromptoDYS")
+            log_message(f"  0 - Quitter")
+            log_message("-" * 30)
 
             choix = input("🎯 Votre choix (1/2/3/0): ").strip()
 
@@ -773,17 +858,17 @@ def menu_console():
                 traitement_gemini()
 
             elif choix == "0":
-                print("\n👋 Fermeture...")
+                log_message("\n👋 Fermeture...")
                 os._exit(0)  # Forcer la fermeture complète
 
             else:
-                print("❌ Choix invalide. Utilisez 1, 2, 3 ou 0")
+                log_message("❌ Choix invalide. Utilisez 1, 2, 3 ou 0")
 
         except KeyboardInterrupt:
-            print("\n\n👋 Au revoir !")
+            log_message("\n\n👋 Au revoir !")
             os._exit(0)
         except Exception as e:
-            print(f"❌ Erreur: {e}")
+            log_message(f"❌ Erreur: {e}")
 
 
 # --- GUI Tkinter avec thème Sun Valley ---
@@ -797,8 +882,8 @@ def gui_control_panel():
     GUI de contrôle avec Tkinter + sv_ttk (thème Windows 11)
     Panneau compact avec 3 boutons principaux
     """
-    global editeur_lance, web_folder_global
-    print("🖥️ Démarrage du panneau de contrôle GUI...")
+    global editeur_lance, web_folder_global, root_global, status_label_global
+    log_message("🖥️ Démarrage du panneau de contrôle GUI...")
     
     # --- Fonctions des boutons ---
     def btn_ouvrir_editeur():
@@ -806,11 +891,11 @@ def gui_control_panel():
         global editeur_lance
         
         if editeur_lance:
-            print("📝 L'éditeur est déjà ouvert")
+            log_message("📝 L'éditeur est déjà ouvert")
             status_label.config(text="✅ L'éditeur est déjà ouvert")
             return
         
-        print("📝 Action: Lancement de l'éditeur...")
+        log_message("📝 Action: Lancement de l'éditeur...")
         status_label.config(text="⏳ Ouverture de l'éditeur...")
         root.update()
         
@@ -835,12 +920,12 @@ def gui_control_panel():
                           ],
                           block=True)
             except Exception as e:
-                print(f"❌ Erreur lancement éditeur: {e}")
+                log_message(f"❌ Erreur lancement éditeur: {e}")
                 # Fallback
                 try:
                     eel.start('index.html', mode='chrome-app', size=(1200, 800), port=8080, block=True)
                 except Exception as e2:
-                    print(f"❌ Erreur fallback: {e2}")
+                    log_message(f"❌ Erreur fallback: {e2}")
                     root.after(0, lambda: status_label.config(text=f"❌ Erreur: {str(e)[:20]}"))
                     editeur_lance = False
                     return
@@ -862,11 +947,11 @@ def gui_control_panel():
         
         # Vérifier si l'éditeur est ouvert
         if not editeur_lance:
-            print("⚠️ L'éditeur n'est pas ouvert !")
+            log_message("⚠️ L'éditeur n'est pas ouvert !")
             status_label.config(text="⚠️ Ouvrez l'éditeur d'abord !")
             return
         
-        print("🤖 Action: Lancement du traitement IA...")
+        log_message("🤖 Action: Lancement du traitement IA...")
         status_label.config(text="⏳ Traitement IA en cours...")
         root.update()  # Rafraîchir l'interface
         
@@ -884,7 +969,7 @@ def gui_control_panel():
     
     def btn_ouvrir_rapports():
         """Ouvre le dossier des rapports PDF dans l'explorateur Windows"""
-        print("📂 Action: Ouverture du dossier reports...")
+        log_message("📂 Action: Ouverture du dossier reports...")
         reports_path = os.path.abspath("reports")
         
         # Créer le dossier s'il n'existe pas
@@ -896,16 +981,17 @@ def gui_control_panel():
             status_label.config(text=f"📂 Dossier reports ouvert")
         except Exception as e:
             status_label.config(text=f"❌ Erreur ouverture: {str(e)[:20]}")
-            print(f"❌ Erreur ouverture dossier: {e}")
+            log_message(f"❌ Erreur ouverture dossier: {e}")
     
     def btn_quitter():
         """Ferme l'application complète"""
-        print("👋 Fermeture de l'application...")
+        log_message("👋 Fermeture de l'application...")
         root.destroy()
         os._exit(0)  # Fermer aussi Eel
     
     # --- Création de la fenêtre principale ---
     root = tk.Tk()
+    root_global = root  # Référence globale pour les callbacks Eel
     root.title("PromptoDYS - Panneau de Contrôle")
     root.geometry("860x880")  # Taille optimale
     root.resizable(True, True)  # Fenêtre redimensionnable
@@ -916,38 +1002,38 @@ def gui_control_panel():
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "prompto.png")
         icon_image = tk.PhotoImage(file=icon_path)
         root.iconphoto(True, icon_image)
-        print(f"✅ Icône chargée: {icon_path}")
+        log_message(f"✅ Icône chargée: {icon_path}")
     except Exception as e:
-        print(f"⚠️ Icône non chargée: {e}")
+        log_message(f"⚠️ Icône non chargée: {e}")
     
     # Appliquer le thème Sun Valley (mode clair)
     sv_ttk.set_theme("light")  # Thème clair Windows 11
     
     # --- Frame principal avec padding ---
-    main_frame = ttk.Frame(root, padding=40)
+    main_frame = ttk.Frame(root, padding=20)  # Réduit de 40 à 20
     main_frame.pack(fill="both", expand=True)
     
     # --- Titre avec logo ---
     title_frame = ttk.Frame(main_frame)
-    title_frame.pack(pady=(0, 10))
+    title_frame.pack(pady=(0, 5))  # Réduit de 10 à 5
     
     # Charger le logo prompto pour le titre (redimensionné)
     try:
         logo_path = os.path.join(os.path.dirname(__file__), "assets", "prompto.png")
         logo_image_title = tk.PhotoImage(file=logo_path)
         # Redimensionner le logo (subsample = diviser par n)
-        logo_image_title = logo_image_title.subsample(4, 4)  # Réduire à 25%
+        logo_image_title = logo_image_title.subsample(5, 5)  # Réduit encore plus (de 4 à 5)
         logo_label = ttk.Label(title_frame, image=logo_image_title)
         logo_label.image = logo_image_title  # Garder une référence
         logo_label.pack(side="left", padx=(0, 15))
-        print("✅ Logo titre chargé")
+        log_message("✅ Logo titre chargé")
     except Exception as e:
-        print(f"⚠️ Logo titre non chargé: {e}")
+        log_message(f"⚠️ Logo titre non chargé: {e}")
     
     title_label = ttk.Label(
         title_frame, 
         text="PromptoDYS", 
-        font=("Segoe UI", 32, "bold")
+        font=("Segoe UI", 24, "bold")  # Réduit de 32 à 24
     )
     title_label.pack(side="left")
     
@@ -969,39 +1055,81 @@ def gui_control_panel():
         width=40,
         style="Big.TButton"
     )
-    btn1.pack(pady=10, ipady=10)
+    btn1.pack(pady=5, ipady=5)  # Réduit de 10 à 5
     
     # Bouton 2: Traitement IA
     btn2 = ttk.Button(
         main_frame,
-        text="🤖 Traitement par l'IA",
+        text="🤖 Traiter la prise de note",
         command=btn_traitement_ia,
         width=40,
         style="Big.TButton"
     )
-    btn2.pack(pady=10, ipady=10)
+    btn2.pack(pady=5, ipady=5)  # Réduit de 10 à 5
     
     # Bouton 3: Ouvrir rapports PDF
     btn3 = ttk.Button(
         main_frame,
-        text="📂 Ouvrir Rapports PDF",
+        text="📂 Voir les rapports PDF",
         command=btn_ouvrir_rapports,
         width=40,
         style="Big.TButton"
     )
-    btn3.pack(pady=10, ipady=10)
+    btn3.pack(pady=5, ipady=5)  # Réduit de 10 à 5
     
     # --- Séparateur ---
     separator = ttk.Separator(main_frame, orient="horizontal")
-    separator.pack(fill="x", pady=20)
+    separator.pack(fill="x", pady=10)  # Réduit de 20 à 10
     
     # --- Barre de statut ---
     status_label = ttk.Label(
         main_frame,
         text="🟢 Prêt",
-        font=("Segoe UI", 18)
+        font=("Segoe UI", 14)  # Réduit de 18 à 14
     )
-    status_label.pack(pady=10)
+    status_label.pack(pady=5)  # Réduit de 10 à 5
+    status_label_global = status_label  # Référence globale pour les callbacks Eel
+    
+    # --- Zone de texte pour le streaming IA ---
+    # Renommé pour refléter qu'il contient tous les logs
+    streaming_frame = ttk.LabelFrame(main_frame, text="📝 Console / Logs", padding=10)
+    streaming_frame.pack(fill="both", expand=False, pady=10)
+    
+    # Créer une zone de texte avec scrollbar
+    streaming_text = tk.Text(
+        streaming_frame,
+        height=4,  # Exactement 4 lignes complètes
+        width=60,
+        font=("Consolas", 10), # Police légèrement plus petite pour logs
+        wrap="word",
+        state="disabled",  # Lecture seule
+        bg="#f8f8f8",
+        fg="#333333"
+    )
+    scrollbar = ttk.Scrollbar(streaming_frame, orient="vertical", command=streaming_text.yview)
+    streaming_text.configure(yscrollcommand=scrollbar.set)
+    
+    streaming_text.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+    
+    # Référence globale pour le streaming
+    global streaming_text_global
+    streaming_text_global = streaming_text
+    
+    # --- Redirection de stdout ET stderr vers la GUI ---
+    def update_gui_logs(msg):
+        # Filtrer les messages vides
+        if msg and msg.strip():
+            update_streaming_text(msg)
+        elif msg == "\n":
+            update_streaming_text("\n")
+        
+    # Rediriger stdout (prints normaux)
+    sys.stdout = RedirectText(update_gui_logs, is_stderr=False)
+    # Rediriger stderr (erreurs, exceptions)
+    sys.stderr = RedirectText(update_gui_logs, is_stderr=True)
+    
+    print("✅ Console et Erreurs redirigées vers la GUI")
     
     # --- Bouton Quitter (plus petit, en bas) ---
     style.configure("Quit.TButton", font=("Segoe UI", 14), padding=10)
@@ -1023,28 +1151,28 @@ def main():
     """Lance l'application - GUI d'abord, éditeur via bouton"""
     global web_folder_global
     
-    print('🚀 Lancement de PromptoDYS...')
-    print('💾 Sauvegarde automatique : PDF uniquement avec CAPTURE COMPLÈTE des logs')
+    log_message('🚀 Lancement de PromptoDYS...')
+    log_message('💾 Sauvegarde automatique : PDF uniquement avec CAPTURE COMPLÈTE des logs')
 
     # Trouver le dossier web
     web_folder_global = find_web_folder()
     if not web_folder_global:
-        print("💡 Placez votre build React dans le dossier 'build/'")
+        log_message("💡 Placez votre build React dans le dossier 'build/'")
         return
 
     # Créer le dossier reports
     os.makedirs("reports", exist_ok=True)
-    print('📁 Dossier "reports" créé pour les sauvegardes automatiques')
+    log_message('📁 Dossier "reports" créé pour les sauvegardes automatiques')
 
     # Initialiser Eel (préparation, mais ne lance pas encore)
     eel.init(web_folder_global)
-    print('✅ Eel initialisé, prêt à lancer l\'éditeur')
+    log_message('✅ Eel initialisé, prêt à lancer l\'éditeur')
 
     # Lancer la GUI de contrôle (BLOQUANT - boucle principale)
-    print('�️ Lancement du panneau de contrôle...')
+    log_message('🖥️ Lancement du panneau de contrôle...')
     gui_control_panel()
 
-    print("🔚 Application fermée")
+    log_message("🔚 Application fermée")
 
 
 if __name__ == '__main__':
