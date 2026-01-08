@@ -4,6 +4,8 @@
 Script Python unifié pour l'éditeur Markdown avec intégration Eel + IA Gemini
 Combinaison : Interface desktop + Assistant IA pour traitement de texte
 
+GUI de contrôle avec Tkinter + sv_ttk (thème Sun Valley Windows 11)
+
 Installation requise:
 pip install eel google-genai reportlab markdown
 Usage:
@@ -42,6 +44,12 @@ from reportlab.platypus.tableofcontents import TableOfContents
 from google import genai
 from google.genai import types
 import google.genai.errors as genai_errors
+
+# --- Imports GUI Tkinter + sv_ttk ---
+import tkinter as tk
+from tkinter import ttk
+import sv_ttk  # Thème Sun Valley (Windows 11 look)
+import subprocess  # Pour ouvrir le dossier reports
 
 try:
     from ctypes import windll
@@ -733,7 +741,7 @@ def ecrire_contenu():
 
 
 def menu_console():
-    """Menu console qui s'exécute en parallèle"""
+    """Menu console qui s'exécute en parallèle (OBSOLÈTE - remplacé par GUI)"""
     # Attendre que l'éditeur soit prêt
     print("⏳ Attente que l'éditeur soit prêt...")
     time.sleep(5)
@@ -778,14 +786,249 @@ def menu_console():
             print(f"❌ Erreur: {e}")
 
 
+# --- GUI Tkinter avec thème Sun Valley ---
+# --- Variable globale pour tracker si l'éditeur est lancé ---
+editeur_lance = False
+web_folder_global = None
+
+
+def gui_control_panel():
+    """
+    GUI de contrôle avec Tkinter + sv_ttk (thème Windows 11)
+    Panneau compact avec 3 boutons principaux
+    """
+    global editeur_lance, web_folder_global
+    print("🖥️ Démarrage du panneau de contrôle GUI...")
+    
+    # --- Fonctions des boutons ---
+    def btn_ouvrir_editeur():
+        """Lance l'éditeur Eel dans un thread séparé"""
+        global editeur_lance
+        
+        if editeur_lance:
+            print("📝 L'éditeur est déjà ouvert")
+            status_label.config(text="✅ L'éditeur est déjà ouvert")
+            return
+        
+        print("📝 Action: Lancement de l'éditeur...")
+        status_label.config(text="⏳ Ouverture de l'éditeur...")
+        root.update()
+        
+        def lancer_eel():
+            global editeur_lance
+            try:
+                editeur_lance = True
+                eel.start('index.html',
+                          mode='chrome',
+                          size=(1200, 800),
+                          port=8080,
+                          cmdline_args=[
+                              '--app=http://localhost:8080/index.html',
+                              '--disable-web-security',
+                              '--disable-features=VizDisplayCompositor',
+                              '--no-first-run',
+                              '--disable-default-apps',
+                              '--disable-extensions',
+                              '--disable-plugins',
+                              '--window-size=1200,800',
+                              '--window-position=100,100'
+                          ],
+                          block=True)
+            except Exception as e:
+                print(f"❌ Erreur lancement éditeur: {e}")
+                # Fallback
+                try:
+                    eel.start('index.html', mode='chrome-app', size=(1200, 800), port=8080, block=True)
+                except Exception as e2:
+                    print(f"❌ Erreur fallback: {e2}")
+                    root.after(0, lambda: status_label.config(text=f"❌ Erreur: {str(e)[:20]}"))
+                    editeur_lance = False
+                    return
+            
+            # Quand l'éditeur se ferme, on met à jour le statut
+            root.after(0, lambda: status_label.config(text="🔴 Éditeur fermé"))
+            editeur_lance = False
+        
+        # Lancer dans un thread pour ne pas bloquer la GUI
+        thread = threading.Thread(target=lancer_eel, daemon=True)
+        thread.start()
+        
+        # Mettre à jour le statut après un court délai
+        root.after(2000, lambda: status_label.config(text="✅ Éditeur ouvert") if editeur_lance else None)
+    
+    def btn_traitement_ia():
+        """Lance le traitement IA Gemini dans un thread séparé"""
+        global editeur_lance
+        
+        # Vérifier si l'éditeur est ouvert
+        if not editeur_lance:
+            print("⚠️ L'éditeur n'est pas ouvert !")
+            status_label.config(text="⚠️ Ouvrez l'éditeur d'abord !")
+            return
+        
+        print("🤖 Action: Lancement du traitement IA...")
+        status_label.config(text="⏳ Traitement IA en cours...")
+        root.update()  # Rafraîchir l'interface
+        
+        # Lancer le traitement dans un thread pour ne pas bloquer la GUI
+        def run_traitement():
+            try:
+                traitement_gemini()
+                # Mise à jour du statut après traitement (thread-safe)
+                root.after(0, lambda: status_label.config(text="✅ Traitement IA terminé !"))
+            except Exception as e:
+                root.after(0, lambda: status_label.config(text=f"❌ Erreur: {str(e)[:30]}"))
+        
+        thread = threading.Thread(target=run_traitement, daemon=True)
+        thread.start()
+    
+    def btn_ouvrir_rapports():
+        """Ouvre le dossier des rapports PDF dans l'explorateur Windows"""
+        print("📂 Action: Ouverture du dossier reports...")
+        reports_path = os.path.abspath("reports")
+        
+        # Créer le dossier s'il n'existe pas
+        os.makedirs(reports_path, exist_ok=True)
+        
+        # Ouvrir le dossier dans l'explorateur Windows
+        try:
+            subprocess.Popen(f'explorer "{reports_path}"')
+            status_label.config(text=f"📂 Dossier reports ouvert")
+        except Exception as e:
+            status_label.config(text=f"❌ Erreur ouverture: {str(e)[:20]}")
+            print(f"❌ Erreur ouverture dossier: {e}")
+    
+    def btn_quitter():
+        """Ferme l'application complète"""
+        print("👋 Fermeture de l'application...")
+        root.destroy()
+        os._exit(0)  # Fermer aussi Eel
+    
+    # --- Création de la fenêtre principale ---
+    root = tk.Tk()
+    root.title("PromptoDYS - Panneau de Contrôle")
+    root.geometry("860x880")  # Taille optimale
+    root.resizable(True, True)  # Fenêtre redimensionnable
+    root.minsize(700, 700)  # Taille minimale
+    
+    # --- Icône de la fenêtre ---
+    try:
+        icon_path = os.path.join(os.path.dirname(__file__), "assets", "prompto.png")
+        icon_image = tk.PhotoImage(file=icon_path)
+        root.iconphoto(True, icon_image)
+        print(f"✅ Icône chargée: {icon_path}")
+    except Exception as e:
+        print(f"⚠️ Icône non chargée: {e}")
+    
+    # Appliquer le thème Sun Valley (mode clair)
+    sv_ttk.set_theme("light")  # Thème clair Windows 11
+    
+    # --- Frame principal avec padding ---
+    main_frame = ttk.Frame(root, padding=40)
+    main_frame.pack(fill="both", expand=True)
+    
+    # --- Titre avec logo ---
+    title_frame = ttk.Frame(main_frame)
+    title_frame.pack(pady=(0, 10))
+    
+    # Charger le logo prompto pour le titre (redimensionné)
+    try:
+        logo_path = os.path.join(os.path.dirname(__file__), "assets", "prompto.png")
+        logo_image_title = tk.PhotoImage(file=logo_path)
+        # Redimensionner le logo (subsample = diviser par n)
+        logo_image_title = logo_image_title.subsample(4, 4)  # Réduire à 25%
+        logo_label = ttk.Label(title_frame, image=logo_image_title)
+        logo_label.image = logo_image_title  # Garder une référence
+        logo_label.pack(side="left", padx=(0, 15))
+        print("✅ Logo titre chargé")
+    except Exception as e:
+        print(f"⚠️ Logo titre non chargé: {e}")
+    
+    title_label = ttk.Label(
+        title_frame, 
+        text="PromptoDYS", 
+        font=("Segoe UI", 32, "bold")
+    )
+    title_label.pack(side="left")
+    
+    
+    
+    # --- Style personnalisé pour les boutons avec bordures saillantes ---
+    style = ttk.Style()
+    style.configure("Big.TButton", font=("Segoe UI", 16), padding=15, relief="raised", borderwidth=3)
+    style.map("Big.TButton",
+              relief=[("pressed", "sunken"), ("!pressed", "raised")],
+              bordercolor=[("focus", "#0078D4"), ("!focus", "#666666")])
+    
+    # --- Boutons ---
+    # Bouton 1: Ouvrir l'éditeur
+    btn1 = ttk.Button(
+        main_frame,
+        text="📝 Ouvrir l'Éditeur",
+        command=btn_ouvrir_editeur,
+        width=40,
+        style="Big.TButton"
+    )
+    btn1.pack(pady=10, ipady=10)
+    
+    # Bouton 2: Traitement IA
+    btn2 = ttk.Button(
+        main_frame,
+        text="🤖 Traitement par l'IA",
+        command=btn_traitement_ia,
+        width=40,
+        style="Big.TButton"
+    )
+    btn2.pack(pady=10, ipady=10)
+    
+    # Bouton 3: Ouvrir rapports PDF
+    btn3 = ttk.Button(
+        main_frame,
+        text="📂 Ouvrir Rapports PDF",
+        command=btn_ouvrir_rapports,
+        width=40,
+        style="Big.TButton"
+    )
+    btn3.pack(pady=10, ipady=10)
+    
+    # --- Séparateur ---
+    separator = ttk.Separator(main_frame, orient="horizontal")
+    separator.pack(fill="x", pady=20)
+    
+    # --- Barre de statut ---
+    status_label = ttk.Label(
+        main_frame,
+        text="🟢 Prêt",
+        font=("Segoe UI", 18)
+    )
+    status_label.pack(pady=10)
+    
+    # --- Bouton Quitter (plus petit, en bas) ---
+    style.configure("Quit.TButton", font=("Segoe UI", 14), padding=10)
+    btn_quit = ttk.Button(
+        main_frame,
+        text="❌ Quitter",
+        command=btn_quitter,
+        width=20,
+        style="Quit.TButton"
+    )
+    btn_quit.pack(pady=(10, 0))
+    
+    # --- Lancer la boucle principale ---
+    print("✅ Panneau de contrôle GUI prêt !")
+    root.mainloop()
+
+
 def main():
-    """Lance l'application avec Eel"""
-    print('🚀 Lancement de l\'\u00e9diteur Markdown + IA Gemini...')
+    """Lance l'application - GUI d'abord, éditeur via bouton"""
+    global web_folder_global
+    
+    print('🚀 Lancement de PromptoDYS...')
     print('💾 Sauvegarde automatique : PDF uniquement avec CAPTURE COMPLÈTE des logs')
 
     # Trouver le dossier web
-    web_folder = find_web_folder()
-    if not web_folder:
+    web_folder_global = find_web_folder()
+    if not web_folder_global:
         print("💡 Placez votre build React dans le dossier 'build/'")
         return
 
@@ -793,52 +1036,13 @@ def main():
     os.makedirs("reports", exist_ok=True)
     print('📁 Dossier "reports" créé pour les sauvegardes automatiques')
 
-    # Initialiser Eel
-    eel.init(web_folder)
+    # Initialiser Eel (préparation, mais ne lance pas encore)
+    eel.init(web_folder_global)
+    print('✅ Eel initialisé, prêt à lancer l\'éditeur')
 
-    print('🪟 Ouverture de la fenêtre native...')
-    print('💡 Le menu console va démarrer dans quelques secondes')
-
-    # Petite attente pour laisser le système se stabiliser
-    time.sleep(2)
-
-    # Lancer le menu console dans un thread séparé
-    console_thread = threading.Thread(target=menu_console, daemon=True)
-    console_thread.start()
-
-    try:
-        # Lancer l'éditeur Eel (mode fenêtre native sans interface navigateur)
-        eel.start('index.html',
-                  mode='chrome',
-                  size=(1200, 800),
-                  port=8080,
-                  cmdline_args=[
-                      '--app=http://localhost:8080/index.html',  # Mode application
-                      '--disable-web-security',  # Désactiver sécurité web
-                      '--disable-features=VizDisplayCompositor',  # Optimisation
-                      '--no-first-run',  # Pas de setup initial
-                      '--disable-default-apps',  # Pas d'apps par défaut
-                      '--disable-extensions',  # Pas d'extensions
-                      '--disable-plugins',  # Pas de plugins
-                      '--window-size=1200,800',  # Taille fenêtre
-                      '--window-position=100,100'  # Position fenêtre
-                  ],
-                  block=True)  # Mode bloquant pour garder l'app ouverte
-
-    except Exception as e:
-        print(f'❌ Erreur: {e}')
-        print('💡 Vérifiez que Chrome/Chromium est installé')
-        print('💡 Essai avec mode alternatif...')
-
-        # Fallback avec mode chrome-app si le mode chrome échoue
-        try:
-            eel.start('index.html',
-                      mode='chrome-app',
-                      size=(1200, 800),
-                      port=8080,
-                      block=True)
-        except Exception as e2:
-            print(f'❌ Erreur fallback: {e2}')
+    # Lancer la GUI de contrôle (BLOQUANT - boucle principale)
+    print('�️ Lancement du panneau de contrôle...')
+    gui_control_panel()
 
     print("🔚 Application fermée")
 
