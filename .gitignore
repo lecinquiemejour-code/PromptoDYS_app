@@ -1,0 +1,164 @@
+# PromptoDYS - Configuration Git Ignore
+# Créé le 08/01/2026
+
+# ============================================
+# FICHIERS SENSIBLES (SÉCURITÉ CRITIQUE)
+# ============================================
+GeminiKey.txt
+*.key
+*.pem
+*.p12
+.env
+.env.local
+
+# ============================================
+# DONNÉES UTILISATEUR ET RAPPORTS
+# ============================================
+data/
+REPORTS/
+reports/
+*.dys.bak
+*.dys.tmp
+
+# ============================================
+# PYTHON
+# ============================================
+# Environnements virtuels
+.venv/
+venv/
+ENV/
+env/
+.virtualenv/
+
+# Bytecode et cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / Packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec.bak
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ============================================
+# REACT / NODE.JS
+# ============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Build React (on peut commenter si on veut versionner le build)
+# build_web/
+
+# ============================================
+# IDEs ET ÉDITEURS
+# ============================================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# PyCharm / IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Windsurf
+.windsurf/
+
+# ============================================
+# SYSTÈME D'EXPLOITATION
+# ============================================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+*.stackdump
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+.directory
+
+# ============================================
+# FICHIERS TEMPORAIRES ET LOGS
+# ============================================
+*.log
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+logs/
+
+# ============================================
+# ARCHIVES ET BACKUPS
+# ============================================
+*.zip
+*.tar.gz
+*.rar
+*.7z
+archives/
+backups/
+"build backup 290825.zip"
+PromptoDYS_v*.zip
+
+# ============================================
+# DOCUMENTATION GÉNÉRÉE
+# ============================================
+docs/_build/
+site/
+
+# ============================================
+# FICHIERS DE TEST
+# ============================================
+test_output/
+.tox/

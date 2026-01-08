@@ -1,0 +1,5 @@
+# Configuration PromptoDYS Editor
+# Ce fichier peut être édité manuellement après le déploiement
+
+# Mode Développeur : active les logs détaillés et fonctionnalités de débogage
+developer_mode: false
