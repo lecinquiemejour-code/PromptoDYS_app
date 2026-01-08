@@ -9,7 +9,9 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
-### À venir
+### Modifié
+- Licence du projet : Passage de **MIT** à **GPL v3**.
+- Mise à jour des badges et documentation associés.
 - Tests unitaires et d'intégration
 - Support export DOCX
 - Mode offline avec cache local
