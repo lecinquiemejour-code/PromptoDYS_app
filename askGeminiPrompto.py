@@ -48,7 +48,7 @@ import google.genai.errors as genai_errors
 
 # --- Imports GUI Tkinter + sv_ttk ---
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import sv_ttk  # Thème Sun Valley (Windows 11 look)
 import subprocess  # Pour ouvrir le dossier reports
 
@@ -877,6 +877,32 @@ editeur_lance = False
 web_folder_global = None
 
 
+def on_closing():
+    """
+    Intercepte la fermeture de la fenêtre GUI
+    Bloque la fermeture si l'éditeur est encore ouvert pour éviter la perte de données
+    """
+    global editeur_lance, root_global
+    
+    if editeur_lance:
+        # Bloquer la fermeture et afficher un avertissement
+        messagebox.showwarning(
+            "PromptoDYS - Éditeur ouvert",
+            "L'éditeur est encore ouvert.\n\n"
+            "Veuillez d'abord fermer l'éditeur,\n"
+            "puis fermer cette application.",
+            icon='warning'
+        )
+        log_message("⚠️ Fermeture bloquée : l'éditeur est encore ouvert")
+        return  # Bloquer la fermeture
+    
+    # Pas d'éditeur ouvert, fermeture autorisée
+    log_message("👋 Fermeture de l'application...")
+    root_global.destroy()
+    os._exit(0)  # Force la fermeture complète
+
+
+
 def gui_control_panel():
     """
     GUI de contrôle avec Tkinter + sv_ttk (thème Windows 11)
@@ -948,7 +974,14 @@ def gui_control_panel():
         # Vérifier si l'éditeur est ouvert
         if not editeur_lance:
             log_message("⚠️ L'éditeur n'est pas ouvert !")
-            status_label.config(text="⚠️ Ouvrez l'éditeur d'abord !")
+            messagebox.showwarning(
+                "PromptoDYS - Éditeur requis",
+                "L'éditeur n'est pas ouvert.\n\n"
+                "Veuillez d'abord ouvrir l'éditeur\n"
+                "avant de lancer le traitement IA.",
+                icon='warning'
+            )
+            status_label.config(text="⚠️ Éditeur non ouvert")
             return
         
         log_message("🤖 Action: Lancement du traitement IA...")
@@ -985,9 +1018,8 @@ def gui_control_panel():
     
     def btn_quitter():
         """Ferme l'application complète"""
-        log_message("👋 Fermeture de l'application...")
-        root.destroy()
-        os._exit(0)  # Fermer aussi Eel
+        # Réutiliser la fonction on_closing pour la cohérence
+        on_closing()
     
     # --- Création de la fenêtre principale ---
     root = tk.Tk()
@@ -995,6 +1027,9 @@ def gui_control_panel():
     root.title("PromptoDYS - Panneau de Contrôle")
     root.geometry("860x880")  # Taille optimale
     root.resizable(True, True)  # Fenêtre redimensionnable
+    
+    # Intercepter la fermeture de la fenêtre (X rouge)
+    root.protocol("WM_DELETE_WINDOW", on_closing)
     root.minsize(700, 700)  # Taille minimale
     
     # --- Icône de la fenêtre ---
