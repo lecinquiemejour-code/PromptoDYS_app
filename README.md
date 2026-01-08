@@ -4,7 +4,7 @@
 
 ![Version](https://img.shields.io/badge/version-1.1-blue)
 ![Python](https://img.shields.io/badge/python-3.x-green)
-![License](https://img.shields.io/badge/license-MIT-orange)
+![License](https://img.shields.io/badge/license-GPL--3.0-orange)
 ![Status](https://img.shields.io/badge/status-stable-brightgreen)
 
 PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'intelligence artificielle Google Gemini pour corriger et améliorer automatiquement les prises de notes d'élèves souffrant de troubles DYS (Dyslexie, Dysorthographie, Dysgraphie, Dyspraxie).
@@ -210,7 +210,7 @@ Voir [CHANGELOG.md](CHANGELOG.md) pour l'historique des versions.
 
 ## 📄 License
 
-Ce projet est sous licence MIT - voir [LICENSE](LICENSE) pour plus de détails.
+Ce projet est sous licence GPL v3 - voir [LICENSE](LICENSE) pour plus de détails.
 
 ---
 
