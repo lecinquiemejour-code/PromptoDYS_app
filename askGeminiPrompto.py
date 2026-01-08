@@ -32,6 +32,7 @@ import time
 from datetime import datetime
 import markdown
 import re
+import socket  # Pour vérifier la connexion internet
 
 # --- Imports pour PDF avec reportlab (remplace weasyprint) ---
 from reportlab.lib.pagesizes import A4
@@ -59,11 +60,14 @@ except:
     pass  # Ignorer si non Windows
 
 
-# --- Historique des messages LLM ---
-historique_llm = []
-
 # --- NOUVELLE VARIABLE POUR CAPTURER TOUS LES LOGS ---
 logs_complets = []
+
+# --- VARIABLES D'ÉTAT POUR L'ABANDON IA ---
+abandon_ia = False
+traitement_en_cours = False
+btn_ia_global = None  # Référence au bouton pour changer son état
+
 
 
 
@@ -100,6 +104,25 @@ class RedirectText(object):
                 self.terminal.flush()
             except:
                 pass
+
+
+def verifier_connexion_internet():
+    """
+    Vérifie si une connexion internet est disponible
+    Teste la connectivité via DNS Google (8.8.8.8) sur le port 53
+    
+    Returns:
+        bool: True si connecté, False sinon
+    """
+    try:
+        log_message("🔍 VÉRIFICATION: Test de connexion internet...")
+        # Essayer de se connecter au DNS Google (8.8.8.8) sur le port 53 (DNS)
+        socket.create_connection(("8.8.8.8", 53), timeout=3)
+        log_message("✅ SUCCÈS: Connexion internet détectée")
+        return True
+    except OSError as e:
+        log_message(f"❌ ÉCHEC: Pas de connexion internet détectée ({e})")
+        return False
 
 
 def log_message(message):
@@ -590,12 +613,15 @@ def extraire_debrief_correction(reponse_complete):
 
 def traitement_gemini():
     """Traitement IA Gemini : lecture → prompt → stream → injection + CAPTURE COMPLÈTE"""
+    global abandon_ia, traitement_en_cours, btn_ia_global
 
-    # RÉINITIALISER LES LOGS POUR CETTE SESSION
+    # RÉINITIALISER LES LOGS ET LE FLAG D'ABANDON
     global logs_complets
     logs_complets = []
+    abandon_ia = False
+    traitement_en_cours = True
 
-    log_message("\n🤖 DÉMARRAGE: TRAITEMENT IA GEMINI AVEC CAPTURE COMPLÈTE")
+    log_message("\n🤖 DÉMARRAGE: TRAITEMENT IA GEMINI (ANNULABLE)")
     log_message("=" * 50)
 
     # VARIABLES POUR CAPTURER TOUT
@@ -671,12 +697,14 @@ def traitement_gemini():
     update_streaming_text("", clear=True)
 
     try:
+        log_message("📡 Flux IA: Démarrage de la réception des données...")
         for chunk in client.models.generate_content_stream(
                 model="gemini-2.5-flash",
                 contents=prompt_final,
                 config=config
         ):
             last_response = chunk
+            # log_message("📡 Flux IA: Chunk reçu...") # Heartbeat discret
 
             if not chunk.candidates:
                 continue
@@ -684,6 +712,11 @@ def traitement_gemini():
                 continue
 
             for part in chunk.candidates[0].content.parts:
+                # VÉRIFICATION DE L'ABANDON À CHAQUE CHUNK
+                if abandon_ia:
+                    log_message("\n🚫 ABANDON: Traitement arrêté par l'utilisateur.")
+                    break
+
                 if not part.text:
                     continue
                 if part.thought:
@@ -695,6 +728,9 @@ def traitement_gemini():
                     log_message(part.text)
                     full_answer += part.text
                     streaming_gemini_complet += part.text
+            
+            if abandon_ia:
+                break
 
     except genai_errors.ServerError as e:
         log_message(f"\n❌ ÉCHEC: Erreur serveur Gemini: {e}")
@@ -704,6 +740,23 @@ def traitement_gemini():
         return
     except Exception as e:
         log_message(f"\n❌ ÉCHEC: Erreur inattendue: {e}")
+        return
+    finally:
+        # TOUJOURS RÉINITIALISER L'ÉTAT DU BOUTON
+        traitement_en_cours = False
+        if btn_ia_global:
+            log_message("🔄 FIN: Réinitialisation du bouton de contrôle")
+            def reset_btn():
+                btn_ia_global.configure(
+                    text="🤖 Traiter la prise de note", 
+                    style="Big.TButton",
+                    state="normal"  # Rétablir l'interactivité
+                )
+            root_global.after(0, reset_btn)
+
+    # VÉRIFIER SI ON A QUITTÉ À CAUSE D'UN ABANDON
+    if abandon_ia:
+        log_message("⚠️ INFOS: Injection et sauvegarde PDF annulées.")
         return
 
     log_message("\n" + "-" * 60)
@@ -908,7 +961,7 @@ def gui_control_panel():
     GUI de contrôle avec Tkinter + sv_ttk (thème Windows 11)
     Panneau compact avec 3 boutons principaux
     """
-    global editeur_lance, web_folder_global, root_global, status_label_global
+    global editeur_lance, web_folder_global, root_global, status_label_global, btn_ia_global
     log_message("🖥️ Démarrage du panneau de contrôle GUI...")
     
     # --- Fonctions des boutons ---
@@ -968,10 +1021,43 @@ def gui_control_panel():
         root.after(2000, lambda: status_label.config(text="✅ Éditeur ouvert") if editeur_lance else None)
     
     def btn_traitement_ia():
-        """Lance le traitement IA Gemini dans un thread séparé"""
-        global editeur_lance
+        """Lance le traitement IA Gemini ou demande l'abandon"""
+        global editeur_lance, traitement_en_cours, abandon_ia, btn_ia_global
         
-        # Vérifier si l'éditeur est ouvert
+        # SI DÉJÀ EN COURS -> DEMANDER L'ABANDON
+        if traitement_en_cours:
+            log_message("🚫 Action: Demande d'abandon du traitement IA...")
+            abandon_ia = True
+            btn_ia.configure(text="⏳ Abandon en cours...", state="disabled")
+            
+            # FAILSAFE UI: Forcer le reset du bouton après 5s quoi qu'il arrive
+            def failsafe_reset():
+                global traitement_en_cours
+                if traitement_en_cours or btn_ia.cget("text") == "⏳ Abandon en cours...":
+                    log_message("⚠️ FAILSAFE: Déblocage forcé de l'interface (reset bouton)")
+                    traitement_en_cours = False
+                    btn_ia.configure(text="🤖 Traiter la prise de note", style="Big.TButton", state="normal")
+            
+            root.after(5000, failsafe_reset)
+            return
+
+        # VÉRIFICATION 1: Connexion internet
+        log_message("\n🔍 VÉRIFICATION PRÉ-TRAITEMENT IA...")
+        if not verifier_connexion_internet():
+            log_message("❌ ÉCHEC: Pas de connexion internet !")
+            messagebox.showerror(
+                "PromptoDYS - Pas de connexion internet",
+                "Aucune connexion internet détectée.\n\n"
+                "Le traitement IA nécessite une connexion\n"
+                "pour communiquer avec l'API Gemini.\n\n"
+                "Veuillez vérifier votre connexion internet\n"
+                "et réessayer.",
+                icon='error'
+            )
+            status_label.config(text="❌ Pas de connexion internet")
+            return
+        
+        # VÉRIFICATION 2: Éditeur ouvert
         if not editeur_lance:
             log_message("⚠️ L'éditeur n'est pas ouvert !")
             messagebox.showwarning(
@@ -986,15 +1072,22 @@ def gui_control_panel():
         
         log_message("🤖 Action: Lancement du traitement IA...")
         status_label.config(text="⏳ Traitement IA en cours...")
-        root.update()  # Rafraîchir l'interface
+        
+        # Mise à jour du bouton en mode "Abandon"
+        btn_ia.configure(text="⛔ Abandonner le traitement", style="Big.TButton")
+        root.update()
         
         # Lancer le traitement dans un thread pour ne pas bloquer la GUI
         def run_traitement():
             try:
                 traitement_gemini()
                 # Mise à jour du statut après traitement (thread-safe)
-                root.after(0, lambda: status_label.config(text="✅ Traitement IA terminé !"))
+                if not abandon_ia:
+                    root.after(0, lambda: status_label.config(text="✅ Traitement IA terminé !"))
+                else:
+                    root.after(0, lambda: status_label.config(text="🚫 Traitement annulé"))
             except Exception as e:
+                log_message(f"❌ Erreur critique IA: {e}")
                 root.after(0, lambda: status_label.config(text=f"❌ Erreur: {str(e)[:30]}"))
         
         thread = threading.Thread(target=run_traitement, daemon=True)
@@ -1093,14 +1186,16 @@ def gui_control_panel():
     btn1.pack(pady=5, ipady=5)  # Réduit de 10 à 5
     
     # Bouton 2: Traitement IA
-    btn2 = ttk.Button(
+    btn_ia = ttk.Button(
         main_frame,
         text="🤖 Traiter la prise de note",
         command=btn_traitement_ia,
         width=40,
         style="Big.TButton"
     )
-    btn2.pack(pady=5, ipady=5)  # Réduit de 10 à 5
+    btn_ia.pack(pady=5, ipady=5)  # Réduit de 10 à 5
+    btn_ia_global = btn_ia  # Garder la référence globale
+
     
     # Bouton 3: Ouvrir rapports PDF
     btn3 = ttk.Button(
