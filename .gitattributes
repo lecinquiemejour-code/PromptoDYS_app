@@ -1,0 +1,51 @@
+# PromptoDYS - Configuration Git Attributes
+# Normalisation des fins de ligne et détection des langages
+
+# ============================================
+# AUTO-DETECTION
+# ============================================
+* text=auto
+
+# ============================================
+# FICHIERS TEXTE (LF sur tous les OS)
+# ============================================
+*.py text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.json text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.sh text eol=lf
+
+# ============================================
+# FICHIERS WINDOWS (CRLF)
+# ============================================
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# ============================================
+# FICHIERS BINAIRES
+# ============================================
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.exe binary
+*.dll binary
+*.so binary
+*.zip binary
+*.tar.gz binary
+
+# ============================================
+# LINGUIST (GitHub language detection)
+# ============================================
+*.js linguist-detectable=true
+*.py linguist-detectable=true
+build_web/* linguist-generated=true
