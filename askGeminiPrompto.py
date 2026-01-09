@@ -32,7 +32,7 @@ import time
 from datetime import datetime
 import markdown
 import re
-import socket  # Pour vérifier la connexion internet
+# import socket # Supprimé : Vérification internet retirée
 
 # --- Imports pour PDF avec reportlab (remplace weasyprint) ---
 from reportlab.lib.pagesizes import A4
@@ -106,23 +106,7 @@ class RedirectText(object):
                 pass
 
 
-def verifier_connexion_internet():
-    """
-    Vérifie si une connexion internet est disponible
-    Teste la connectivité via DNS Google (8.8.8.8) sur le port 53
-    
-    Returns:
-        bool: True si connecté, False sinon
-    """
-    try:
-        log_message("🔍 VÉRIFICATION: Test de connexion internet...")
-        # Essayer de se connecter au DNS Google (8.8.8.8) sur le port 53 (DNS)
-        socket.create_connection(("8.8.8.8", 53), timeout=3)
-        log_message("✅ SUCCÈS: Connexion internet détectée")
-        return True
-    except OSError as e:
-        log_message(f"❌ ÉCHEC: Pas de connexion internet détectée ({e})")
-        return False
+
 
 
 def log_message(message):
@@ -1041,21 +1025,8 @@ def gui_control_panel():
             root.after(5000, failsafe_reset)
             return
 
-        # VÉRIFICATION 1: Connexion internet
+        # VÉRIFICATION 1: Connexion internet - SUPPRIMÉE
         log_message("\n🔍 VÉRIFICATION PRÉ-TRAITEMENT IA...")
-        if not verifier_connexion_internet():
-            log_message("❌ ÉCHEC: Pas de connexion internet !")
-            messagebox.showerror(
-                "PromptoDYS - Pas de connexion internet",
-                "Aucune connexion internet détectée.\n\n"
-                "Le traitement IA nécessite une connexion\n"
-                "pour communiquer avec l'API Gemini.\n\n"
-                "Veuillez vérifier votre connexion internet\n"
-                "et réessayer.",
-                icon='error'
-            )
-            status_label.config(text="❌ Pas de connexion internet")
-            return
         
         # VÉRIFICATION 2: Éditeur ouvert
         if not editeur_lance:
