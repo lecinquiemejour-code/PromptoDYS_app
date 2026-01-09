@@ -52,6 +52,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import sv_ttk  # Thème Sun Valley (Windows 11 look)
 import subprocess  # Pour ouvrir le dossier reports
+import psutil  # Pour vérifier les processus actifs (détection éditeur)
 
 try:
     from ctypes import windll
@@ -62,6 +63,7 @@ except:
 
 # --- NOUVELLE VARIABLE POUR CAPTURER TOUS LES LOGS ---
 logs_complets = []
+historique_llm = []
 
 # --- VARIABLES D'ÉTAT POUR L'ABANDON IA ---
 abandon_ia = False
@@ -921,8 +923,36 @@ def on_closing():
     """
     global editeur_lance, root_global
     
+    # VÉRIFICATION ACTIVE : Le processus Chrome de l'éditeur est-il vraiment actif ?
     if editeur_lance:
-        # Bloquer la fermeture et afficher un avertissement
+        log_message("🔍 Vérification: Recherche du processus éditeur...")
+        chrome_running = False
+        
+        try:
+            for proc in psutil.process_iter(['name', 'cmdline']):
+                try:
+                    proc_name = proc.info.get('name', '').lower()
+                    if 'chrome' in proc_name or 'msedge' in proc_name:
+                        cmdline = ' '.join(proc.info.get('cmdline', []) or [])
+                        # Vérifier si c'est notre instance Eel (port 8080 ou index.html)
+                        if '8080' in cmdline or 'index.html' in cmdline:
+                            chrome_running = True
+                            log_message(f"✅ Processus éditeur trouvé: {proc_name} (PID {proc.pid})")
+                            break
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    continue
+        except Exception as e:
+            log_message(f"⚠️ Erreur lors de la vérification des processus: {e}")
+            # En cas d'erreur, on fait confiance au flag pour éviter une fausse fermeture
+            chrome_running = True
+        
+        if not chrome_running:
+            # Éditeur fermé mais flag pas à jour -> corriger automatiquement
+            log_message("🔧 Correction: Éditeur détecté comme fermé, mise à jour du flag")
+            editeur_lance = False
+    
+    if editeur_lance:
+        # Bloquer la fermeture uniquement si l'éditeur est VRAIMENT ouvert
         messagebox.showwarning(
             "PromptoDYS - Éditeur ouvert",
             "L'éditeur est encore ouvert.\n\n"
@@ -938,6 +968,50 @@ def on_closing():
     root_global.destroy()
     os._exit(0)  # Force la fermeture complète
 
+
+
+# --- Thread de Monitoring de l'Éditeur ---
+
+def thread_monitoring_editeur():
+    """
+    Thread de surveillance qui vérifie périodiquement si l'éditeur est toujours actif.
+    Si le processus Chrome n'existe plus alors que editeur_lance=True, corrige automatiquement le flag.
+    """
+    global editeur_lance, root_global, status_label_global
+    
+    log_message("❤️‍🩹 Thread de monitoring éditeur démarré (vérification toutes les 1.5s)")
+    
+    while True:
+        time.sleep(1.5)  # Vérifier toutes les 1.5 secondes
+        
+        if editeur_lance:
+            # Vérifier si le processus Chrome/Edge de l'éditeur est toujours actif
+            chrome_running = False
+            
+            try:
+                for proc in psutil.process_iter(['name', 'cmdline']):
+                    try:
+                        proc_name = proc.info.get('name', '').lower()
+                        if 'chrome' in proc_name or 'msedge' in proc_name:
+                            cmdline = ' '.join(proc.info.get('cmdline', []) or [])
+                            # Vérifier si c'est notre instance Eel (port 8080 ou index.html)
+                            if '8080' in cmdline or 'index.html' in cmdline:
+                                chrome_running = True
+                                break
+                    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                        continue
+            except Exception as e:
+                # En cas d'erreur, on garde le flag tel quel pour éviter une fausse détection
+                continue
+            
+            if not chrome_running:
+                # Éditeur fermé mais flag pas à jour -> corriger automatiquement
+                log_message("🔧 Monitoring: Éditeur détecté fermé, correction automatique du flag")
+                editeur_lance = False
+                
+                # Mettre à jour la GUI si disponible (thread-safe)
+                if root_global and status_label_global:
+                    root_global.after(0, lambda: status_label_global.config(text="🔴 Éditeur fermé"))
 
 
 def gui_control_panel():
@@ -1268,6 +1342,11 @@ def main():
     # Initialiser Eel (préparation, mais ne lance pas encore)
     eel.init(web_folder_global)
     log_message('✅ Eel initialisé, prêt à lancer l\'éditeur')
+
+    # Lancer le thread de monitoring en arrière-plan
+    monitoring_thread = threading.Thread(target=thread_monitoring_editeur, daemon=True)
+    monitoring_thread.start()
+    log_message('✅ Thread de monitoring lancé')
 
     # Lancer la GUI de contrôle (BLOQUANT - boucle principale)
     log_message('🖥️ Lancement du panneau de contrôle...')
