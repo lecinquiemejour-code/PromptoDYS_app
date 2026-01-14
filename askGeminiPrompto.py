@@ -70,6 +70,9 @@ abandon_ia = False
 traitement_en_cours = False
 btn_ia_global = None  # Référence au bouton pour changer son état
 
+# --- VARIABLE POUR TRACKING TEMPOREL DE L'ÉDITEUR ---
+last_editor_activity = None  # Timestamp de la dernière activité éditeur détectée
+
 
 
 
@@ -202,9 +205,10 @@ def update_streaming_text(text, clear=False):
 @eel.expose
 def on_editor_open():
     """Appelé par React quand l'éditeur est monté"""
-    global editeur_lance, root_global, status_label_global
+    global editeur_lance, root_global, status_label_global, last_editor_activity
     editeur_lance = True
-    print("✅ Éditeur ouvert (notifié par React)")
+    last_editor_activity = time.time()  # Marquer l'activité
+    print(f"✅ Éditeur ouvert (notifié par React) - Timestamp: {last_editor_activity}")
     # Mettre à jour la GUI si disponible
     if root_global and status_label_global:
         root_global.after(0, lambda: status_label_global.config(text="✅ Éditeur ouvert"))
@@ -213,8 +217,9 @@ def on_editor_open():
 @eel.expose
 def on_editor_close():
     """Appelé par React avant la fermeture de la fenêtre"""
-    global editeur_lance, root_global, status_label_global
+    global editeur_lance, root_global, status_label_global, last_editor_activity
     editeur_lance = False
+    last_editor_activity = None  # Réinitialiser le timestamp
     print("🔴 Éditeur fermé (notifié par React)")
     # Mettre à jour la GUI si disponible
     if root_global and status_label_global:
@@ -920,8 +925,9 @@ def on_closing():
     """
     Intercepte la fermeture de la fenêtre GUI
     Bloque la fermeture si l'éditeur est encore ouvert pour éviter la perte de données
+    AMÉLIORÉ : Détection stricte + bouton déblocage + timeout 1 minute
     """
-    global editeur_lance, root_global
+    global editeur_lance, root_global, last_editor_activity
     
     # VÉRIFICATION ACTIVE : Le processus Chrome de l'éditeur est-il vraiment actif ?
     if editeur_lance:
@@ -934,8 +940,8 @@ def on_closing():
                     proc_name = proc.info.get('name', '').lower()
                     if 'chrome' in proc_name or 'msedge' in proc_name:
                         cmdline = ' '.join(proc.info.get('cmdline', []) or [])
-                        # Vérifier si c'est notre instance Eel (port 8080 ou index.html)
-                        if '8080' in cmdline or 'index.html' in cmdline:
+                        # DÉTECTION STRICTE : Chercher spécifiquement notre instance Eel
+                        if '--app=http://localhost:8080' in cmdline:
                             chrome_running = True
                             log_message(f"✅ Processus éditeur trouvé: {proc_name} (PID {proc.pid})")
                             break
@@ -943,8 +949,21 @@ def on_closing():
                     continue
         except Exception as e:
             log_message(f"⚠️ Erreur lors de la vérification des processus: {e}")
-            # En cas d'erreur, on fait confiance au flag pour éviter une fausse fermeture
-            chrome_running = True
+            # AMÉLIORATION : Ne plus bloquer automatiquement, proposer le choix
+            result = messagebox.askyesno(
+                "PromptoDYS - Erreur de vérification",
+                f"Impossible de vérifier l'état de l'éditeur.\n\n"
+                f"Erreur: {str(e)[:100]}\n\n"
+                f"Voulez-vous FORCER la fermeture de l'application ?",
+                icon='warning'
+            )
+            if result:  # User choisit "Oui" = forcer la fermeture
+                log_message("🔧 Déblocage forcé par l'utilisateur suite à erreur")
+                editeur_lance = False
+                chrome_running = False
+            else:  # User choisit "Non" = annuler la fermeture
+                log_message("⚠️ Fermeture annulée par l'utilisateur")
+                return  # Bloquer la fermeture
         
         if not chrome_running:
             # Éditeur fermé mais flag pas à jour -> corriger automatiquement
@@ -952,16 +971,23 @@ def on_closing():
             editeur_lance = False
     
     if editeur_lance:
-        # Bloquer la fermeture uniquement si l'éditeur est VRAIMENT ouvert
-        messagebox.showwarning(
+        # Bloquer la fermeture MAIS proposer le déblocage forcé
+        result = messagebox.askyesno(
             "PromptoDYS - Éditeur ouvert",
-            "L'éditeur est encore ouvert.\n\n"
-            "Veuillez d'abord fermer l'éditeur,\n"
-            "puis fermer cette application.",
+            "L'éditeur semble encore ouvert.\n\n"
+            "Voulez-vous FORCER la fermeture de l'application ?\n\n"
+            "⚠️ ATTENTION : Cela peut entraîner une perte de données non sauvegardées.\n\n"
+            "Oui = Forcer la fermeture\n"
+            "Non = Annuler et fermer d'abord l'éditeur",
             icon='warning'
         )
-        log_message("⚠️ Fermeture bloquée : l'éditeur est encore ouvert")
-        return  # Bloquer la fermeture
+        if result:  # User choisit "Oui" = forcer la fermeture
+            log_message("🔧 Déblocage forcé : Fermeture forcée par l'utilisateur")
+            editeur_lance = False
+            # Continuer vers la fermeture
+        else:  # User choisit "Non" = annuler
+            log_message("⚠️ Fermeture annulée : veuillez fermer l'éditeur d'abord")
+            return  # Bloquer la fermeture
     
     # Pas d'éditeur ouvert, fermeture autorisée
     log_message("👋 Fermeture de l'application...")
@@ -976,10 +1002,12 @@ def thread_monitoring_editeur():
     """
     Thread de surveillance qui vérifie périodiquement si l'éditeur est toujours actif.
     Si le processus Chrome n'existe plus alors que editeur_lance=True, corrige automatiquement le flag.
+    AMÉLIORÉ : Timeout de 60 secondes + détection stricte + tracking temporel
     """
-    global editeur_lance, root_global, status_label_global
+    global editeur_lance, root_global, status_label_global, last_editor_activity
     
     log_message("❤️‍🩹 Thread de monitoring éditeur démarré (vérification toutes les 1.5s)")
+    log_message("⏱️ Timeout de sécurité : 60 secondes sans activité = reset automatique")
     
     while True:
         time.sleep(1.5)  # Vérifier toutes les 1.5 secondes
@@ -994,24 +1022,42 @@ def thread_monitoring_editeur():
                         proc_name = proc.info.get('name', '').lower()
                         if 'chrome' in proc_name or 'msedge' in proc_name:
                             cmdline = ' '.join(proc.info.get('cmdline', []) or [])
-                            # Vérifier si c'est notre instance Eel (port 8080 ou index.html)
-                            if '8080' in cmdline or 'index.html' in cmdline:
+                            # DÉTECTION STRICTE : Chercher spécifiquement notre instance Eel
+                            if '--app=http://localhost:8080' in cmdline:
                                 chrome_running = True
+                                # Mettre à jour le timestamp d'activité
+                                last_editor_activity = time.time()
                                 break
                     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                         continue
             except Exception as e:
                 # En cas d'erreur, on garde le flag tel quel pour éviter une fausse détection
+                log_message(f"⚠️ Monitoring: Erreur lors de la vérification : {e}")
                 continue
             
             if not chrome_running:
                 # Éditeur fermé mais flag pas à jour -> corriger automatiquement
                 log_message("🔧 Monitoring: Éditeur détecté fermé, correction automatique du flag")
                 editeur_lance = False
+                last_editor_activity = None
                 
                 # Mettre à jour la GUI si disponible (thread-safe)
                 if root_global and status_label_global:
                     root_global.after(0, lambda: status_label_global.config(text="🔴 Éditeur fermé"))
+            
+            # TIMEOUT DE SÉCURITÉ : Si pas d'activité depuis 60 secondes
+            if last_editor_activity is not None:
+                temps_inactif = time.time() - last_editor_activity
+                if temps_inactif > 60:  # 60 secondes = 1 minute
+                    log_message(f"⏱️ TIMEOUT: Aucune activité éditeur depuis {int(temps_inactif)}s (> 60s)")
+                    log_message("🔧 Reset automatique du flag editeur_lance")
+                    editeur_lance = False
+                    last_editor_activity = None
+                    
+                    # Mettre à jour la GUI si disponible (thread-safe)
+                    if root_global and status_label_global:
+                        root_global.after(0, lambda: status_label_global.config(text="🔴 Éditeur fermé (timeout)"))
+
 
 
 def gui_control_panel():
@@ -1166,6 +1212,9 @@ def gui_control_panel():
     root.geometry("860x880")  # Taille optimale
     root.resizable(True, True)  # Fenêtre redimensionnable
     
+    # Configuration du fond gris Windows 11 Acrylic
+    root.configure(bg="#F3F3F3")
+    
     # Intercepter la fermeture de la fenêtre (X rouge)
     root.protocol("WM_DELETE_WINDOW", on_closing)
     root.minsize(700, 700)  # Taille minimale
@@ -1182,9 +1231,10 @@ def gui_control_panel():
     # Appliquer le thème Sun Valley (mode clair)
     sv_ttk.set_theme("light")  # Thème clair Windows 11
     
-    # --- Frame principal avec padding ---
+    # --- Frame principal avec padding et fond gris ---
     main_frame = ttk.Frame(root, padding=20)  # Réduit de 40 à 20
     main_frame.pack(fill="both", expand=True)
+    # Note: Le fond du Frame est géré par sv_ttk, le fond de root suffit
     
     # --- Titre avec logo ---
     title_frame = ttk.Frame(main_frame)
@@ -1212,12 +1262,40 @@ def gui_control_panel():
     
     
     
-    # --- Style personnalisé pour les boutons avec bordures saillantes ---
+    # --- Style personnalisé Windows 11 Acrylic : boutons saillants ---
     style = ttk.Style()
-    style.configure("Big.TButton", font=("Segoe UI", 16), padding=15, relief="raised", borderwidth=3)
-    style.map("Big.TButton",
-              relief=[("pressed", "sunken"), ("!pressed", "raised")],
-              bordercolor=[("focus", "#0078D4"), ("!focus", "#666666")])
+    
+    # Configuration du style des boutons principaux
+    style.configure(
+        "Big.TButton",
+        font=("Segoe UI", 16, "bold"),  # Police plus marquée
+        padding=20,  # Augmenté de 15 à 20 pour plus de présence
+        relief="raised",
+        borderwidth=4,  # Augmenté de 3 à 4 pour effet plus prononcé
+        background="#FFFFFF",  # Fond blanc cassé
+        foreground="#1F1F1F"  # Texte noir profond
+    )
+    
+    # Effets de survol et états interactifs (flagrants)
+    style.map(
+        "Big.TButton",
+        relief=[("pressed", "sunken"), ("!pressed", "raised")],
+        bordercolor=[
+            ("active", "#0078D4"),  # Bordure bleue accent Windows 11 au survol
+            ("pressed", "#0078D4"),  # Bordure bleue maintenue au clic
+            ("focus", "#0078D4"),
+            ("!active", "#CCCCCC")  # Bordure gris neutre par défaut
+        ],
+        background=[
+            ("active", "#F0F8FF"),  # Fond bleu très clair au survol
+            ("pressed", "#E6F2FF"),  # Fond légèrement plus foncé au clic
+            ("!active", "#FFFFFF")  # Fond blanc par défaut
+        ],
+        foreground=[
+            ("active", "#0078D4"),  # Texte bleu au survol pour renforcer l'effet
+            ("!active", "#1F1F1F")
+        ]
+    )
     
     # --- Boutons ---
     # Bouton 1: Ouvrir l'éditeur
@@ -1228,7 +1306,7 @@ def gui_control_panel():
         width=40,
         style="Big.TButton"
     )
-    btn1.pack(pady=5, ipady=5)  # Réduit de 10 à 5
+    btn1.pack(pady=8, ipady=8)  # Augmenté de 5 à 8 pour plus de respiration
     
     # Bouton 2: Traitement IA
     btn_ia = ttk.Button(
@@ -1238,7 +1316,7 @@ def gui_control_panel():
         width=40,
         style="Big.TButton"
     )
-    btn_ia.pack(pady=5, ipady=5)  # Réduit de 10 à 5
+    btn_ia.pack(pady=8, ipady=8)  # Augmenté de 5 à 8 pour plus de respiration
     btn_ia_global = btn_ia  # Garder la référence globale
 
     
@@ -1250,7 +1328,7 @@ def gui_control_panel():
         width=40,
         style="Big.TButton"
     )
-    btn3.pack(pady=5, ipady=5)  # Réduit de 10 à 5
+    btn3.pack(pady=8, ipady=8)  # Augmenté de 5 à 8 pour plus de respiration
     
     # --- Séparateur ---
     separator = ttk.Separator(main_frame, orient="horizontal")
@@ -1306,8 +1384,33 @@ def gui_control_panel():
     
     print("✅ Console et Erreurs redirigées vers la GUI")
     
-    # --- Bouton Quitter (plus petit, en bas) ---
-    style.configure("Quit.TButton", font=("Segoe UI", 14), padding=10)
+    # --- Bouton Quitter (style secondaire, discret) ---
+    style.configure(
+        "Quit.TButton",
+        font=("Segoe UI", 13),
+        padding=10,
+        relief="flat",  # Bouton plat pour le différencier
+        borderwidth=2,
+        background="#E0E0E0",  # Gris clair
+        foreground="#666666"  # Texte gris foncé
+    )
+    style.map(
+        "Quit.TButton",
+        relief=[("pressed", "sunken"), ("!pressed", "flat")],
+        background=[
+            ("active", "#FFE6E6"),  # Rouge très pâle au survol
+            ("!active", "#E0E0E0")
+        ],
+        foreground=[
+            ("active", "#D32F2F"),  # Rouge au survol (action destructive)
+            ("!active", "#666666")
+        ],
+        bordercolor=[
+            ("active", "#D32F2F"),  # Bordure rouge au survol
+            ("!active", "#CCCCCC")
+        ]
+    )
+    
     btn_quit = ttk.Button(
         main_frame,
         text="❌ Quitter",
@@ -1315,7 +1418,7 @@ def gui_control_panel():
         width=20,
         style="Quit.TButton"
     )
-    btn_quit.pack(pady=(10, 0))
+    btn_quit.pack(pady=(15, 0))  # Augmenté de 10 à 15 pour séparation visuelle
     
     # --- Lancer la boucle principale ---
     print("✅ Panneau de contrôle GUI prêt !")
