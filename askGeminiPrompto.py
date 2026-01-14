@@ -740,7 +740,6 @@ def traitement_gemini():
             def reset_btn():
                 btn_ia_global.configure(
                     text="🤖 Traiter la prise de note", 
-                    style="Big.TButton",
                     state="normal"  # Rétablir l'interactivité
                 )
             root_global.after(0, reset_btn)
@@ -1165,7 +1164,7 @@ def gui_control_panel():
         status_label.config(text="⏳ Traitement IA en cours...")
         
         # Mise à jour du bouton en mode "Abandon"
-        btn_ia.configure(text="⛔ Abandonner le traitement", style="Big.TButton")
+        btn_ia.configure(text="⛔ Abandonner le traitement")
         root.update()
         
         # Lancer le traitement dans un thread pour ne pas bloquer la GUI
@@ -1209,15 +1208,13 @@ def gui_control_panel():
     root = tk.Tk()
     root_global = root  # Référence globale pour les callbacks Eel
     root.title("PromptoDYS - Panneau de Contrôle")
-    root.geometry("860x880")  # Taille optimale
+    root.geometry("688x1100")  # Largeur 688px, hauteur 1100px
+    root.configure(bg="#F3F3F3")  # Fond gris
     root.resizable(True, True)  # Fenêtre redimensionnable
-    
-    # Configuration du fond gris Windows 11 Acrylic
-    root.configure(bg="#F3F3F3")
     
     # Intercepter la fermeture de la fenêtre (X rouge)
     root.protocol("WM_DELETE_WINDOW", on_closing)
-    root.minsize(700, 700)  # Taille minimale
+    root.minsize(550, 1000)  # Taille minimale ajustée
     
     # --- Icône de la fenêtre ---
     try:
@@ -1231,10 +1228,13 @@ def gui_control_panel():
     # Appliquer le thème Sun Valley (mode clair)
     sv_ttk.set_theme("light")  # Thème clair Windows 11
     
-    # --- Frame principal avec padding et fond gris ---
-    main_frame = ttk.Frame(root, padding=20)  # Réduit de 40 à 20
+    # --- Créer un style pour le fond gris ---
+    style = ttk.Style()
+    style.configure("Gray.TFrame", background="#F3F3F3")
+    
+    # --- Frame principal avec padding ---
+    main_frame = ttk.Frame(root, padding=(20, 20, 20, 0), style="Gray.TFrame")  # Fond gris, pas de padding en bas
     main_frame.pack(fill="both", expand=True)
-    # Note: Le fond du Frame est géré par sv_ttk, le fond de root suffit
     
     # --- Titre avec logo ---
     title_frame = ttk.Frame(main_frame)
@@ -1262,73 +1262,102 @@ def gui_control_panel():
     
     
     
-    # --- Style personnalisé Windows 11 Acrylic : boutons saillants ---
-    style = ttk.Style()
+    # --- Fonctions pour effets de survol sur boutons tk.Button ---
+    def on_button_enter(event, btn):
+        """Effet au survol : bordure bleue, fond bleu clair, texte bleu"""
+        btn.config(
+            bg="#E3F2FD",  # Fond bleu clair
+            fg="#0078D4",  # Texte bleu
+            highlightbackground="#0078D4",  # Bordure bleue
+            highlightthickness=12  # Bordure épaisse au survol
+        )
     
-    # Configuration du style des boutons principaux
-    style.configure(
-        "Big.TButton",
-        font=("Segoe UI", 16, "bold"),  # Police plus marquée
-        padding=20,  # Augmenté de 15 à 20 pour plus de présence
-        relief="raised",
-        borderwidth=4,  # Augmenté de 3 à 4 pour effet plus prononcé
-        background="#FFFFFF",  # Fond blanc cassé
-        foreground="#1F1F1F"  # Texte noir profond
-    )
+    def on_button_leave(event, btn):
+        """Retour à l'état normal"""
+        btn.config(
+            bg="#FFFFFF",  # Fond blanc
+            fg="#1F1F1F",  # Texte noir
+            highlightbackground="#333333",  # Bordure sombre
+            highlightthickness=12  # Bordure épaisse maintenue
+        )
     
-    # Effets de survol et états interactifs (flagrants)
-    style.map(
-        "Big.TButton",
-        relief=[("pressed", "sunken"), ("!pressed", "raised")],
-        bordercolor=[
-            ("active", "#0078D4"),  # Bordure bleue accent Windows 11 au survol
-            ("pressed", "#0078D4"),  # Bordure bleue maintenue au clic
-            ("focus", "#0078D4"),
-            ("!active", "#CCCCCC")  # Bordure gris neutre par défaut
-        ],
-        background=[
-            ("active", "#F0F8FF"),  # Fond bleu très clair au survol
-            ("pressed", "#E6F2FF"),  # Fond légèrement plus foncé au clic
-            ("!active", "#FFFFFF")  # Fond blanc par défaut
-        ],
-        foreground=[
-            ("active", "#0078D4"),  # Texte bleu au survol pour renforcer l'effet
-            ("!active", "#1F1F1F")
-        ]
-    )
+    def on_button_press(event, btn):
+        """Effet au clic : enfoncement visuel"""
+        btn.config(relief="sunken")
     
-    # --- Boutons ---
+    def on_button_release(event, btn):
+        """Retour au relief normal après clic"""
+        btn.config(relief="raised")
+    
+    # --- Boutons (tk.Button classiques pour bordures épaisses) ---
     # Bouton 1: Ouvrir l'éditeur
-    btn1 = ttk.Button(
+    btn1 = tk.Button(
         main_frame,
         text="📝 Ouvrir l'Éditeur",
         command=btn_ouvrir_editeur,
-        width=40,
-        style="Big.TButton"
+        font=("Segoe UI", 16, "bold"),
+        bg="#FFFFFF",  # Fond blanc
+        fg="#1F1F1F",  # Texte noir
+        relief="raised",
+        bd=12,  # Bordure très épaisse
+        highlightbackground="#333333",  # Bordure sombre
+        highlightthickness=12,  # Épaisseur bordure highlight
+        padx=20,
+        pady=15,
+        cursor="hand2"
     )
-    btn1.pack(pady=8, ipady=8)  # Augmenté de 5 à 8 pour plus de respiration
+    btn1.pack(pady=8, fill="x", padx=20)
+    # Lier les événements de survol
+    btn1.bind("<Enter>", lambda e: on_button_enter(e, btn1))
+    btn1.bind("<Leave>", lambda e: on_button_leave(e, btn1))
+    btn1.bind("<ButtonPress-1>", lambda e: on_button_press(e, btn1))
+    btn1.bind("<ButtonRelease-1>", lambda e: on_button_release(e, btn1))
     
     # Bouton 2: Traitement IA
-    btn_ia = ttk.Button(
+    btn_ia = tk.Button(
         main_frame,
         text="🤖 Traiter la prise de note",
         command=btn_traitement_ia,
-        width=40,
-        style="Big.TButton"
+        font=("Segoe UI", 16, "bold"),
+        bg="#FFFFFF",
+        fg="#1F1F1F",
+        relief="raised",
+        bd=12,
+        highlightbackground="#333333",
+        highlightthickness=12,
+        padx=20,
+        pady=15,
+        cursor="hand2"
     )
-    btn_ia.pack(pady=8, ipady=8)  # Augmenté de 5 à 8 pour plus de respiration
+    btn_ia.pack(pady=8, fill="x", padx=20)
+    btn_ia.bind("<Enter>", lambda e: on_button_enter(e, btn_ia))
+    btn_ia.bind("<Leave>", lambda e: on_button_leave(e, btn_ia))
+    btn_ia.bind("<ButtonPress-1>", lambda e: on_button_press(e, btn_ia))
+    btn_ia.bind("<ButtonRelease-1>", lambda e: on_button_release(e, btn_ia))
     btn_ia_global = btn_ia  # Garder la référence globale
 
     
     # Bouton 3: Ouvrir rapports PDF
-    btn3 = ttk.Button(
+    btn3 = tk.Button(
         main_frame,
         text="📂 Voir les rapports PDF",
         command=btn_ouvrir_rapports,
-        width=40,
-        style="Big.TButton"
+        font=("Segoe UI", 16, "bold"),
+        bg="#FFFFFF",
+        fg="#1F1F1F",
+        relief="raised",
+        bd=12,
+        highlightbackground="#333333",
+        highlightthickness=12,
+        padx=20,
+        pady=15,
+        cursor="hand2"
     )
-    btn3.pack(pady=8, ipady=8)  # Augmenté de 5 à 8 pour plus de respiration
+    btn3.pack(pady=8, fill="x", padx=20)
+    btn3.bind("<Enter>", lambda e: on_button_enter(e, btn3))
+    btn3.bind("<Leave>", lambda e: on_button_leave(e, btn3))
+    btn3.bind("<ButtonPress-1>", lambda e: on_button_press(e, btn3))
+    btn3.bind("<ButtonRelease-1>", lambda e: on_button_release(e, btn3))
     
     # --- Séparateur ---
     separator = ttk.Separator(main_frame, orient="horizontal")
@@ -1384,41 +1413,26 @@ def gui_control_panel():
     
     print("✅ Console et Erreurs redirigées vers la GUI")
     
-    # --- Bouton Quitter (style secondaire, discret) ---
-    style.configure(
-        "Quit.TButton",
-        font=("Segoe UI", 13),
-        padding=10,
-        relief="flat",  # Bouton plat pour le différencier
-        borderwidth=2,
-        background="#E0E0E0",  # Gris clair
-        foreground="#666666"  # Texte gris foncé
-    )
-    style.map(
-        "Quit.TButton",
-        relief=[("pressed", "sunken"), ("!pressed", "flat")],
-        background=[
-            ("active", "#FFE6E6"),  # Rouge très pâle au survol
-            ("!active", "#E0E0E0")
-        ],
-        foreground=[
-            ("active", "#D32F2F"),  # Rouge au survol (action destructive)
-            ("!active", "#666666")
-        ],
-        bordercolor=[
-            ("active", "#D32F2F"),  # Bordure rouge au survol
-            ("!active", "#CCCCCC")
-        ]
-    )
-    
-    btn_quit = ttk.Button(
+    # --- Bouton Quitter (plus petit, en bas) ---
+    btn_quit = tk.Button(
         main_frame,
         text="❌ Quitter",
         command=btn_quitter,
-        width=20,
-        style="Quit.TButton"
+        font=("Segoe UI", 14),
+        bg="#F5F5F5",
+        fg="#666666",
+        relief="raised",
+        bd=8,
+        highlightbackground="#999999",
+        highlightthickness=8,
+        padx=15,
+        pady=10,
+        cursor="hand2"
     )
-    btn_quit.pack(pady=(15, 0))  # Augmenté de 10 à 15 pour séparation visuelle
+    btn_quit.pack(pady=0)  # Aucune marge
+    # Effets de survol spécifiques pour le bouton Quitter
+    btn_quit.bind("<Enter>", lambda e: btn_quit.config(bg="#FFE6E6", fg="#CC0000", highlightbackground="#CC0000"))
+    btn_quit.bind("<Leave>", lambda e: btn_quit.config(bg="#F5F5F5", fg="#666666", highlightbackground="#999999"))
     
     # --- Lancer la boucle principale ---
     print("✅ Panneau de contrôle GUI prêt !")
