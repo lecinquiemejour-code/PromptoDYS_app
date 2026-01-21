@@ -54,6 +54,9 @@ import sv_ttk  # Thème Sun Valley (Windows 11 look)
 import subprocess  # Pour ouvrir le dossier reports
 import psutil  # Pour vérifier les processus actifs (détection éditeur)
 
+# --- VERSION ---
+__version__ = "1.2.0"
+
 try:
     from ctypes import windll
     windll.shcore.SetProcessDpiAwareness(1)  # DPI per monitor
