@@ -2,7 +2,7 @@
 
 > **Assistant IA dédié à l'aide scolaire pour élèves avec troubles DYS**
 
-![Version](https://img.shields.io/badge/version-1.1-blue)
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
 ![Python](https://img.shields.io/badge/python-3.x-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-orange)
 ![Status](https://img.shields.io/badge/status-stable-brightgreen)

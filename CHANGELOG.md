@@ -9,14 +9,32 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
-### Modifié
-- Licence du projet : Passage de **MIT** à **GPL v3**.
-- Mise à jour des badges et documentation associés.
+### Prévu
 - Tests unitaires et d'intégration
 - Support export DOCX
 - Mode offline avec cache local
 - Tableau de bord statistiques élèves
 - Interface professeurs
+
+---
+
+## [1.2.0] - 2026-01-21
+
+### Ajouté
+- Métadonnées Windows complètes pour l'exécutable (version_info)
+- Documentation anti-antivirus (`README_ANTIVIRUS.md`)
+- Hash SHA256 pour vérification d'intégrité
+- Constante `__version__` dans le code Python
+
+### Modifié
+- Configuration PyInstaller : UPX désactivé pour réduire les faux positifs antivirus
+- Procédure de build mise à jour avec étapes anti-détection
+- Optimisations de compilation pour meilleure compatibilité antivirus
+
+### Amélioré
+- Fiabilité de la détection de l'état de l'éditeur
+- Système de logging avec capture complète
+- Gestion des processus et tracking temporel
 
 ---
 

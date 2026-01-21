@@ -11,6 +11,7 @@ a = Analysis(
         ('build_web/favicon.png', 'build_web'),
         ('prompto.dys', '.'),
         ('GeminiKey.txt', '.'),
+        ('assets/prompto.png', 'assets'),  # Icône et logo de l'application
     ],
     hiddenimports=[
         'eel',
@@ -39,10 +40,11 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,  # ⚠️ UPX désactivé pour réduire faux positifs antivirus
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,  # True pour tests, False pour version finale
+    console=False,  # Mode fenêtré pour version finale (pas de console)
+    # version='version_info.txt',  # Métadonnées Windows pour authentification (temporairement désactivé)
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
