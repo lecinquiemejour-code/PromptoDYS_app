@@ -153,15 +153,17 @@ git checkout -b fix/correction-bug-xyz
 
 ```bash
 # Installer l'environnement de dev
-python -m venv .venv
-source .venv/bin/activate  # ou .venv\Scripts\activate sur Windows
-pip install -r requirements.txt
+uv sync   # crée .venv à partir de uv.lock
 
 # Développer votre feature
 # ... modifier les fichiers ...
 
 # Tester vos changements
-python askGeminiPrompto.py
+uv run python askGeminiPrompto.py
+
+# Si vous modifiez les dépendances : 
+uv add <paquet>
+# puis committez pyproject.toml ET uv.lock
 ```
 
 ### 4. Commiter

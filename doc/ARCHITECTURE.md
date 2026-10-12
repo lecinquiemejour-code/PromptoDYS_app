@@ -290,8 +290,8 @@ flowchart LR
 ### Procédure pour produire l'exécutable
 
 ```powershell
-.venv\Scripts\activate
-pyinstaller --clean PromptoDYS.spec
+uv sync
+uv run pyinstaller --clean PromptoDYS.spec
 ```
 
 Le résultat est `dist/PromptoDYS.exe`. Voir aussi [BUILD_STATUS.md](../BUILD_STATUS.md) et [README_ANTIVIRUS.md](../README_ANTIVIRUS.md).

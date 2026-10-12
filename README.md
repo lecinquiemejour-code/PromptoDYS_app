@@ -43,7 +43,9 @@ PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'i
 
 ### Prérequis
 
-- **Python 3.x** (3.8 ou supérieur recommandé)
+- **Python 3.14** (version figée dans `.python-version`, installée automatiquement par uv si absente)
+- **[uv](https://docs.astral.sh/uv/)** (gestion des dépendances et de l'environnement virtuel)
+- **Tkinter** (inclus avec Python sur Windows ; sous macOS : `brew install python-tk@3.14`)
 - **Chrome/Chromium** (pour l'interface Eel)
 - **Clé API Google Gemini** ([Obtenir une clé](https://ai.google.dev/))
 
@@ -54,24 +56,21 @@ PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'i
 git clone https://github.com/lecinquiemejour-code/PromptoDYS_app.git
 cd PromptoDYS_app
 
-# 2. Créer un environnement virtuel
-python -m venv .venv
-
-# 3. Activer l'environnement virtuel
-# Windows:
-.venv\Scripts\activate
-# Linux/macOS:
-source .venv/bin/activate
-
-# 4. Installer les dépendances
-pip install eel google-genai reportlab markdown sv_ttk
+# 2. Créer l'environnement virtuel (.venv) et installer les dépendances
+uv sync
 ```
+Les dépendances directes sont déclarées dans `pyproject.toml`. Le fichier `uv.lock` fige toutes les versions (transitives incluses) avec leurs hashes.
+Pour mettre à jour une dépendance : `uv lock --upgrade-package <paquet>` puis `uv sync`, et committer `uv.lock`.
+Pour ajouter une dépendance : `uv add <paquet>` puis committez `pyproject.toml` ET `uv.lock`.
 
 ### Configuration
 
 ```bash
 # 1. Copier le template de configuration
+# Windows
 copy .env.template GeminiKey.txt
+# MacOS / Linux
+cp .env.template GeminiKey.txt   
 
 # 2. Éditer GeminiKey.txt et remplacer par votre vraie clé API
 # IMPORTANT: Ne commitez JAMAIS ce fichier !
@@ -84,7 +83,7 @@ copy .env.template GeminiKey.txt
 ### Lancement de l'application
 
 ```bash
-python askGeminiPrompto.py
+uv run python askGeminiPrompto.py
 ```
 
 L'application ouvre deux interfaces :
@@ -147,11 +146,8 @@ PromptoDYS/
 ## 📦 Build (Exécutable Windows)
 
 ```bash
-# Installer PyInstaller
-pip install pyinstaller
-
-# Compiler l'exécutable
-pyinstaller PromptoDYS.spec
+# PyInstaller est dans le groupe "dev" (installé par défaut avec uv sync)
+uv run pyinstaller --clean PromptoDYS.spec
 
 # L'exécutable sera dans dist/PromptoDYS.exe
 ```
