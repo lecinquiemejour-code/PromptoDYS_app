@@ -32,6 +32,8 @@ import time
 from datetime import datetime
 import markdown
 import re
+import base64
+import mimetypes
 # import socket # Supprimé : Vérification internet retirée
 
 # --- Imports pour PDF avec reportlab (remplace weasyprint) ---
@@ -49,10 +51,9 @@ import google.genai.errors as genai_errors
 
 # --- Imports GUI Tkinter + sv_ttk ---
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 import sv_ttk  # Thème Sun Valley (Windows 11 look)
 import subprocess  # Pour ouvrir le dossier reports
-import psutil  # Pour vérifier les processus actifs (détection éditeur)
 
 # --- VERSION ---
 __version__ = "1.2.0"
@@ -75,6 +76,9 @@ btn_ia_global = None  # Référence au bouton pour changer son état
 
 # --- VARIABLE POUR TRACKING TEMPOREL DE L'ÉDITEUR ---
 last_editor_activity = None  # Timestamp de la dernière activité éditeur détectée
+
+# --- CHEMIN DU DOCUMENT COURANT (style Arduino : mémorise le dernier save/open) ---
+current_document_path = None  # Ex: "C:/.../PromptoDYS/MonDoc" → sauvegarde directe au prochain Ctrl+S
 
 
 
@@ -181,6 +185,228 @@ def set_markdown(markdown_content):
         return True
     except Exception as e:
         print(f'❌ ÉCHEC: Erreur écriture: {e}')
+        return False
+
+
+# --- Répertoire par défaut des projets PromptoDYS ---
+def _get_documents_folder():
+    """Récupère le vrai dossier Documents Windows (compatible OneDrive)"""
+    try:
+        import ctypes
+        import ctypes.wintypes
+        CSIDL_PERSONAL = 5  # "Mes documents" dans l'API Shell Windows
+        buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+        ctypes.windll.shell32.SHGetFolderPathW(None, CSIDL_PERSONAL, None, 0, buf)
+        if buf.value:
+            return buf.value
+    except Exception:
+        pass
+    # Fallback si non-Windows ou erreur
+    return os.path.expanduser("~/Documents")
+
+PROMPTO_DOCS_DIR = os.path.join(_get_documents_folder(), "PromptoDYS")
+os.makedirs(PROMPTO_DOCS_DIR, exist_ok=True)
+print(f"📁 Dossier projets PromptoDYS: {PROMPTO_DOCS_DIR}")
+
+# --- Fonctions de sauvegarde/ouverture de documents complets (texte + images) ---
+# Principe "Arduino" : le dossier porte le même nom que le fichier .md principal
+
+def save_document(document_name, save_directory):
+    """
+    💾 SAUVEGARDE COMPLÈTE: Récupère le document (texte + images) depuis l'éditeur
+    et l'écrit sur le disque dans un dossier autonome.
+    
+    Structure créée :
+        save_directory/document_name/
+        ├── document_name.md
+        └── images/
+            ├── photo_xxx.png
+            └── schema_xxx.jpg
+    
+    Args:
+        document_name: Nom du document (ex: "MonDocument")
+        save_directory: Chemin du dossier parent (ex: "C:/Users/Jean/Documents")
+    
+    Returns:
+        str|False: Chemin du dossier créé si succès, False sinon
+    """
+    print(f"💾 SAUVEGARDE: Début pour '{document_name}' dans '{save_directory}'")
+    
+    # 1. Récupérer les données depuis l'éditeur JS (texte + images base64)
+    print(f"🔍 DEBUG: editeur_lance={editeur_lance}, last_editor_activity={last_editor_activity}")
+    print(f"🔍 DEBUG: Appel eel.readDocumentData()()...")
+    try:
+        data = eel.readDocumentData()()
+        print(f"🔍 DEBUG readDocumentData retour → type={type(data).__name__}")
+        if data is None:
+            print(f"🔍 DEBUG readDocumentData → None (la fonction JS retourne undefined ou null)")
+        elif isinstance(data, dict):
+            print(f"🔍 DEBUG readDocumentData → dict avec clés: {list(data.keys())}")
+            if 'markdown' in data:
+                print(f"🔍 DEBUG   markdown: {len(data['markdown'])} caractères")
+            if 'images' in data:
+                print(f"🔍 DEBUG   images: {len(data['images'])} image(s)")
+        elif isinstance(data, str):
+            print(f"🔍 DEBUG readDocumentData → string ({len(data)} car.): {repr(data)[:200]}")
+        elif isinstance(data, bool):
+            print(f"🔍 DEBUG readDocumentData → bool: {data}")
+        else:
+            print(f"🔍 DEBUG readDocumentData → {type(data).__name__}: {repr(data)[:500]}")
+    except Exception as e:
+        print(f"❌ SAUVEGARDE: Erreur appel readDocumentData: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    
+    if not data:
+        print(f"❌ SAUVEGARDE: Aucune donnée reçue de l'éditeur (data est falsy: {repr(data)})")
+        return False
+    
+    print(f"📄 SAUVEGARDE: Markdown reçu ({len(data.get('markdown', ''))} caractères)")
+    print(f"🖼️ SAUVEGARDE: {len(data.get('images', []))} image(s) reçue(s)")
+    
+    # 2. Créer la structure de dossiers
+    doc_dir = os.path.join(save_directory, document_name)
+    images_dir = os.path.join(doc_dir, "images")
+    
+    # Gestion des conflits de noms (style Arduino : on écrase le contenu existant)
+    os.makedirs(images_dir, exist_ok=True)
+    print(f"📁 SAUVEGARDE: Dossier créé/existant: {doc_dir}")
+    
+    # 3. Écrire le fichier Markdown
+    md_path = os.path.join(doc_dir, f"{document_name}.md")
+    try:
+        with open(md_path, "w", encoding="utf-8") as f:
+            f.write(data["markdown"])
+        print(f"✅ SAUVEGARDE: Fichier MD écrit: {md_path}")
+    except Exception as e:
+        print(f"❌ SAUVEGARDE: Erreur écriture MD: {e}")
+        return False
+    
+    # 4. Écrire chaque image (décodage base64 → binaire)
+    images_saved = 0
+    for image in data.get("images", []):
+        image_path = os.path.join(images_dir, image["filename"])
+        try:
+            image_bytes = base64.b64decode(image["data"])
+            with open(image_path, "wb") as f:
+                f.write(image_bytes)
+            images_saved += 1
+            print(f"  🖼️ Image sauvée: {image['filename']} ({len(image_bytes)} octets)")
+        except Exception as e:
+            print(f"  ❌ Erreur image '{image['filename']}': {e}")
+    
+    print(f"✅ SAUVEGARDE TERMINÉE: {md_path} + {images_saved} image(s)")
+    return doc_dir
+
+
+def load_document(path):
+    """
+    📂 OUVERTURE COMPLÈTE: Lit un document depuis le disque et l'injecte dans l'éditeur.
+    
+    Accepte un chemin vers le dossier OU vers le fichier .md (principe Arduino :
+    que l'utilisateur sélectionne le .md ou le dossier, ça fonctionne pareil).
+    
+    Args:
+        path: Chemin vers le dossier du document OU vers le fichier .md
+    
+    Returns:
+        bool: True si succès, False sinon
+    """
+    print(f"📂 OUVERTURE: Chemin reçu: '{path}'")
+    
+    # Détection intelligente : fichier .md ou dossier ?
+    if path.endswith(".md") and os.path.isfile(path):
+        # L'utilisateur a sélectionné le fichier .md directement
+        doc_dir = os.path.dirname(path)
+        print(f"📂 OUVERTURE: Fichier .md détecté → dossier déduit: {doc_dir}")
+    elif os.path.isdir(path):
+        # L'utilisateur a sélectionné le dossier
+        doc_dir = path
+        print(f"📂 OUVERTURE: Dossier sélectionné directement")
+    else:
+        print(f"❌ OUVERTURE: Chemin invalide (ni dossier, ni fichier .md): {path}")
+        return False
+    
+    # Déduire les chemins (convention : nom du dossier = nom du fichier .md)
+    document_name = os.path.basename(doc_dir)
+    md_path = os.path.join(doc_dir, f"{document_name}.md")
+    images_dir = os.path.join(doc_dir, "images")
+    
+    # 1. Lire le fichier Markdown
+    if not os.path.exists(md_path):
+        print(f"❌ OUVERTURE: Fichier non trouvé: {md_path}")
+        return False
+    
+    try:
+        with open(md_path, "r", encoding="utf-8") as f:
+            markdown_content = f.read()
+        print(f"📄 OUVERTURE: Markdown lu ({len(markdown_content)} caractères)")
+    except Exception as e:
+        print(f"❌ OUVERTURE: Erreur lecture MD: {e}")
+        return False
+    
+    # 2. Lire et encoder les images en base64
+    images = []
+    if os.path.exists(images_dir):
+        for filename in os.listdir(images_dir):
+            image_path = os.path.join(images_dir, filename)
+            if not os.path.isfile(image_path):
+                continue
+            
+            mime_type, _ = mimetypes.guess_type(image_path)
+            if not mime_type or not mime_type.startswith("image/"):
+                print(f"  ⚠️ Fichier ignoré (pas une image): {filename}")
+                continue
+            
+            try:
+                with open(image_path, "rb") as f:
+                    image_data = base64.b64encode(f.read()).decode("utf-8")
+                
+                images.append({
+                    "filename": filename,
+                    "data": image_data,
+                    "mimeType": mime_type
+                })
+                print(f"  🖼️ Image chargée: {filename} ({mime_type})")
+            except Exception as e:
+                print(f"  ❌ Erreur lecture image '{filename}': {e}")
+    else:
+        print(f"📁 OUVERTURE: Pas de dossier images/ (document texte seul)")
+    
+    print(f"📤 OUVERTURE: Envoi à l'éditeur ({len(markdown_content)} car. + {len(images)} image(s))...")
+    
+    # 3. Envoyer à l'éditeur JS via le pont Eel
+    print(f"🔍 DEBUG: editeur_lance={editeur_lance}, last_editor_activity={last_editor_activity}")
+    print(f"🔍 DEBUG: Appel eel.writeDocumentData() avec {len(markdown_content)} car. + {len(images)} image(s)...")
+    
+    # Détail des données envoyées
+    data_to_send = {
+        "markdown": markdown_content,
+        "images": images
+    }
+    print(f"🔍 DEBUG: data_to_send → clés={list(data_to_send.keys())}")
+    print(f"🔍 DEBUG:   markdown: {len(data_to_send['markdown'])} car., début: {repr(data_to_send['markdown'][:100])}")
+    print(f"🔍 DEBUG:   images: {len(data_to_send['images'])} élément(s)")
+    for i, img in enumerate(data_to_send['images']):
+        print(f"🔍 DEBUG:   image[{i}]: filename={img['filename']}, mimeType={img['mimeType']}, data={len(img['data'])} car. base64")
+    
+    try:
+        result = eel.writeDocumentData(data_to_send)()
+        
+        print(f"🔍 DEBUG writeDocumentData retour → type={type(result).__name__}, valeur={repr(result)}")
+        
+        if result is None:
+            print(f"✅ OUVERTURE TERMINÉE: '{document_name}' chargé (retour: None/undefined — normal si JS ne retourne rien)")
+        elif result:
+            print(f"✅ OUVERTURE TERMINÉE: '{document_name}' chargé dans l'éditeur")
+        else:
+            print(f"⚠️ OUVERTURE: writeDocumentData a retourné {repr(result)} (le document peut quand même être chargé)")
+        return True
+    except Exception as e:
+        print(f"❌ OUVERTURE: Erreur appel writeDocumentData: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -925,53 +1151,13 @@ web_folder_global = None
 
 def on_closing():
     """
-    Intercepte la fermeture de la fenêtre GUI
-    Bloque la fermeture si l'éditeur est encore ouvert pour éviter la perte de données
-    AMÉLIORÉ : Détection stricte + bouton déblocage + timeout 1 minute
+    Intercepte la fermeture de la fenêtre GUI.
+    Bloque la fermeture si l'éditeur est encore ouvert pour éviter la perte de données.
+    L'état de l'éditeur est géré exclusivement par les callbacks React (on_editor_open/on_editor_close)
+    et par le retour de eel.start() — plus fiable que la détection psutil.
     """
-    global editeur_lance, root_global, last_editor_activity
-    
-    # VÉRIFICATION ACTIVE : Le processus Chrome de l'éditeur est-il vraiment actif ?
-    if editeur_lance:
-        log_message("🔍 Vérification: Recherche du processus éditeur...")
-        chrome_running = False
-        
-        try:
-            for proc in psutil.process_iter(['name', 'cmdline']):
-                try:
-                    proc_name = proc.info.get('name', '').lower()
-                    if 'chrome' in proc_name or 'msedge' in proc_name:
-                        cmdline = ' '.join(proc.info.get('cmdline', []) or [])
-                        # DÉTECTION STRICTE : Chercher spécifiquement notre instance Eel
-                        if '--app=http://localhost:8080' in cmdline:
-                            chrome_running = True
-                            log_message(f"✅ Processus éditeur trouvé: {proc_name} (PID {proc.pid})")
-                            break
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    continue
-        except Exception as e:
-            log_message(f"⚠️ Erreur lors de la vérification des processus: {e}")
-            # AMÉLIORATION : Ne plus bloquer automatiquement, proposer le choix
-            result = messagebox.askyesno(
-                "PromptoDYS - Erreur de vérification",
-                f"Impossible de vérifier l'état de l'éditeur.\n\n"
-                f"Erreur: {str(e)[:100]}\n\n"
-                f"Voulez-vous FORCER la fermeture de l'application ?",
-                icon='warning'
-            )
-            if result:  # User choisit "Oui" = forcer la fermeture
-                log_message("🔧 Déblocage forcé par l'utilisateur suite à erreur")
-                editeur_lance = False
-                chrome_running = False
-            else:  # User choisit "Non" = annuler la fermeture
-                log_message("⚠️ Fermeture annulée par l'utilisateur")
-                return  # Bloquer la fermeture
-        
-        if not chrome_running:
-            # Éditeur fermé mais flag pas à jour -> corriger automatiquement
-            log_message("🔧 Correction: Éditeur détecté comme fermé, mise à jour du flag")
-            editeur_lance = False
-    
+    global editeur_lance, root_global
+
     if editeur_lance:
         # Bloquer la fermeture MAIS proposer le déblocage forcé
         result = messagebox.askyesno(
@@ -998,67 +1184,10 @@ def on_closing():
 
 
 
-# --- Thread de Monitoring de l'Éditeur ---
-
-def thread_monitoring_editeur():
-    """
-    Thread de surveillance qui vérifie périodiquement si l'éditeur est toujours actif.
-    Si le processus Chrome n'existe plus alors que editeur_lance=True, corrige automatiquement le flag.
-    AMÉLIORÉ : Timeout de 60 secondes + détection stricte + tracking temporel
-    """
-    global editeur_lance, root_global, status_label_global, last_editor_activity
-    
-    log_message("❤️‍🩹 Thread de monitoring éditeur démarré (vérification toutes les 1.5s)")
-    log_message("⏱️ Timeout de sécurité : 60 secondes sans activité = reset automatique")
-    
-    while True:
-        time.sleep(1.5)  # Vérifier toutes les 1.5 secondes
-        
-        if editeur_lance:
-            # Vérifier si le processus Chrome/Edge de l'éditeur est toujours actif
-            chrome_running = False
-            
-            try:
-                for proc in psutil.process_iter(['name', 'cmdline']):
-                    try:
-                        proc_name = proc.info.get('name', '').lower()
-                        if 'chrome' in proc_name or 'msedge' in proc_name:
-                            cmdline = ' '.join(proc.info.get('cmdline', []) or [])
-                            # DÉTECTION STRICTE : Chercher spécifiquement notre instance Eel
-                            if '--app=http://localhost:8080' in cmdline:
-                                chrome_running = True
-                                # Mettre à jour le timestamp d'activité
-                                last_editor_activity = time.time()
-                                break
-                    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                        continue
-            except Exception as e:
-                # En cas d'erreur, on garde le flag tel quel pour éviter une fausse détection
-                log_message(f"⚠️ Monitoring: Erreur lors de la vérification : {e}")
-                continue
-            
-            if not chrome_running:
-                # Éditeur fermé mais flag pas à jour -> corriger automatiquement
-                log_message("🔧 Monitoring: Éditeur détecté fermé, correction automatique du flag")
-                editeur_lance = False
-                last_editor_activity = None
-                
-                # Mettre à jour la GUI si disponible (thread-safe)
-                if root_global and status_label_global:
-                    root_global.after(0, lambda: status_label_global.config(text="🔴 Éditeur fermé"))
-            
-            # TIMEOUT DE SÉCURITÉ : Si pas d'activité depuis 60 secondes
-            if last_editor_activity is not None:
-                temps_inactif = time.time() - last_editor_activity
-                if temps_inactif > 60:  # 60 secondes = 1 minute
-                    log_message(f"⏱️ TIMEOUT: Aucune activité éditeur depuis {int(temps_inactif)}s (> 60s)")
-                    log_message("🔧 Reset automatique du flag editeur_lance")
-                    editeur_lance = False
-                    last_editor_activity = None
-                    
-                    # Mettre à jour la GUI si disponible (thread-safe)
-                    if root_global and status_label_global:
-                        root_global.after(0, lambda: status_label_global.config(text="🔴 Éditeur fermé (timeout)"))
+# --- État de l'éditeur géré exclusivement par les callbacks React ---
+# on_editor_open()  → editeur_lance = True  (React notifie l'ouverture)
+# on_editor_close() → editeur_lance = False (React notifie la fermeture)
+# lancer_eel()      → editeur_lance = False (eel.start() retourne/lève si crash)
 
 
 
@@ -1125,6 +1254,135 @@ def gui_control_panel():
         
         # Mettre à jour le statut après un court délai
         root.after(2000, lambda: status_label.config(text="✅ Éditeur ouvert") if editeur_lance else None)
+    
+    def btn_sauvegarder_document():
+        """Sauvegarde le document — toujours en mode "Enregistrer sous" (dialogue à chaque fois).
+        Si un document est déjà ouvert, le dialogue pré-remplit le nom et le dossier courant."""
+        global editeur_lance, current_document_path
+        
+        if not editeur_lance:
+            messagebox.showwarning(
+                "PromptoDYS - Éditeur requis",
+                "L'éditeur n'est pas ouvert.\n\n"
+                "Veuillez d'abord ouvrir l'éditeur\n"
+                "avant de sauvegarder.",
+                icon='warning'
+            )
+            status_label.config(text="⚠️ Éditeur non ouvert")
+            return
+        
+        log_message(f"🔍 DEBUG btn_sauvegarder: editeur_lance={editeur_lance}, current_document_path={current_document_path}")
+        
+        # Toujours afficher le dialogue — pré-rempli si document déjà ouvert/sauvegardé
+        initial_dir = os.path.dirname(current_document_path) if current_document_path else PROMPTO_DOCS_DIR
+        initial_name = os.path.basename(current_document_path) if current_document_path else "nouveau_document"
+        
+        selected = filedialog.asksaveasfilename(
+            title="Enregistrer le document PromptoDYS...",
+            initialdir=initial_dir,
+            initialfile=initial_name,
+            defaultextension="",
+            filetypes=[("Tous les fichiers", "*.*")]
+        )
+        if not selected:
+            log_message("💾 Sauvegarde annulée par l'utilisateur")
+            return
+        
+        save_dir = os.path.dirname(selected)
+        doc_name = os.path.splitext(os.path.basename(selected))[0]
+        doc_name = re.sub(r'[<>:"/\\|?*]', '_', doc_name).strip()
+        
+        # Anti-récursion : si l'utilisateur a navigué à l'intérieur du dossier projet
+        # (ex: PromptoDYS/equations/equations au lieu de PromptoDYS/equations)
+        # on remonte au bon niveau pour éviter equations/equations/equations.md
+        while os.path.basename(save_dir) == doc_name:
+            log_message(f"⚠️ Anti-récursion: save_dir '{save_dir}' se termine par '{doc_name}' → on remonte")
+            save_dir = os.path.dirname(save_dir)
+        
+        status_label.config(text="⏳ Sauvegarde en cours...")
+        root.update()
+        
+        def run_save():
+            global current_document_path
+            log_message(f"🔍 DEBUG run_save: doc_name='{doc_name}', save_dir='{save_dir}'")
+            result = save_document(doc_name, save_dir)
+            if result:
+                current_document_path = result
+                root.after(0, lambda: status_label.config(text=f"✅ '{doc_name}' sauvegardé !"))
+                log_message(f"✅ Document sauvegardé dans: {result}")
+            else:
+                root.after(0, lambda: status_label.config(text="❌ Erreur de sauvegarde"))
+        
+        thread = threading.Thread(target=run_save, daemon=True)
+        thread.start()
+    
+    def btn_ouvrir_document():
+        """Ouvre un document complet (texte + images) via filedialog — accepte dossier ou fichier .md
+        Si l'éditeur n'est pas lancé, il est ouvert automatiquement avant le chargement."""
+        global editeur_lance, current_document_path
+        
+        # 1. Choisir le fichier AVANT de lancer l'éditeur (le filedialog est indépendant)
+        selected_path = filedialog.askopenfilename(
+            title="Ouvrir un document PromptoDYS",
+            initialdir=PROMPTO_DOCS_DIR,
+            filetypes=[
+                ("Documents Markdown", "*.md"),
+                ("Tous les fichiers", "*.*")
+            ]
+        )
+        if not selected_path:
+            log_message("📂 Ouverture annulée par l'utilisateur")
+            return
+        
+        # 2. Si l'éditeur n'est pas ouvert, le lancer automatiquement
+        need_wait = not editeur_lance
+        if need_wait:
+            log_message("📂 Éditeur non ouvert → lancement automatique avant ouverture du document...")
+            status_label.config(text="⏳ Lancement de l'éditeur...")
+            root.update()
+            btn_ouvrir_editeur()
+        
+        status_label.config(text="⏳ Ouverture en cours...")
+        root.update()
+        
+        # 3. Attendre que l'éditeur soit prêt, puis charger le document
+        def run_load():
+            if need_wait:
+                # Attendre le VRAI signal de React (on_editor_open → last_editor_activity)
+                # et non editeur_lance qui est mis à True trop tôt par lancer_eel()
+                timeout = 30
+                waited = 0
+                log_message("⏳ Attente du signal React on_editor_open()...")
+                while last_editor_activity is None and waited < timeout:
+                    time.sleep(0.5)
+                    waited += 0.5
+                
+                if last_editor_activity is None:
+                    log_message("❌ Timeout: React n'a pas signalé on_editor_open() dans les 30 secondes")
+                    root.after(0, lambda: status_label.config(text="❌ Éditeur non prêt (timeout)"))
+                    return
+                
+                # Petit délai pour laisser React finir l'initialisation complète des composants
+                time.sleep(1.5)
+            
+            log_message(f"✅ Éditeur prêt, chargement du document...")
+            
+            result = load_document(selected_path)
+            if result:
+                global current_document_path
+                # Mémoriser le chemin du document ouvert (comme Arduino retient le sketch ouvert)
+                if selected_path.endswith(".md"):
+                    current_document_path = os.path.dirname(selected_path)
+                else:
+                    current_document_path = selected_path
+                doc_name = os.path.basename(current_document_path)
+                log_message(f"📌 Document courant: {current_document_path}")
+                root.after(0, lambda: status_label.config(text=f"✅ '{doc_name}' ouvert !"))
+            else:
+                root.after(0, lambda: status_label.config(text="❌ Erreur d'ouverture"))
+        
+        thread = threading.Thread(target=run_load, daemon=True)
+        thread.start()
     
     def btn_traitement_ia():
         """Lance le traitement IA Gemini ou demande l'abandon"""
@@ -1316,6 +1574,58 @@ def gui_control_panel():
     btn1.bind("<ButtonPress-1>", lambda e: on_button_press(e, btn1))
     btn1.bind("<ButtonRelease-1>", lambda e: on_button_release(e, btn1))
     
+    # --- Section Document : Sauvegarder / Ouvrir (côte à côte dans un LabelFrame) ---
+    doc_frame = ttk.LabelFrame(main_frame, text="📄 Document", padding=(10, 5))
+    doc_frame.pack(fill="x", padx=20, pady=8)
+    
+    # Configurer 2 colonnes de poids égal pour répartir l'espace
+    doc_frame.columnconfigure(0, weight=1)
+    doc_frame.columnconfigure(1, weight=1)
+    
+    # Bouton Sauvegarder (colonne gauche)
+    btn_save = tk.Button(
+        doc_frame,
+        text="💾 Sauvegarder",
+        command=btn_sauvegarder_document,
+        font=("Segoe UI", 13, "bold"),
+        bg="#FFFFFF",
+        fg="#1F1F1F",
+        relief="raised",
+        bd=8,
+        highlightbackground="#333333",
+        highlightthickness=8,
+        padx=10,
+        pady=10,
+        cursor="hand2"
+    )
+    btn_save.grid(row=0, column=0, sticky="ew", padx=(0, 5), pady=5)
+    btn_save.bind("<Enter>", lambda e: on_button_enter(e, btn_save))
+    btn_save.bind("<Leave>", lambda e: on_button_leave(e, btn_save))
+    btn_save.bind("<ButtonPress-1>", lambda e: on_button_press(e, btn_save))
+    btn_save.bind("<ButtonRelease-1>", lambda e: on_button_release(e, btn_save))
+    
+    # Bouton Ouvrir (colonne droite)
+    btn_open = tk.Button(
+        doc_frame,
+        text="📂 Ouvrir",
+        command=btn_ouvrir_document,
+        font=("Segoe UI", 13, "bold"),
+        bg="#FFFFFF",
+        fg="#1F1F1F",
+        relief="raised",
+        bd=8,
+        highlightbackground="#333333",
+        highlightthickness=8,
+        padx=10,
+        pady=10,
+        cursor="hand2"
+    )
+    btn_open.grid(row=0, column=1, sticky="ew", padx=(5, 0), pady=5)
+    btn_open.bind("<Enter>", lambda e: on_button_enter(e, btn_open))
+    btn_open.bind("<Leave>", lambda e: on_button_leave(e, btn_open))
+    btn_open.bind("<ButtonPress-1>", lambda e: on_button_press(e, btn_open))
+    btn_open.bind("<ButtonRelease-1>", lambda e: on_button_release(e, btn_open))
+    
     # Bouton 2: Traitement IA
     btn_ia = tk.Button(
         main_frame,
@@ -1462,11 +1772,6 @@ def main():
     # Initialiser Eel (préparation, mais ne lance pas encore)
     eel.init(web_folder_global)
     log_message('✅ Eel initialisé, prêt à lancer l\'éditeur')
-
-    # Lancer le thread de monitoring en arrière-plan
-    monitoring_thread = threading.Thread(target=thread_monitoring_editeur, daemon=True)
-    monitoring_thread.start()
-    log_message('✅ Thread de monitoring lancé')
 
     # Lancer la GUI de contrôle (BLOQUANT - boucle principale)
     log_message('🖥️ Lancement du panneau de contrôle...')
