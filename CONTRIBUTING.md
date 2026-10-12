@@ -63,7 +63,7 @@ En participant à ce projet, vous acceptez de maintenir un environnement respect
 
 ### Avant de créer une issue
 
-1. **Vérifiez** que le bug n'a pas déjà été signalé dans les [Issues](https://github.com/VOTRE_USERNAME/PromptoDYS/issues)
+1. **Vérifiez** que le bug n'a pas déjà été signalé dans les [Issues](https://github.com/lecinquiemejour-code/PromptoDYS_app/issues)
 2. **Assurez-vous** d'utiliser la dernière version du projet
 3. **Collectez** les informations nécessaires (voir ci-dessous)
 
@@ -131,7 +131,7 @@ En participant à ce projet, vous acceptez de maintenir un environnement respect
 
 ```bash
 # Fork via GitHub UI, puis:
-git clone https://github.com/VOTRE_USERNAME/PromptoDYS.git
+git clone https://github.com/lecinquiemejour-code/PromptoDYS_app.git
 cd PromptoDYS
 git remote add upstream https://github.com/ORIGINAL_OWNER/PromptoDYS.git
 ```
@@ -302,7 +302,7 @@ Pour l'instant, le projet n'a pas de suite de tests automatisés. C'est une exce
 Si vous avez des questions sur le processus de contribution :
 
 1. Consultez la [documentation existante](README.md)
-2. Cherchez dans les [Issues](https://github.com/VOTRE_USERNAME/PromptoDYS/issues)
+2. Cherchez dans les [Issues](https://github.com/lecinquiemejour-code/PromptoDYS_app/issues)
 3. Créez une nouvelle issue avec le label `question`
 
 ---

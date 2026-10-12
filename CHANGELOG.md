@@ -123,4 +123,4 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ---
 
-**Lien des releases :** [GitHub Releases](https://github.com/VOTRE_USERNAME/PromptoDYS/releases)
+**Lien des releases :** [GitHub Releases](https://github.com/lecinquiemejour-code/PromptoDYS_app/releases)

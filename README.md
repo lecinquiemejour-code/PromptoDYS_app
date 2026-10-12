@@ -51,8 +51,8 @@ PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'i
 
 ```bash
 # 1. Cloner le dépôt
-git clone https://github.com/VOTRE_USERNAME/PromptoDYS.git
-cd PromptoDYS
+git clone https://github.com/lecinquiemejour-code/PromptoDYS_app.git
+cd PromptoDYS_app
 
 # 2. Créer un environnement virtuel
 python -m venv .venv
@@ -227,7 +227,7 @@ Ce projet est sous licence GPL v3 - voir [LICENSE](LICENSE) pour plus de détail
 
 **Jean-Noël Lefebvre**
 
-- GitHub: [@VOTRE_USERNAME](https://github.com/VOTRE_USERNAME)
+- GitHub: [@lecinquiemejour-code](https://github.com/lecinquiemejour-code)
 
 ---
 
@@ -242,7 +242,7 @@ Ce projet est sous licence GPL v3 - voir [LICENSE](LICENSE) pour plus de détail
 ## 📞 Support
 
 Pour toute question ou problème :
-- Ouvrez une [issue](https://github.com/VOTRE_USERNAME/PromptoDYS/issues)
+- Ouvrez une [issue](https://github.com/lecinquiemejour-code/PromptoDYS_app/issues)
 - Contactez-moi directement
 
 ---

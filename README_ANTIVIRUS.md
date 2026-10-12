@@ -62,8 +62,8 @@ Lors du premier lancement, Windows peut afficher "Application non reconnue" :
 Si vous préférez ne pas utiliser l'exécutable :
 ```bash
 # Cloner le dépôt
-git clone https://github.com/VOTRE_USERNAME/PromptoDYS.git
-cd PromptoDYS
+git clone https://github.com/lecinquiemejour-code/PromptoDYS_app.git
+cd PromptoDYS_app
 
 # Installer les dépendances
 pip install eel google-genai reportlab markdown
@@ -82,14 +82,14 @@ PromptoDYS est un projet **open-source** sous licence **GPL v3** :
 - ✅ Aucune connexion sortante (sauf vers l'API Google Gemini avec VOTRE clé)
 - ✅ Toutes les données restent sur VOTRE machine
 
-**Dépôt GitHub** : https://github.com/VOTRE_USERNAME/PromptoDYS
+**Dépôt GitHub** : https://github.com/lecinquiemejour-code/PromptoDYS_app
 
 ---
 
 ## 🆘 BESOIN D'AIDE ?
 
 Si vous avez des questions ou des problèmes :
-- 📧 Ouvrir une [issue sur GitHub](https://github.com/VOTRE_USERNAME/PromptoDYS/issues)
+- 📧 Ouvrir une [issue sur GitHub](https://github.com/lecinquiemejour-code/PromptoDYS_app/issues)
 - 💬 Contacter le développeur
 
 ---
