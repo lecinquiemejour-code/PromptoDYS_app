@@ -202,6 +202,15 @@ Les contributions sont les bienvenues ! Consultez [CONTRIBUTING.md](CONTRIBUTING
 
 ---
 
+## 📚 Documentation technique
+
+Le dossier [doc/](doc/) contient la documentation détaillée, avec schémas :
+
+- [ARCHITECTURE.md](doc/ARCHITECTURE.md) : comment les deux projets (application Python et éditeur React) coopèrent, le pont Eel, la sauvegarde des documents, la chaîne de fabrication de l'exécutable.
+- [WORKFLOW_GEMINI.md](doc/WORKFLOW_GEMINI.md) : le traitement IA étape par étape, construction du prompt, paramètres Gemini, streaming et abandon, extraction de la réponse, rapport PDF, gestion des erreurs.
+
+---
+
 ## 📝 Changelog
 
 Voir [CHANGELOG.md](CHANGELOG.md) pour l'historique des versions.
