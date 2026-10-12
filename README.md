@@ -64,7 +64,7 @@ python -m venv .venv
 source .venv/bin/activate
 
 # 4. Installer les dépendances
-pip install eel google-genai reportlab markdown
+pip install eel google-genai reportlab markdown sv_ttk
 ```
 
 ### Configuration
