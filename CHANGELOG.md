@@ -9,6 +9,11 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## [Non publié]
 
+### Modifié
+- Gestion des dépendances et de l'environnement Python avec `uv`
+- Ajout de paramètres de sécurité pour Claude Code
+- Amélioration de la logique de chargement de l'API Key Gemini
+
 ### Prévu
 - Tests unitaires et d'intégration
 - Support export DOCX
