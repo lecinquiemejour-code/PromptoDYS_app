@@ -3,7 +3,7 @@
 > **Assistant IA dédié à l'aide scolaire pour élèves avec troubles DYS**
 
 ![Version](https://img.shields.io/badge/version-1.2.0-blue)
-![Python](https://img.shields.io/badge/python-3.x-green)
+![Python](https://img.shields.io/badge/python-3.14-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-orange)
 ![Status](https://img.shields.io/badge/status-stable-brightgreen)
 
@@ -23,7 +23,7 @@ PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'i
 - 📄 Génération automatique de rapports détaillés
 - 🎨 Styles personnalisés et lisibles
 - 📋 Capture complète des logs et statistiques
-- 💾 Sauvegarde automatique dans `/REPORTS`
+- 💾 Sauvegarde automatique dans `reports/`
 
 ### 🎨 Interface adaptée
 - 🖼️ Support des images dans les notes
@@ -43,7 +43,8 @@ PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'i
 
 ### Prérequis
 
-- **Python 3.x** (3.8 ou supérieur recommandé)
+- **[uv](https://docs.astral.sh/uv/)** (gestion de Python, des dépendances et de l'environnement virtuel)
+- **Python 3.14** : rien à installer. uv télécharge son propre Python (version figée dans `.python-version`, Tkinter inclus) et ignore volontairement le Python du système ou de Homebrew (`python-preference = "only-managed"` dans `pyproject.toml`)
 - **Chrome/Chromium** (pour l'interface Eel)
 - **Clé API Google Gemini** ([Obtenir une clé](https://ai.google.dev/))
 
@@ -54,24 +55,24 @@ PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'i
 git clone https://github.com/lecinquiemejour-code/PromptoDYS_app.git
 cd PromptoDYS_app
 
-# 2. Créer un environnement virtuel
-python -m venv .venv
-
-# 3. Activer l'environnement virtuel
-# Windows:
-.venv\Scripts\activate
-# Linux/macOS:
-source .venv/bin/activate
-
-# 4. Installer les dépendances
-pip install eel google-genai reportlab markdown
+# 2. Créer l'environnement virtuel (.venv) et installer les dépendances
+#    --locked : installe exactement les versions de uv.lock, sans jamais le modifier
+uv sync --locked
 ```
+Si `uv sync --locked` échoue, c'est que `uv.lock` n'est plus à jour par rapport à `pyproject.toml` dans le dépôt : signalez-le plutôt que de le régénérer de votre côté.
+
+Les dépendances directes sont déclarées dans `pyproject.toml`. Le fichier `uv.lock` fige toutes les versions (transitives incluses) avec leurs hashes.
+Pour mettre à jour une dépendance : `uv lock --upgrade-package <paquet>` puis `uv sync`, et committer `uv.lock`.
+Pour ajouter une dépendance : `uv add <paquet>` puis committez `pyproject.toml` ET `uv.lock`.
 
 ### Configuration
 
 ```bash
 # 1. Copier le template de configuration
+# Windows
 copy .env.template GeminiKey.txt
+# MacOS / Linux
+cp .env.template GeminiKey.txt
 
 # 2. Éditer GeminiKey.txt et remplacer par votre vraie clé API
 # IMPORTANT: Ne commitez JAMAIS ce fichier !
@@ -84,7 +85,7 @@ copy .env.template GeminiKey.txt
 ### Lancement de l'application
 
 ```bash
-python askGeminiPrompto.py
+uv run python askGeminiPrompto.py
 ```
 
 L'application ouvre deux interfaces :
@@ -107,7 +108,7 @@ L'application ouvre deux interfaces :
 2. **Lancer le traitement IA** (option 3)
 3. **L'IA analyse et corrige** la note en temps réel
 4. **Le résultat** est injecté automatiquement dans l'éditeur
-5. **Un rapport PDF** est généré automatiquement dans `/REPORTS`
+5. **Un rapport PDF** est généré automatiquement dans `reports/`
 
 ---
 
@@ -115,22 +116,27 @@ L'application ouvre deux interfaces :
 
 ```
 PromptoDYS/
-├── askGeminiPrompto.py       # Script principal (848 lignes)
+├── askGeminiPrompto.py       # Script principal
+├── pyproject.toml            # Dépendances directes et configuration uv
+├── uv.lock                   # Versions figées de toutes les dépendances (généré par uv)
+├── .python-version           # Version de Python utilisée par uv
 ├── PromptoDYS.spec           # Configuration PyInstaller
 ├── prompto.dys               # Template de prompt IA
+├── .env.template             # Modèle de GeminiKey.txt
 ├── GeminiKey.txt             # Clé API (à créer, ignoré par Git)
 ├── build_web/                # Interface React compilée
 │   ├── index.html
 │   ├── config.yaml
 │   └── static/
-├── REPORTS/                  # Rapports PDF générés
+├── doc/                      # Documentation technique
+├── reports/                  # Rapports PDF générés
 └── data/                     # Données utilisateur
 ```
 
 ### Stack technologique
 
 **Backend:**
-- Python 3.x
+- Python 3.14
 - Eel (bridge Python ↔ Web)
 - Google GenAI SDK
 - ReportLab (génération PDF)
@@ -147,11 +153,10 @@ PromptoDYS/
 ## 📦 Build (Exécutable Windows)
 
 ```bash
-# Installer PyInstaller
-pip install pyinstaller
-
-# Compiler l'exécutable
-pyinstaller PromptoDYS.spec
+# PyInstaller est dans le groupe "dev" (installé par défaut avec uv sync)
+# --locked : le build utilise exactement les versions testées de uv.lock.
+uv sync --locked
+uv run pyinstaller --clean PromptoDYS.spec
 
 # L'exécutable sera dans dist/PromptoDYS.exe
 ```
@@ -183,7 +188,7 @@ Le fichier `prompto.dys` définit le comportement de l'IA :
 Le fichier `.gitignore` protège automatiquement :
 - `GeminiKey.txt`
 - `/data` (données utilisateur)
-- `/REPORTS` (rapports générés)
+- `reports/` (rapports générés)
 - `.venv` (environnement virtuel)
 
 ---

@@ -219,6 +219,8 @@ Ce n'est pas un bug, mais c'est ce qui a rendu B1 et B2 possibles : l'état du b
 
 [Ligne 777](../askGeminiPrompto.py#L777). Ces logs sont copiés dans la section 3 du rapport PDF. Les six premiers caractères sont communs à toutes les clés Google, donc la fuite réelle est de quatre caractères. Faible, mais sans utilité : un simple « Clé API chargée (39 caractères) » suffit.
 
+**Statut : 🟡 partiellement résolu.** La portion loggée a été raccourcie : le log n'affiche plus que les 4 derniers caractères de la clé (`Clé API chargée (...xxxx)`) au lieu des 10 premiers, ce qui suffit à identifier la clé utilisée sans exposer de partie exploitable. Le log se trouve désormais dans `init_gemini_client()`. Pour résoudre complètement, ne logger aucun extrait (longueur de la clé uniquement).
+
 ### M6. Nom de fichier image non assaini à la sauvegarde
 
 [Ligne 289](../askGeminiPrompto.py#L289) : `os.path.join(images_dir, image["filename"])` utilise tel quel un nom venant du JavaScript. Un nom contenant `..\` écrirait hors du dossier `images/`. Le risque réel est faible (tout est local), mais `os.path.basename()` règle la question en un mot.
@@ -269,6 +271,8 @@ C'est le mécanisme utilisé partout pour revenir sur le thread Tkinter. Il fonc
 
 ### D2. `requirements.txt` est en UTF-16
 
+**Statut : ✅ résolu.** `requirements.txt` a été supprimé au profit de uv : dépendances directes dans `pyproject.toml`, versions figées avec hashes dans `uv.lock`.
+
 Signature d'un `pip freeze > requirements.txt` sous PowerShell 5. `pip` le lit grâce au BOM, mais GitHub l'affiche en caractères chinois, `git diff` le traite en binaire, et tout outil tiers (Dependabot, un `cat`) échoue. Le fichier est aussi un gel complet avec 40 dépendances transitives, ce qui masque les cinq vraies : `eel`, `google-genai`, `reportlab`, `sv-ttk`, et `pyinstaller` pour le build.
 
 **Piste.** `pip freeze | Out-File -Encoding utf8 requirements.txt`, ou mieux un `requirements.txt` court à la main et un `requirements-lock.txt` gelé.
@@ -280,7 +284,7 @@ Signature d'un `pip freeze > requirements.txt` sous PowerShell 5. `pip` le lit g
 | [README.md](../README.md) | La commande `pip install eel google-genai reportlab markdown` **oublie `sv_ttk`** : un nouveau contributeur obtient `ModuleNotFoundError` au premier lancement. Même oubli dans `README_ANTIVIRUS.md` et `BUILD_STATUS.md`. |
 | README.md | Décrit un « menu console avec 3 options » qui n'existe plus, une structure avec `/REPORTS` et `data/` (le code écrit `reports/`, `data/` n'est utilisé nulle part), « 848 lignes » (il y en a 1 784), « Python 3.8+ » alors que le build se fait en 3.13. |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Parle de la branche `main`, le dépôt utilise `master`. Le remote `upstream` pointe sur `ORIGINAL_OWNER/PromptoDYS`, un reste de gabarit. |
-| [BUILD_STATUS.md](../BUILD_STATUS.md) | Décrit un problème Python 3.10.0 résolu depuis, et contredit `BUILD_v1.2.0_SUCCESS.md`. À fusionner ou archiver. |
+| `BUILD_STATUS.md` | ✅ Supprimé. Décrivait un problème Python 3.10.0 résolu depuis, et contredisait `BUILD_v1.2.0_SUCCESS.md`. |
 | [README_ANTIVIRUS.md](../README_ANTIVIRUS.md) | Lien VirusTotal « [À ajouter après build] » depuis janvier. |
 | [.env.template](../.env.template) | Le nom suggère un fichier `.env`, c'est en fait le gabarit de `GeminiKey.txt`. `GeminiKey.example.txt` serait plus clair. |
 | [CHANGELOG.md](../CHANGELOG.md) 1.2.0 | Annonce « Métadonnées Windows complètes », mais la ligne `version='version_info.txt'` est **commentée** dans le spec. L'exe n'a donc pas de métadonnées, ce qui aggrave les faux positifs antivirus que le même changelog prétend réduire. |
@@ -392,7 +396,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | 8 | `askGeminiPrompto.py` | `http_options` avec timeout, fermeture du stream à l'abandon | B6 |
 | 9 | `askGeminiPrompto.py` | `ruff --fix`, retirer imports morts, `menu_console` et compagnie, `historique_llm` ; `basename` sur le nom d'image ; log de clé sans extrait | M1, M2, M3, M5, M6, M7 |
 | 10 | `build_web/static/` | Supprimer les trois vieux bundles et leurs `.map` | D1 |
-| 11 | `requirements.txt` | Regénérer en UTF-8, version courte plus lock | D2 |
+| 11 | `requirements.txt` | ✅ Fait : remplacé par `pyproject.toml` + `uv.lock` | D2 |
 | 12 | `README.md`, `CONTRIBUTING.md`, `BUILD_STATUS.md`, `.env.template`, `prompto.dys` | Corrections listées en D3 | D3 |
 | 13 | Build | `pyinstaller --clean`, test sur machine sans clé, avec clé, depuis un raccourci | Validation |
 
@@ -429,7 +433,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | M2 | 🟡 Mineur | Code mort (menu console, historique) | Trivial | 1 |
 | M3 | 🟡 Mineur | `except:` nus, f-strings vides | Trivial | 1 |
 | M4 | 🟡 Mineur | Fichier monolithique, douze globales | Moyen | 3 |
-| M5 | 🟡 Mineur | Extrait de clé dans les logs et le PDF | Trivial | 1 |
+| M5 | 🟡 Partiellement résolu | Extrait de clé dans les logs et le PDF (raccourci aux 4 derniers caractères) | Trivial | 1 |
 | M6 | 🟡 Mineur | Nom d'image non assaini | Trivial | 1 |
 | M7 | 🟡 Mineur | Double avertissement NOTE | Trivial | 1 |
 | M8 | 🟡 Mineur | Parseur PDF : émojis (carré noir garanti), italique vs maths, listes numérotées | Faible | 1 ou 4 |
@@ -438,7 +442,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | M11 | 🟡 Mineur | `os._exit`, Chrome reste ouvert | Faible | 1 |
 | M12 | 🟡 Mineur | Effets de bord à l'import | Trivial | 2 |
 | D1 | 🟠 Important | Trois bundles React morts, `.map` dans l'exe | Trivial | 1 |
-| D2 | 🟡 Mineur | `requirements.txt` en UTF-16 | Trivial | 1 |
+| D2 | ✅ Résolu | `requirements.txt` en UTF-16 (remplacé par uv) | Trivial | 1 |
 | D3 | 🟠 Important | Docs obsolètes, `sv_ttk` absent de la commande d'installation, `version=` commenté | Faible | 1 |
 | D4 | 🟡 Mineur | Version dupliquée quatre fois | Faible | 3 |
 | D5 | 🟡 Mineur | Archives et PDF lourds dans le dépôt ou à la racine | Trivial | 1 |

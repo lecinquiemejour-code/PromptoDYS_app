@@ -6,10 +6,10 @@ Combinaison : Interface desktop + Assistant IA pour traitement de texte
 
 GUI de contrôle avec Tkinter + sv_ttk (thème Sun Valley Windows 11)
 
-Installation requise:
-pip install eel google-genai reportlab markdown
+Installation requise (dépendances déclarées dans pyproject.toml):
+uv sync --locked
 Usage:
-python PromptoDYS.py
+uv run python askGeminiPrompto.py
 
 Fichiers requis:
 - GeminiKey.txt (clé API Gemini)
@@ -769,12 +769,32 @@ def ajouter_message_llm(prompt_utilisé, réponse_complète, contenu_extrait, st
 
 # --- Fonctions Gemini ---
 
+GEMINI_API_KEY_PLACEHOLDER = "YOUR_GEMINI_API_KEY_HERE"
+
+
+def lire_cle_api():
+    """Lit la clé API dans GeminiKey.txt (ignore lignes vides et commentaires #)"""
+    # utf-8-sig : tolère le BOM ajouté par le Bloc-notes Windows
+    with open("GeminiKey.txt", "r", encoding="utf-8-sig") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                return line
+    return ""
+
+
 def init_gemini_client():
     """Initialise le client Gemini avec la clé API"""
     try:
-        with open("GeminiKey.txt", "r") as f:
-            api_key = f.readline().strip()
-            log_message(f"🔑 INFO: Clé API chargée ({api_key[:10]}...)")
+        api_key = lire_cle_api()
+        if not api_key:
+            log_message("❌ ÉCHEC: Aucune clé API trouvée dans GeminiKey.txt")
+            return None
+        if api_key == GEMINI_API_KEY_PLACEHOLDER:
+            log_message("❌ ÉCHEC: GeminiKey.txt contient encore la valeur du template, remplacez-la par votre clé")
+            return None
+        # Seuls les 4 derniers caractères : ce log est recopié dans les rapports PDF
+        log_message(f"🔑 INFO: Clé API chargée (...{api_key[-4:]})")
         return genai.Client(api_key=api_key)
     except FileNotFoundError:
         log_message("❌ ÉCHEC: Fichier GeminiKey.txt introuvable")

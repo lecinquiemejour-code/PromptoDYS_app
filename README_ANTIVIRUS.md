@@ -65,11 +65,11 @@ Si vous préférez ne pas utiliser l'exécutable :
 git clone https://github.com/lecinquiemejour-code/PromptoDYS_app.git
 cd PromptoDYS_app
 
-# Installer les dépendances
-pip install eel google-genai reportlab markdown
+# Installer les dépendances (nécessite uv : https://docs.astral.sh/uv/)
+uv sync --locked
 
 # Lancer directement le script Python
-python askGeminiPrompto.py
+uv run python askGeminiPrompto.py
 ```
 
 ---
