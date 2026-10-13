@@ -10,9 +10,19 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 ## [Non publié]
 
 ### Modifié
-- Gestion des dépendances et de l'environnement Python avec `uv`
-- Ajout de paramètres de sécurité pour Claude Code
-- Amélioration de la logique de chargement de l'API Key Gemini
+- Gestion des dépendances et de l'environnement Python avec `uv` (`pyproject.toml` + `uv.lock`)
+- Python 3.14 requis, fourni par uv (`python-preference = "only-managed"`)
+- Montées de version majeures : `google-genai` 1.59 → 2.29, `reportlab` 4.4 → 5.0, `gevent` 25.9 → 26.9
+- Documentation d'installation et de build mise à jour pour uv (`uv sync --locked`, `uv run`)
+- Amélioration de la logique de chargement de l'API Key Gemini : lignes vides et commentaires ignorés, fichier enregistré avec BOM (Bloc-notes Windows) accepté, message clair si la valeur du template n'a pas été remplacée par l'utilisateur
+
+### Supprimé
+- `requirements.txt` (encodé en UTF-16), remplacé par `pyproject.toml` et `uv.lock`
+- `BUILD_STATUS.md`, obsolète (problème propre à Python 3.10.0)
+
+### Sécurité
+- Paramètres de sécurité pour Claude Code (`.claude/settings.json`) : lecture de `GeminiKey.txt` interdite, confirmation demandée pour les commandes destructives et les changements de dépendances
+- Le log de chargement de la clé API, recopié dans les rapports PDF, n'affiche plus que les 4 derniers caractères de la clé au lieu des 10 premiers
 
 ### Prévu
 - Tests unitaires et d'intégration
@@ -77,7 +87,7 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ### Structure
 - Interface React compilée dans `build_web/`
-- Système de sauvegarde automatique dans `/REPORTS`
+- Système de sauvegarde automatique dans `reports/`
 - Gestion des données utilisateur dans `/data`
 
 ### Fonctionnalités IA
