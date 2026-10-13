@@ -72,7 +72,7 @@ Pour ajouter une dépendance : `uv add <paquet>` puis committez `pyproject.toml`
 # Windows
 copy .env.template GeminiKey.txt
 # MacOS / Linux
-cp .env.template GeminiKey.txt   
+cp .env.template GeminiKey.txt
 
 # 2. Éditer GeminiKey.txt et remplacer par votre vraie clé API
 # IMPORTANT: Ne commitez JAMAIS ce fichier !
