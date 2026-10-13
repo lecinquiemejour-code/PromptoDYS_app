@@ -32,7 +32,7 @@ PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'i
 - 🚫 Évite l'italique (difficile pour les DYS)
 
 ### 🤖 Powered by Google Gemini
-- ⚡ Modèle Gemini 2.5 Flash
+- ⚡ Modèle Gemini 3.8 Flash
 - 💭 Mode "thinking" pour analyse approfondie
 - 📊 Statistiques de tokens détaillées
 - 🔄 Streaming en temps réel
@@ -146,7 +146,7 @@ PromptoDYS/
 - HTML/CSS/JavaScript
 
 **IA:**
-- Google Gemini 2.5 Flash
+- Google Gemini 3.8 Flash
 
 ---
 

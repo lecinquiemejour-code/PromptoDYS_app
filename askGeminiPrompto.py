@@ -508,7 +508,7 @@ def preparer_contenu_rapport_complet(contenu_original, logs_etapes, streaming_ge
     # SECTION 7: Footer
     contenu_final += "## 📋 Informations de Session\n\n"
     contenu_final += f"- **Script :** PromptoDYS avec capture complète des logs\n"
-    contenu_final += f"- **Modèle IA :** Gemini 2.5 Flash\n"
+    contenu_final += f"- **Modèle IA :** Gemini 3.8 Flash\n"
     contenu_final += f"- **Mode :** Thinking activé\n"
     contenu_final += f"- **Sauvegarde :** Automatique PDF uniquement\n\n"
 
@@ -939,7 +939,7 @@ def traitement_gemini():
     try:
         log_message("📡 Flux IA: Démarrage de la réception des données...")
         for chunk in client.models.generate_content_stream(
-                model="gemini-2.5-flash",
+                model="gemini-3.8-flash",
                 contents=prompt_final,
                 config=config
         ):

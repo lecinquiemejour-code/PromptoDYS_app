@@ -292,7 +292,7 @@ Signature d'un `pip freeze > requirements.txt` sous PowerShell 5. `pip` le lit g
 
 ### D4. Le numéro de version est dupliqué à quatre endroits
 
-`__version__` dans le code, le badge du README, `version_info.txt` et le CHANGELOG. Rien ne les relie. Le `__version__` du code n'est d'ailleurs lu nulle part (il pourrait au moins apparaître dans le titre de la fenêtre et dans le pied du rapport PDF, qui affiche en dur « Gemini 2.5 Flash »).
+`__version__` dans le code, le badge du README, `version_info.txt` et le CHANGELOG. Rien ne les relie. Le `__version__` du code n'est d'ailleurs lu nulle part (il pourrait au moins apparaître dans le titre de la fenêtre et dans le pied du rapport PDF, qui affiche en dur « Gemini 3.8 Flash »).
 
 ### D5. Fichiers volumineux dans le dépôt et à sa racine
 

@@ -119,7 +119,7 @@ La fonction `lire_prompto_dys()` vérifie que la balise `[TEXTE]` est présente.
 
 | Paramètre | Valeur | Pourquoi |
 |---|---|---|
-| Modèle | `gemini-2.5-flash` | Rapide et économique, suffisant pour de la correction de texte |
+| Modèle | `gemini-3.8-flash` | Rapide et économique, suffisant pour de la correction de texte |
 | `temperature` | `0.0` | Réponses les plus déterministes possible : une correction doit être stable, pas créative |
 | `max_output_tokens` | `None` | Pas de limite, la note corrigée peut être longue avec ses huit sections |
 | `thinking_budget` | `500` | Gemini réfléchit avant de répondre, mais avec un plafond pour limiter le coût et la latence |
@@ -365,7 +365,7 @@ config.thinking_config = types.ThinkingConfig(
 )
 ...
 client.models.generate_content_stream(
-    model="gemini-2.5-flash",
+    model="gemini-3.8-flash",
     contents=prompt_final,
     config=config
 )

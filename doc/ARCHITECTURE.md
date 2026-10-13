@@ -53,7 +53,7 @@ flowchart LR
         IDB["IndexedDB + localStorage<br/>images, thème, brouillon"]
     end
 
-    GEMINI["API Google Gemini 2.5 Flash"]
+    GEMINI["API Google Gemini 3.8 Flash"]
     DISK["Disque<br/>Documents/PromptoDYS/*.md + images/<br/>reports/*.pdf"]
 
     TK --> EEL
