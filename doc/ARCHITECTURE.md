@@ -290,7 +290,7 @@ flowchart LR
 ### Procédure pour produire l'exécutable
 
 ```powershell
-uv sync
+uv sync --locked
 uv run pyinstaller --clean PromptoDYS.spec
 ```
 

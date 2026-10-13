@@ -153,7 +153,7 @@ git checkout -b fix/correction-bug-xyz
 
 ```bash
 # Installer l'environnement de dev
-uv sync   # crée .venv à partir de uv.lock
+uv sync --locked   # crée .venv à partir de uv.lock, sans le modifier
 
 # Développer votre feature
 # ... modifier les fichiers ...
@@ -161,10 +161,24 @@ uv sync   # crée .venv à partir de uv.lock
 # Tester vos changements
 uv run python askGeminiPrompto.py
 
-# Si vous modifiez les dépendances : 
+# Si vous modifiez les dépendances :
 uv add <paquet>
 # puis committez pyproject.toml ET uv.lock
 ```
+
+#### Quelle commande uv utiliser ?
+
+| Situation | Commande |
+|---|---|
+| Je viens de cloner, ou de faire un `git pull` | `uv sync --locked` |
+| Je modifie les dépendances | `uv add <paquet>` / `uv remove <paquet>`, ou `uv sync` après avoir édité `pyproject.toml` |
+| Je mets à jour une dépendance | `uv lock --upgrade-package <paquet>` puis `uv sync` |
+| Je lance l'application | `uv run python askGeminiPrompto.py` |
+| Je build l'exécutable de release | `uv sync --locked` puis `uv run pyinstaller --clean PromptoDYS.spec` |
+
+`--locked` installe exactement ce que contient `uv.lock` et s'arrête en erreur si le fichier ne correspond plus à `pyproject.toml`, au lieu de le modifier en silence. Sans `--locked`, `uv sync` met `uv.lock` à jour : à n'utiliser que lorsque c'est vous qui changez les dépendances, puis committez `pyproject.toml` ET `uv.lock` ensemble.
+
+`uv run` synchronise l'environnement automatiquement avant de lancer la commande : pas besoin d'activer le `.venv` (`source .venv/bin/activate`).
 
 ### 4. Commiter
 

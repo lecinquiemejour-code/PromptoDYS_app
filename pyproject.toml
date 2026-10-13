@@ -19,3 +19,5 @@ dev = [
 
 [tool.uv]
 package = false
+# Toujours utiliser le Python géré par uv (inclut Tkinter), jamais celui du système ou de Homebrew
+python-preference = "only-managed"

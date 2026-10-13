@@ -43,9 +43,8 @@ PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'i
 
 ### Prérequis
 
-- **Python 3.14** (version figée dans `.python-version`, installée automatiquement par uv si absente)
-- **[uv](https://docs.astral.sh/uv/)** (gestion des dépendances et de l'environnement virtuel)
-- **Tkinter** (inclus avec Python sur Windows ; sous macOS : `brew install python-tk@3.14`)
+- **[uv](https://docs.astral.sh/uv/)** (gestion de Python, des dépendances et de l'environnement virtuel)
+- **Python 3.14** : rien à installer. uv télécharge son propre Python (version figée dans `.python-version`, Tkinter inclus) et ignore volontairement le Python du système ou de Homebrew (`python-preference = "only-managed"` dans `pyproject.toml`)
 - **Chrome/Chromium** (pour l'interface Eel)
 - **Clé API Google Gemini** ([Obtenir une clé](https://ai.google.dev/))
 
@@ -57,8 +56,11 @@ git clone https://github.com/lecinquiemejour-code/PromptoDYS_app.git
 cd PromptoDYS_app
 
 # 2. Créer l'environnement virtuel (.venv) et installer les dépendances
-uv sync
+#    --locked : installe exactement les versions de uv.lock, sans jamais le modifier
+uv sync --locked
 ```
+Si `uv sync --locked` échoue, c'est que `uv.lock` n'est plus à jour par rapport à `pyproject.toml` dans le dépôt : signalez-le plutôt que de le régénérer de votre côté.
+
 Les dépendances directes sont déclarées dans `pyproject.toml`. Le fichier `uv.lock` fige toutes les versions (transitives incluses) avec leurs hashes.
 Pour mettre à jour une dépendance : `uv lock --upgrade-package <paquet>` puis `uv sync`, et committer `uv.lock`.
 Pour ajouter une dépendance : `uv add <paquet>` puis committez `pyproject.toml` ET `uv.lock`.
@@ -147,6 +149,8 @@ PromptoDYS/
 
 ```bash
 # PyInstaller est dans le groupe "dev" (installé par défaut avec uv sync)
+# --locked : le build utilise exactement les versions testées de uv.lock.
+uv sync --locked
 uv run pyinstaller --clean PromptoDYS.spec
 
 # L'exécutable sera dans dist/PromptoDYS.exe
