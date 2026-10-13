@@ -219,6 +219,8 @@ Ce n'est pas un bug, mais c'est ce qui a rendu B1 et B2 possibles : l'état du b
 
 [Ligne 777](../askGeminiPrompto.py#L777). Ces logs sont copiés dans la section 3 du rapport PDF. Les six premiers caractères sont communs à toutes les clés Google, donc la fuite réelle est de quatre caractères. Faible, mais sans utilité : un simple « Clé API chargée (39 caractères) » suffit.
 
+**Statut : 🟡 partiellement résolu.** La portion loggée a été raccourcie : le log n'affiche plus que les 4 derniers caractères de la clé (`Clé API chargée (...xxxx)`) au lieu des 10 premiers, ce qui suffit à identifier la clé utilisée sans exposer de partie exploitable. Le log se trouve désormais dans `init_gemini_client()`. Pour résoudre complètement, ne logger aucun extrait (longueur de la clé uniquement).
+
 ### M6. Nom de fichier image non assaini à la sauvegarde
 
 [Ligne 289](../askGeminiPrompto.py#L289) : `os.path.join(images_dir, image["filename"])` utilise tel quel un nom venant du JavaScript. Un nom contenant `..\` écrirait hors du dossier `images/`. Le risque réel est faible (tout est local), mais `os.path.basename()` règle la question en un mot.
@@ -431,7 +433,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | M2 | 🟡 Mineur | Code mort (menu console, historique) | Trivial | 1 |
 | M3 | 🟡 Mineur | `except:` nus, f-strings vides | Trivial | 1 |
 | M4 | 🟡 Mineur | Fichier monolithique, douze globales | Moyen | 3 |
-| M5 | 🟡 Mineur | Extrait de clé dans les logs et le PDF | Trivial | 1 |
+| M5 | 🟡 Partiellement résolu | Extrait de clé dans les logs et le PDF (raccourci aux 4 derniers caractères) | Trivial | 1 |
 | M6 | 🟡 Mineur | Nom d'image non assaini | Trivial | 1 |
 | M7 | 🟡 Mineur | Double avertissement NOTE | Trivial | 1 |
 | M8 | 🟡 Mineur | Parseur PDF : émojis (carré noir garanti), italique vs maths, listes numérotées | Faible | 1 ou 4 |
