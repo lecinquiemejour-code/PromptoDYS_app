@@ -3,7 +3,7 @@
 > **Assistant IA dédié à l'aide scolaire pour élèves avec troubles DYS**
 
 ![Version](https://img.shields.io/badge/version-1.2.0-blue)
-![Python](https://img.shields.io/badge/python-3.x-green)
+![Python](https://img.shields.io/badge/python-3.14-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-orange)
 ![Status](https://img.shields.io/badge/status-stable-brightgreen)
 
@@ -23,7 +23,7 @@ PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'i
 - 📄 Génération automatique de rapports détaillés
 - 🎨 Styles personnalisés et lisibles
 - 📋 Capture complète des logs et statistiques
-- 💾 Sauvegarde automatique dans `/REPORTS`
+- 💾 Sauvegarde automatique dans `reports/`
 
 ### 🎨 Interface adaptée
 - 🖼️ Support des images dans les notes
@@ -108,7 +108,7 @@ L'application ouvre deux interfaces :
 2. **Lancer le traitement IA** (option 3)
 3. **L'IA analyse et corrige** la note en temps réel
 4. **Le résultat** est injecté automatiquement dans l'éditeur
-5. **Un rapport PDF** est généré automatiquement dans `/REPORTS`
+5. **Un rapport PDF** est généré automatiquement dans `reports/`
 
 ---
 
@@ -116,22 +116,27 @@ L'application ouvre deux interfaces :
 
 ```
 PromptoDYS/
-├── askGeminiPrompto.py       # Script principal (848 lignes)
+├── askGeminiPrompto.py       # Script principal
+├── pyproject.toml            # Dépendances directes et configuration uv
+├── uv.lock                   # Versions figées de toutes les dépendances (généré par uv)
+├── .python-version           # Version de Python utilisée par uv
 ├── PromptoDYS.spec           # Configuration PyInstaller
 ├── prompto.dys               # Template de prompt IA
+├── .env.template             # Modèle de GeminiKey.txt
 ├── GeminiKey.txt             # Clé API (à créer, ignoré par Git)
 ├── build_web/                # Interface React compilée
 │   ├── index.html
 │   ├── config.yaml
 │   └── static/
-├── REPORTS/                  # Rapports PDF générés
+├── doc/                      # Documentation technique
+├── reports/                  # Rapports PDF générés
 └── data/                     # Données utilisateur
 ```
 
 ### Stack technologique
 
 **Backend:**
-- Python 3.x
+- Python 3.14
 - Eel (bridge Python ↔ Web)
 - Google GenAI SDK
 - ReportLab (génération PDF)
@@ -183,7 +188,7 @@ Le fichier `prompto.dys` définit le comportement de l'IA :
 Le fichier `.gitignore` protège automatiquement :
 - `GeminiKey.txt`
 - `/data` (données utilisateur)
-- `/REPORTS` (rapports générés)
+- `reports/` (rapports générés)
 - `.venv` (environnement virtuel)
 
 ---
