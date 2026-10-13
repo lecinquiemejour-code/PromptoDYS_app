@@ -773,8 +773,16 @@ def init_gemini_client():
     """Initialise le client Gemini avec la clé API"""
     try:
         with open("GeminiKey.txt", "r") as f:
-            api_key = f.readline().strip()
-            log_message(f"🔑 INFO: Clé API chargée ({api_key[:10]}...)")
+            # Ignore les lignes vides et les commentaires (#), garde la première ligne utile
+            api_key = next(
+                (line.strip() for line in f
+                 if line.strip() and not line.strip().startswith("#")),
+                ""
+            )
+        if not api_key:
+            log_message("❌ ÉCHEC: Aucune clé API trouvée dans GeminiKey.txt")
+            return None
+        log_message(f"🔑 INFO: Clé API chargée ({api_key[:8]}...)")
         return genai.Client(api_key=api_key)
     except FileNotFoundError:
         log_message("❌ ÉCHEC: Fichier GeminiKey.txt introuvable")
