@@ -6,10 +6,10 @@ Combinaison : Interface desktop + Assistant IA pour traitement de texte
 
 GUI de contrôle avec Tkinter + sv_ttk (thème Sun Valley Windows 11)
 
-Installation requise:
-pip install eel google-genai reportlab markdown
+Installation requise (dépendances déclarées dans pyproject.toml):
+uv sync --locked
 Usage:
-python PromptoDYS.py
+uv run python askGeminiPrompto.py
 
 Fichiers requis:
 - GeminiKey.txt (clé API Gemini)

@@ -269,6 +269,8 @@ C'est le mécanisme utilisé partout pour revenir sur le thread Tkinter. Il fonc
 
 ### D2. `requirements.txt` est en UTF-16
 
+**Statut : ✅ résolu.** `requirements.txt` a été supprimé au profit de uv : dépendances directes dans `pyproject.toml`, versions figées avec hashes dans `uv.lock`.
+
 Signature d'un `pip freeze > requirements.txt` sous PowerShell 5. `pip` le lit grâce au BOM, mais GitHub l'affiche en caractères chinois, `git diff` le traite en binaire, et tout outil tiers (Dependabot, un `cat`) échoue. Le fichier est aussi un gel complet avec 40 dépendances transitives, ce qui masque les cinq vraies : `eel`, `google-genai`, `reportlab`, `sv-ttk`, et `pyinstaller` pour le build.
 
 **Piste.** `pip freeze | Out-File -Encoding utf8 requirements.txt`, ou mieux un `requirements.txt` court à la main et un `requirements-lock.txt` gelé.
@@ -392,7 +394,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | 8 | `askGeminiPrompto.py` | `http_options` avec timeout, fermeture du stream à l'abandon | B6 |
 | 9 | `askGeminiPrompto.py` | `ruff --fix`, retirer imports morts, `menu_console` et compagnie, `historique_llm` ; `basename` sur le nom d'image ; log de clé sans extrait | M1, M2, M3, M5, M6, M7 |
 | 10 | `build_web/static/` | Supprimer les trois vieux bundles et leurs `.map` | D1 |
-| 11 | `requirements.txt` | Regénérer en UTF-8, version courte plus lock | D2 |
+| 11 | `requirements.txt` | ✅ Fait : remplacé par `pyproject.toml` + `uv.lock` | D2 |
 | 12 | `README.md`, `CONTRIBUTING.md`, `BUILD_STATUS.md`, `.env.template`, `prompto.dys` | Corrections listées en D3 | D3 |
 | 13 | Build | `pyinstaller --clean`, test sur machine sans clé, avec clé, depuis un raccourci | Validation |
 
@@ -438,7 +440,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | M11 | 🟡 Mineur | `os._exit`, Chrome reste ouvert | Faible | 1 |
 | M12 | 🟡 Mineur | Effets de bord à l'import | Trivial | 2 |
 | D1 | 🟠 Important | Trois bundles React morts, `.map` dans l'exe | Trivial | 1 |
-| D2 | 🟡 Mineur | `requirements.txt` en UTF-16 | Trivial | 1 |
+| D2 | ✅ Résolu | `requirements.txt` en UTF-16 (remplacé par uv) | Trivial | 1 |
 | D3 | 🟠 Important | Docs obsolètes, `sv_ttk` absent de la commande d'installation, `version=` commenté | Faible | 1 |
 | D4 | 🟡 Mineur | Version dupliquée quatre fois | Faible | 3 |
 | D5 | 🟡 Mineur | Archives et PDF lourds dans le dépôt ou à la racine | Trivial | 1 |

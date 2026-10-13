@@ -1,5 +1,8 @@
 # 🚀 Procédure de Build PromptoDYS v1.2.0
 
+> **⚠️ Document historique, ne plus suivre.** Le problème décrit ci-dessous concernait Python 3.10.0. Le projet utilise désormais Python 3.14, fourni par uv, et les dépendances sont gérées par `pyproject.toml` et `uv.lock` : les commandes `python -m venv` et `pip install` de ce document ne s'appliquent plus.
+> La procédure de build à jour est dans le [README](README.md#-build-exécutable-windows) : `uv sync --locked` puis `uv run pyinstaller --clean PromptoDYS.spec`.
+
 ## ⚠️ Problème Technique Détecté
 
 **Erreur** : `IndexError: tuple index out of range` lors du build PyInstaller
