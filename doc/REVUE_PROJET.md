@@ -282,7 +282,7 @@ Signature d'un `pip freeze > requirements.txt` sous PowerShell 5. `pip` le lit g
 | [README.md](../README.md) | La commande `pip install eel google-genai reportlab markdown` **oublie `sv_ttk`** : un nouveau contributeur obtient `ModuleNotFoundError` au premier lancement. Même oubli dans `README_ANTIVIRUS.md` et `BUILD_STATUS.md`. |
 | README.md | Décrit un « menu console avec 3 options » qui n'existe plus, une structure avec `/REPORTS` et `data/` (le code écrit `reports/`, `data/` n'est utilisé nulle part), « 848 lignes » (il y en a 1 784), « Python 3.8+ » alors que le build se fait en 3.13. |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Parle de la branche `main`, le dépôt utilise `master`. Le remote `upstream` pointe sur `ORIGINAL_OWNER/PromptoDYS`, un reste de gabarit. |
-| [BUILD_STATUS.md](../BUILD_STATUS.md) | Décrit un problème Python 3.10.0 résolu depuis, et contredit `BUILD_v1.2.0_SUCCESS.md`. À fusionner ou archiver. |
+| `BUILD_STATUS.md` | ✅ Supprimé. Décrivait un problème Python 3.10.0 résolu depuis, et contredisait `BUILD_v1.2.0_SUCCESS.md`. |
 | [README_ANTIVIRUS.md](../README_ANTIVIRUS.md) | Lien VirusTotal « [À ajouter après build] » depuis janvier. |
 | [.env.template](../.env.template) | Le nom suggère un fichier `.env`, c'est en fait le gabarit de `GeminiKey.txt`. `GeminiKey.example.txt` serait plus clair. |
 | [CHANGELOG.md](../CHANGELOG.md) 1.2.0 | Annonce « Métadonnées Windows complètes », mais la ligne `version='version_info.txt'` est **commentée** dans le spec. L'exe n'a donc pas de métadonnées, ce qui aggrave les faux positifs antivirus que le même changelog prétend réduire. |

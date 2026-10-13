@@ -39,7 +39,6 @@
 ### Documentation
 - `README_ANTIVIRUS.md` - Guide pour les faux positifs antivirus
 - `version_info.txt` - Métadonnées Windows
-- `BUILD_STATUS.md` - Historique de résolution des problèmes
 
 ---
 

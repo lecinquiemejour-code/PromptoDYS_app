@@ -294,7 +294,7 @@ uv sync --locked
 uv run pyinstaller --clean PromptoDYS.spec
 ```
 
-Le résultat est `dist/PromptoDYS.exe`. Voir aussi [BUILD_STATUS.md](../BUILD_STATUS.md) et [README_ANTIVIRUS.md](../README_ANTIVIRUS.md).
+Le résultat est `dist/PromptoDYS.exe`. Voir aussi [README_ANTIVIRUS.md](../README_ANTIVIRUS.md).
 
 ---
 
