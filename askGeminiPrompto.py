@@ -49,6 +49,9 @@ from google import genai
 from google.genai import types
 import google.genai.errors as genai_errors
 
+# Niveau de réflexion Gemini 3.x
+GEMINI_THINKING_LEVEL = types.ThinkingLevel.LOW
+
 # --- Imports GUI Tkinter + sv_ttk ---
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
@@ -509,7 +512,7 @@ def preparer_contenu_rapport_complet(contenu_original, logs_etapes, streaming_ge
     contenu_final += "## 📋 Informations de Session\n\n"
     contenu_final += f"- **Script :** PromptoDYS avec capture complète des logs\n"
     contenu_final += f"- **Modèle IA :** Gemini 3.8 Flash\n"
-    contenu_final += f"- **Mode :** Thinking activé\n"
+    contenu_final += f"- **Thinking Level :** {GEMINI_THINKING_LEVEL.value.capitalize()}\n"
     contenu_final += f"- **Sauvegarde :** Automatique PDF uniquement\n\n"
 
     return contenu_final
@@ -911,16 +914,12 @@ def traitement_gemini():
     # 5. Configuration Gemini
     log_message("\n⚙️ ÉTAPE 5: Configuration des paramètres Gemini...")
     config = types.GenerateContentConfig(
-        temperature=0.0,  # Cohérence pour corrections
-        max_output_tokens=None
+        thinking_config=types.ThinkingConfig(
+            thinking_level=GEMINI_THINKING_LEVEL,
+            include_thoughts=True
+        )
     )
-
-    # Thinking activé
-    config.thinking_config = types.ThinkingConfig(
-        thinking_budget=500,
-        include_thoughts=True
-    )
-    log_message("✅ SUCCÈS: Configuration Gemini prête (thinking activé)")
+    log_message(f"✅ SUCCÈS: Configuration Gemini prête (Thinking level: {GEMINI_THINKING_LEVEL.value})")
 
     # CAPTURER LES LOGS DES ÉTAPES 1-5
     logs_etapes_actuelles = logs_complets.copy()
