@@ -49,6 +49,9 @@ from google import genai
 from google.genai import types
 import google.genai.errors as genai_errors
 
+# Modèle Gemini utilisé (ex. "gemini-3.8-flash", "gemini-3.5-flash-lite")
+GEMINI_MODEL = "gemini-3.8-flash"
+
 # Niveau de réflexion Gemini 3.x
 GEMINI_THINKING_LEVEL = types.ThinkingLevel.LOW
 
@@ -511,7 +514,7 @@ def preparer_contenu_rapport_complet(contenu_original, logs_etapes, streaming_ge
     # SECTION 7: Footer
     contenu_final += "## 📋 Informations de Session\n\n"
     contenu_final += f"- **Script :** PromptoDYS avec capture complète des logs\n"
-    contenu_final += f"- **Modèle IA :** Gemini 3.8 Flash\n"
+    contenu_final += f"- **Modèle IA :** {GEMINI_MODEL}\n"
     contenu_final += f"- **Thinking Level :** {GEMINI_THINKING_LEVEL.value.capitalize()}\n"
     contenu_final += f"- **Sauvegarde :** Automatique PDF uniquement\n\n"
 
@@ -919,7 +922,7 @@ def traitement_gemini():
             include_thoughts=True
         )
     )
-    log_message(f"✅ SUCCÈS: Configuration Gemini prête (Thinking level: {GEMINI_THINKING_LEVEL.value})")
+    log_message(f"✅ SUCCÈS: Configuration Gemini prête (Modèle: {GEMINI_MODEL}, Thinking level: {GEMINI_THINKING_LEVEL.value})")
 
     # CAPTURER LES LOGS DES ÉTAPES 1-5
     logs_etapes_actuelles = logs_complets.copy()
@@ -938,7 +941,7 @@ def traitement_gemini():
     try:
         log_message("📡 Flux IA: Démarrage de la réception des données...")
         for chunk in client.models.generate_content_stream(
-                model="gemini-3.8-flash",
+                model=GEMINI_MODEL,
                 contents=prompt_final,
                 config=config
         ):
