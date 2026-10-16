@@ -848,6 +848,26 @@ def extraire_contenu_note(reponse_complete):
         return reponse_nettoyee
 
 
+def ajouter_note_origine(contenu_traite, contenu_original):
+    """Ajoute la note d'origine (sans les images) à la fin de la note corrigée.
+    Générée côté Python plutôt que par Gemini : copie exacte et tokens de sortie économisés."""
+    if not contenu_traite.strip():
+        return contenu_traite
+    # Images Markdown de l'éditeur, ex. ![photo](./images/photo.png){width=300px id=...}, ou balises <img>
+    note_sans_images = re.sub(r'!\[[^\]]*\]\([^)]*\)(\{[^}]*\})?|<img[^>]*>', '', contenu_original)
+    note_sans_images = re.sub(r'\n{3,}', '\n\n', note_sans_images).strip()  # Lignes vides laissées par les images
+    if not note_sans_images:
+        return contenu_traite
+    # Retirer un éventuel séparateur final pour ne pas le doubler
+    contenu_traite = re.sub(r'(\s*\n)?-{3,}\s*$', '', contenu_traite.rstrip())
+    log_message(f"📎 NOTE: Note d'origine ajoutée ({len(note_sans_images)} caractères)")
+    return (
+        f"{contenu_traite}\n\n---\n\n"
+        f"### <span style=\"color: #3399ff;\">Note d'origine</span>\n\n"
+        f"{note_sans_images}\n"
+    )
+
+
 def extraire_debrief_correction(reponse_complete):
     """Extrait le débrief après </NOTE>"""
     if "</NOTE>" in reponse_complete:
@@ -1012,6 +1032,9 @@ def traitement_gemini():
         log_message(f"📏 Taille du contenu traité: {len(contenu_traite)} caractères")
     else:
         log_message("⚠️ ATTENTION: Balises <NOTE> absentes, utilisation complète")
+
+    # Section « Note d'origine » ajoutée côté Python (n'est plus générée par Gemini)
+    contenu_traite = ajouter_note_origine(contenu_traite, contenu_original)
 
     # Extraire aussi le débrief
     debrief_correction = extraire_debrief_correction(full_answer)
