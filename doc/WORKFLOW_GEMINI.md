@@ -2,7 +2,7 @@
 
 > Document de référence sur le cœur de PromptoDYS : comment une note d'élève part de l'éditeur, est corrigée par Google Gemini, revient dans l'éditeur et finit archivée en PDF.
 >
-> Dernière mise à jour : 12/10/2026. Code concerné : fonction `traitement_gemini()` et ses fonctions auxiliaires dans [askGeminiPrompto.py](../askGeminiPrompto.py), template [prompto.dys](../prompto.dys). Pour la vue d'ensemble des deux projets, voir [ARCHITECTURE.md](ARCHITECTURE.md).
+> Dernière mise à jour : 19/10/2026. Code concerné : fonction `traitement_gemini()` et ses fonctions auxiliaires dans [askGeminiPrompto.py](../askGeminiPrompto.py), template [prompto.dys](../prompto.dys). Pour la vue d'ensemble des deux projets, voir [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
@@ -39,12 +39,12 @@ flowchart TD
     E2 --> E3["3. Lecture prompto.dys"]
     E3 -- échec --> ERR
     E3 --> E4["4. Substitution<br/>[TEXTE] et [DATE]"]
-    E4 --> E5["5. Config Gemini<br/>température 0<br/>thinking 500"]
+    E4 --> E5["5. Config Gemini<br/>GEMINI_MODEL<br/>GEMINI_THINKING_LEVEL"]
     E5 --> E6["6. Streaming"]
 
     E6 -- abandon --> ABORT["Injection et PDF annulés"] --> ERR
     E6 -- erreur API --> ERR
-    E6 --> E7["7. Extraction entre NOTE et /NOTE"]
+    E6 --> E7["7. Extraction entre NOTE et /NOTE<br/>+ ajout de la note d'origine"]
     E7 --> E8["8. Injection<br/>eel.writeMarkdown"]
     E8 --> E9["9. Bilan des tokens"]
     E9 --> E10["10. Rapport PDF<br/>dans reports/"]
@@ -94,12 +94,13 @@ flowchart LR
 
 ### Structure de prompto.dys
 
-Le fichier se lit en quatre blocs :
+Le fichier se lit en cinq blocs :
 
 1. **Configuration** : le rôle de l'assistant, dédié à un apprenant avec troubles DYS, bienveillant et pédagogique.
-2. **Instructions** : analyser, corriger l'orthographe et la grammaire, améliorer la structure, mettre en forme en Markdown, vérifier la syntaxe.
-3. **Matière et titre** : liste fermée des matières du collège. Gemini doit en choisir une et créer un titre.
-4. **Format de réponse et structure** : les contraintes de forme et les huit sections attendues (voir section 6).
+2. **Instructions** : analyser, corriger l'orthographe et la grammaire, reformuler et réorganiser (fragments transformés en phrases, listes mélangées séparées par catégories, définitions rattachées à leur terme), ajouter des sous-parties, mettre en forme en Markdown, vérifier la syntaxe.
+3. **Fidélité au contenu** : conserver toutes les informations de la note (faits, chiffres, noms, exemples), ne pas en ajouter, et signaler une information douteuse dans la section Doutes au lieu de la corriger. La règle porte sur le fond : la reformulation reste obligatoire.
+4. **Matière et titre** : liste fermée des matières du collège. Gemini doit en choisir une, créer un titre et s'appuyer sur son expertise de la matière pour interpréter la note.
+5. **Format de réponse et structure** : les contraintes de forme et les sept sections attendues (voir section 6).
 
 Puis vient la zone de substitution :
 
@@ -117,14 +118,30 @@ La fonction `lire_prompto_dys()` vérifie que la balise `[TEXTE]` est présente.
 
 ## 4. Paramètres envoyés à Gemini
 
+Les deux réglages principaux sont des constantes en tête de [askGeminiPrompto.py](../askGeminiPrompto.py) : `GEMINI_MODEL` et `GEMINI_THINKING_LEVEL`.
+
 | Paramètre | Valeur | Pourquoi |
 |---|---|---|
-| Modèle | `gemini-3.8-flash` | Rapide et économique, suffisant pour de la correction de texte |
-| `temperature` | `0.0` | Réponses les plus déterministes possible : une correction doit être stable, pas créative |
-| `max_output_tokens` | `None` | Pas de limite, la note corrigée peut être longue avec ses huit sections |
-| `thinking_budget` | `500` | Gemini réfléchit avant de répondre, mais avec un plafond pour limiter le coût et la latence |
-| `include_thoughts` | `True` | Les réflexions sont renvoyées dans le flux, affichées avec le préfixe 💭 et archivées dans le PDF |
+| Modèle | `GEMINI_MODEL` = `gemini-3.8-flash` | Interprète bien l'écriture phonétique des notes DYS, pour un coût proche de l'ancien Gemini 2.5 Flash |
+| `thinking_level` | `GEMINI_THINKING_LEVEL` = `LOW` | Niveau de réflexion le plus économe accepté par 3.8 Flash, suffisant pour une note de collège |
+| `include_thoughts` | `True` | Les résumés de réflexion sont renvoyés dans le flux, affichés avec le préfixe 💭 et archivés dans le PDF |
 | Mode d'appel | `generate_content_stream` | Streaming : les morceaux arrivent au fil de l'eau, ce qui permet l'affichage en direct et l'abandon |
+
+> **Paramètres retirés avec Gemini 3**
+> - `temperature` : ignorée par les modèles Gemini 3.x. Google déconseille de la baisser sous 1.0 (risque de boucles et de qualité dégradée). La stabilité des corrections repose désormais sur la clarté du prompt.
+> - `thinking_budget` : remplacé par `thinking_level`. Ce dernier est un niveau relatif (`LOW`, `MEDIUM`, `HIGH`), pas un plafond de tokens : en `LOW`, le modèle décide lui-même s'il réfléchit, et sur une note de collège il ne le fait généralement pas.
+> - `max_output_tokens` : non renseigné, donc sans plafond. S'il est fixé, il inclut les tokens de réflexion : une valeur trop basse tronquerait la note avant la balise `</NOTE>`.
+
+**Pourquoi `LOW` :** mesures sur une même note de sciences, avec le prompt actuel.
+
+| Configuration | Réflexion | Total tokens | Qualité |
+|---|---|---|---|
+| Gemini 2.5 Flash, `thinking_budget=500` (ancienne version) | ≈ 500 | ≈ 3 340 | Référence |
+| `gemini-3.8-flash`, `LOW` | 0 | ≈ 2 900 | Au moins équivalente |
+| `gemini-3.8-flash`, `MEDIUM` | ≈ 2 000 à 3 000 | ≈ 5 500 | Gain sur la forme seulement |
+| `gemini-3.5-flash-lite`, `HIGH` | ≈ 4 700 | ≈ 7 300 | Écarté : interprète mal l'écriture phonétique |
+
+Les tokens de réflexion sont facturés au tarif des tokens de sortie, d'où l'intérêt de `LOW`.
 
 Le client est créé à chaque traitement par `init_gemini_client()`, qui lit la première ligne de `GeminiKey.txt`. Les dix premiers caractères de la clé sont affichés dans les logs pour vérification, jamais la clé complète.
 
@@ -171,24 +188,25 @@ Deux accumulateurs distincts sont remplis pendant le streaming :
 
 ## 6. Anatomie de la réponse attendue
 
-Le template impose à Gemini une réponse en deux zones : la note corrigée entre balises, puis un débrief libre après la balise fermante.
+Le template impose à Gemini une réponse en deux zones : la note corrigée entre balises, puis un débrief libre après la balise fermante. La note d'origine ne fait pas partie de la réponse de Gemini : Python l'ajoute ensuite à la zone injectée (voir section 7).
 
 ```mermaid
 flowchart TB
     OPEN["Balise ouvrante NOTE"]
-    subgraph NOTE["Zone injectée"]
+    subgraph NOTE["Zone générée par Gemini"]
         S1["1. Titre : Matière - Sujet - Date"] --> S2["2. Résumé en une phrase"]
         S2 --> S3["3. Huit mots-clés"]
-        S3 --> S4["4. Note corrigée, images conservées"]
+        S3 --> S4["4. Titre « Note corrigée » puis la note, images conservées"]
         S4 --> S5["5. Avertissement IA en orange"]
-        S5 --> S6["6. Doutes et interrogations"]
+        S5 --> S6["6. Doutes : comparaison phrase par phrase<br/>avec la note d'origine"]
         S6 --> S7["7. Trois questions d'approfondissement"]
-        S7 --> S8["8. Note d'origine, sans correction"]
     end
     CLOSE["Balise fermante /NOTE"]
     DEBRIEF["Débrief : ce qui a été corrigé<br/>Archivé dans le PDF uniquement"]
+    ORIG["Note d'origine sans les images<br/>ajoutée par Python à la zone injectée"]
     OPEN --> S1
-    S8 --> CLOSE --> DEBRIEF
+    S7 --> CLOSE --> DEBRIEF
+    S7 -.-> ORIG
 ```
 
 ### Contraintes de forme imposées par le template
@@ -197,9 +215,11 @@ flowchart TB
 |---|---|
 | Pas d'italique | Difficile à lire pour les dyslexiques |
 | Titres de niveau `#`, `##` ou `###` seulement | Hiérarchie simple |
+| Pas de titre `####` : sous-parties en ligne en gras ou en liste numérotée | Le parseur PDF ne gère que trois niveaux, et la note garde une hiérarchie simple |
 | Titres colorés en `#3399ff` via une balise `<span>` | Repérage visuel rapide |
+| Titre « Note corrigée » toujours présent en tête de la section 4 | Repère fixe d'une note à l'autre |
 | Séparateurs horizontaux `---` entre blocs | Délimitation claire des idées |
-| Pas de saut de ligne dans le Markdown de la note corrigée | Évite les paragraphes éclatés dans l'éditeur |
+| Chaque titre, élément de liste et `---` sur sa propre ligne, une seule ligne vide entre deux blocs, pas de `<br>` ni `<hr>` | Note aérée sans paragraphes éclatés, Markdown valide |
 | Formules en `$...$` | Rendu par MathJax dans l'éditeur |
 | Images replacées à l'identique, même URL, même position | Les images ne transitent pas par Gemini, seul leur lien Markdown y passe |
 
@@ -214,6 +234,19 @@ flowchart TB
 **Cas dégradé :** si l'une des balises manque, toute la réponse est renvoyée, avec un avertissement dans les logs. L'élève voit alors la note corrigée et le débrief ensemble dans l'éditeur. Ce n'est pas bloquant.
 
 `extraire_debrief_correction()` renvoie tout ce qui suit `</NOTE>`, ou une chaîne vide si la balise manque.
+
+### Ajout de la note d'origine
+
+`ajouter_note_origine()` complète la note extraite avec la note de l'élève, telle qu'elle a été lue dans l'éditeur à l'étape 2 :
+
+1. Les images sont retirées : liens Markdown de l'éditeur (`![photo](./images/photo.png){width=300px id=...}`) et balises `<img>`.
+2. Les suites de lignes vides sont réduites à une seule.
+3. Un éventuel séparateur `---` en fin de note corrigée est retiré, pour ne pas le doubler.
+4. La note d'origine est ajoutée après un séparateur, sous un titre `### Note d'origine` coloré en `#3399ff`.
+
+Si la note corrigée est vide, rien n'est ajouté, et l'étape 8 signale qu'il n'y a aucun contenu à injecter.
+
+**Pourquoi côté Python :** quand Gemini recopiait lui-même la note d'origine, il payait chaque token de cette copie au tarif de sortie, le plus cher, et pouvait la modifier par erreur. L'ajout par Python donne une copie exacte et réduit les tokens de sortie d'environ 27 %, soit environ 13 % du total des tokens, sur la note de test. Le gain dépend de la longueur de la note d'origine : plus elle est longue, plus l'économie est importante.
 
 ### Nettoyage des marqueurs `__BOLD_n__`
 
@@ -253,7 +286,7 @@ Le dernier morceau reçu, `last_response`, porte les métadonnées d'usage. Quat
 |---|---|
 | `input` | Tokens du prompt envoyé, template et note comprise |
 | `output` | Tokens de la réponse, hors réflexions |
-| `thinking` | Tokens consommés par la réflexion, plafonnés par `thinking_budget` |
+| `thinking` | Tokens consommés par la réflexion, facturés comme des tokens de sortie. Souvent absent en `LOW` : il s'affiche alors `None`, ce qui veut dire 0 |
 | `total` | Somme des trois |
 
 Ces statistiques servent à suivre le coût d'une correction. Elles sont affichées dans la console, écrites dans le PDF et conservées dans l'historique de session.
@@ -288,7 +321,7 @@ flowchart LR
 4. Streaming Gemini complet : réflexions et réponse dans l'ordre d'arrivée.
 5. Contenu traité final : la note corrigée.
 6. Débrief de la correction par l'IA.
-7. Informations de session : modèle, mode thinking, type de sauvegarde.
+7. Informations de session : modèle (`GEMINI_MODEL`), niveau de réflexion (`GEMINI_THINKING_LEVEL`), type de sauvegarde.
 
 ### Le parseur Markdown du PDF
 
@@ -348,30 +381,39 @@ Chaque traitement est aussi ajouté à `historique_llm`, une liste en mémoire c
 - Garder la balise `[TEXTE]`, sinon le traitement refuse de démarrer.
 - Garder `[DATE]` si le titre doit contenir la date.
 - Garder la consigne d'encadrer la note avec `<NOTE>` et `</NOTE>`, sinon le débrief sera injecté dans l'éditeur avec la note.
+- Ne pas demander la note d'origine dans le prompt : Python l'ajoute déjà (voir section 7), elle apparaîtrait en double.
+- Chaque consigne ajoutée est envoyée à chaque traitement : quelques dizaines de tokens d'entrée par appel. Le modèle applique les consignes à la lettre, une consigne ambiguë ou contradictoire se voit tout de suite dans la mise en forme.
 - Tester avec une note contenant une image et une formule, ce sont les deux cas où la mise en forme casse le plus facilement.
 
 ### Changer le modèle ou les paramètres
 
-Dans `traitement_gemini()`, étape 5 et appel de l'étape 6 :
+Il suffit de modifier les deux constantes en tête de [askGeminiPrompto.py](../askGeminiPrompto.py). Elles sont utilisées par la configuration de l'étape 5, l'appel de l'étape 6, les logs et le pied du rapport PDF.
+
+```python
+# Modèle Gemini utilisé (ex. "gemini-3.8-flash", "gemini-3.5-flash-lite")
+GEMINI_MODEL = "gemini-3.8-flash"
+
+# Niveau de réflexion Gemini 3.x
+GEMINI_THINKING_LEVEL = types.ThinkingLevel.LOW
+```
+
+La configuration envoyée à l'étape 5 en découle :
 
 ```python
 config = types.GenerateContentConfig(
-    temperature=0.0,
-    max_output_tokens=None
-)
-config.thinking_config = types.ThinkingConfig(
-    thinking_budget=500,
-    include_thoughts=True
-)
-...
-client.models.generate_content_stream(
-    model="gemini-3.8-flash",
-    contents=prompt_final,
-    config=config
+    thinking_config=types.ThinkingConfig(
+        thinking_level=GEMINI_THINKING_LEVEL,
+        include_thoughts=True
+    )
 )
 ```
 
-Augmenter `thinking_budget` améliore parfois la qualité sur les notes longues, au prix du temps et du coût. Passer `include_thoughts` à `False` allège le flux et le PDF, mais fait perdre la trace du raisonnement.
+Points d'attention :
+
+- Les niveaux acceptés dépendent du modèle : `gemini-3.8-flash` accepte `LOW`, `MEDIUM` et `HIGH`, mais refuse `MINIMAL` (erreur 400). `gemini-3.5-flash-lite` documente `MINIMAL`, `MEDIUM` et `HIGH`.
+- `MEDIUM` et `HIGH` multiplient le coût par deux à trois, car la réflexion est facturée comme de la sortie (voir section 4).
+- Ne pas réintroduire `temperature` ni `thinking_budget` : ils sont ignorés ou dépréciés sur Gemini 3, et `thinking_budget` ne peut pas être combiné avec `thinking_level`.
+- Passer `include_thoughts` à `False` allège le flux et le PDF, mais fait perdre la trace du raisonnement. Le coût ne change pas.
 
 ### Changer le contenu du rapport PDF
 

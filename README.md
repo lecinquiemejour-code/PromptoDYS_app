@@ -33,7 +33,7 @@ PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'i
 
 ### 🤖 Powered by Google Gemini
 - ⚡ Modèle Gemini 3.8 Flash
-- 💭 Mode "thinking" pour analyse approfondie
+- 💭 Niveau de réflexion configurable (LOW par défaut, économe en tokens)
 - 📊 Statistiques de tokens détaillées
 - 🔄 Streaming en temps réel
 
@@ -169,7 +169,8 @@ Le fichier `prompto.dys` définit le comportement de l'IA :
 
 - **Rôle** : Assistant dédié aux troubles DYS
 - **Matières supportées** : Français, Maths, Histoire-Géo, Sciences, Langues, etc.
-- **Format de sortie** : 8 sections structurées
+- **Fidélité** : aucune information de la note n'est supprimée ni ajoutée, les doutes sont signalés plutôt que corrigés
+- **Format de sortie** : 7 sections générées par Gemini
   1. Titre (Matière + Sujet + Date)
   2. Résumé en 1 phrase
   3. 8 mots-clés
@@ -177,7 +178,7 @@ Le fichier `prompto.dys` définit le comportement de l'IA :
   5. Avertissement IA
   6. Doutes/interrogations
   7. 3 questions d'approfondissement
-  8. Note originale
+- **Note originale** : ajoutée automatiquement par l'application à la suite (copie exacte, sans les images)
 
 ---
 

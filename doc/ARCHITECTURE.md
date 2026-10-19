@@ -2,7 +2,7 @@
 
 > Document de référence pour comprendre comment les deux projets (application Python et éditeur React) coopèrent, du clic de l'élève jusqu'au rapport PDF.
 >
-> Dernière mise à jour : 12/10/2026. Les schémas sont en Mermaid et se rendent directement dans GitHub, VS Code et la plupart des visionneuses Markdown.
+> Dernière mise à jour : 19/10/2026. Les schémas sont en Mermaid et se rendent directement dans GitHub, VS Code et la plupart des visionneuses Markdown.
 
 ---
 
@@ -154,12 +154,13 @@ sequenceDiagram
     R->>R: HTML du DOM → Markdown
     R-->>TK: Markdown de la note
     TK->>TK: Lit prompto.dys, remplace [TEXTE] et [DATE]
-    TK->>G: generate_content_stream (thinking activé, température 0)
+    TK->>G: generate_content_stream (GEMINI_MODEL, GEMINI_THINKING_LEVEL)
     loop Streaming
         G-->>TK: morceaux de réflexion 💭 et de réponse
         TK->>TK: Affiche dans la console, vérifie le flag abandon
     end
     TK->>TK: Extrait le contenu entre NOTE et /NOTE
+    TK->>TK: Ajoute la note d'origine (sans les images)
     TK->>R: eel.writeMarkdown(note corrigée)
     R->>R: Nettoie les astérisques, Markdown → HTML, injecte
     R-->>U: Note corrigée affichée, formules rendues par MathJax
@@ -175,9 +176,9 @@ La fonction `traitement_gemini()` de [askGeminiPrompto.py](../askGeminiPrompto.p
 2. Lecture du Markdown de l'éditeur.
 3. Lecture du template [prompto.dys](../prompto.dys).
 4. Substitution de `[TEXTE]` et `[DATE]`.
-5. Configuration : température 0, mode thinking avec budget de 500 tokens.
+5. Configuration : modèle `GEMINI_MODEL` (`gemini-3.8-flash`) et niveau de réflexion `GEMINI_THINKING_LEVEL` (`LOW`), deux constantes en tête du fichier.
 6. Streaming de la réponse, avec vérification du flag d'abandon à chaque morceau.
-7. Extraction du contenu entre `<NOTE>` et `</NOTE>`.
+7. Extraction du contenu entre `<NOTE>` et `</NOTE>`, puis ajout de la note d'origine sans les images.
 8. Injection dans l'éditeur.
 9. Bilan des tokens (entrée, sortie, réflexion).
 10. Génération du rapport PDF avec ReportLab.
@@ -187,7 +188,8 @@ La fonction `traitement_gemini()` de [askGeminiPrompto.py](../askGeminiPrompto.p
 
 Le fichier [prompto.dys](../prompto.dys) est le cerveau pédagogique. Il impose à Gemini :
 
-- une structure en **huit sections** : titre, résumé, mots-clés, note corrigée, avertissement, doutes, questions, note d'origine ;
+- une structure en **sept sections** : titre, résumé, mots-clés, note corrigée, avertissement, doutes, questions. La note d'origine est ajoutée ensuite par Python, copie exacte sans les images ;
+- une **fidélité au contenu** : aucune information supprimée ni ajoutée, les doutes sont signalés au lieu d'être corrigés ;
 - **pas d'italique**, difficile à lire pour les dyslexiques ;
 - des **titres colorés** en `#3399ff` ;
 - les **balises `<NOTE>`** qui permettent à Python de séparer la note corrigée du débrief.
