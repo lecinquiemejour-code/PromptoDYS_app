@@ -30,7 +30,6 @@ import sys
 import threading
 import time
 from datetime import datetime
-import markdown
 import re
 import base64
 import mimetypes
@@ -41,8 +40,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
-from reportlab.platypus.tableofcontents import TableOfContents
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 
 # --- Imports Gemini ---
 from google import genai

@@ -23,6 +23,8 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 ### Supprimé
 - `requirements.txt` (encodé en UTF-16), remplacé par `pyproject.toml` et `uv.lock`
 - `BUILD_STATUS.md`, obsolète (problème propre à Python 3.10.0)
+- Code mort : menu console (`menu_console()`, `lire_contenu()`, `ecrire_contenu()`), jamais appelé depuis le passage au panneau Tkinter
+- Imports inutilisés `markdown`, `PageBreak` et `TableOfContents`, et dépendance `markdown` retirée de `pyproject.toml`, `uv.lock` et des `hiddenimports` de `PromptoDYS.spec`
 
 ### Sécurité
 - Paramètres de sécurité pour Claude Code (`.claude/settings.json`) : lecture de `GeminiKey.txt` interdite, confirmation demandée pour les commandes destructives et les changements de dépendances

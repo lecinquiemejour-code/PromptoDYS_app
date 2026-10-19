@@ -7,7 +7,6 @@ requires-python = ">=3.14,<3.15"
 dependencies = [
     "eel>=0.18,<0.19",
     "google-genai>=2.29,<3",
-    "markdown>=3.11,<4",
     "reportlab>=5.0,<6",
     "sv-ttk>=2.6,<3",
 ]

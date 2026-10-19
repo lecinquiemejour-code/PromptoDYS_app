@@ -17,7 +17,6 @@ a = Analysis(
         'eel',
         'google.genai',
         'reportlab',
-        'markdown',
         'gevent',
         'gevent.socket',
         'gevent.ssl',
