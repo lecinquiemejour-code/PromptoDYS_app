@@ -143,7 +143,7 @@ Les deux réglages principaux sont des constantes en tête de [askGeminiPrompto.
 
 Les tokens de réflexion sont facturés au tarif des tokens de sortie, d'où l'intérêt de `LOW`.
 
-Le client est créé à chaque traitement par `init_gemini_client()`, qui lit la première ligne de `GeminiKey.txt`. Les dix premiers caractères de la clé sont affichés dans les logs pour vérification, jamais la clé complète.
+Le client est créé à chaque traitement par `init_gemini_client()`. La clé est lue par `lire_cle_api()` : première ligne de `GeminiKey.txt` qui n'est ni vide ni un commentaire `#`, avec tolérance du BOM ajouté par le Bloc-notes Windows. Si la clé est absente ou vaut encore la valeur du modèle `.env.template`, le traitement s'arrête avec un message explicite. Seuls les 4 derniers caractères de la clé sont affichés dans les logs, car ces logs sont recopiés dans les rapports PDF.
 
 ---
 
@@ -336,6 +336,7 @@ Si la génération du PDF échoue, le traitement n'est pas considéré comme rat
 | Situation | Détection | Comportement |
 |---|---|---|
 | `GeminiKey.txt` absent | `FileNotFoundError` à l'étape 1 | Arrêt, message dans les logs, éditeur inchangé |
+| Clé vide ou valeur du modèle `.env.template` non remplacée | Étape 1 | Arrêt, message demandant de renseigner la clé |
 | `prompto.dys` absent ou sans `[TEXTE]` | Étape 3 | Arrêt, message dans les logs |
 | Éditeur vide | Pas d'erreur | Le prompt est envoyé avec une note vide, Gemini répond quand même |
 | Erreur serveur Gemini (5xx) | `genai_errors.ServerError` | Arrêt, message, bouton réinitialisé |
