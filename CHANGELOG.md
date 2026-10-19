@@ -29,6 +29,7 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 ### Sécurité
 - Paramètres de sécurité pour Claude Code (`.claude/settings.json`) : lecture de `GeminiKey.txt` interdite, confirmation demandée pour les commandes destructives et les changements de dépendances
 - Le log de chargement de la clé API, recopié dans les rapports PDF, n'affiche plus que les 4 derniers caractères de la clé au lieu des 10 premiers
+- `GeminiKey.txt` n'est plus inclus dans l'exécutable : chaque utilisateur fournit sa propre clé à côté de l'exe
 
 ### Prévu
 - Tests unitaires et d'intégration

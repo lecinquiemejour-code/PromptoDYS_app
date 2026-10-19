@@ -332,7 +332,7 @@ Le résultat est `dist/PromptoDYS.exe`. Voir aussi [README_ANTIVIRUS.md](../READ
 
 ## 8. Points d'attention
 
-- **Clé API embarquée dans l'exécutable.** Le fichier spec inclut `GeminiKey.txt` dans l'exe. Toute personne qui possède l'exe peut extraire la clé. Ne jamais commiter un exe dans un dépôt, et révoquer toute clé qui aurait été diffusée.
+- **Clé API hors de l'exécutable.** Le spec n'embarque pas `GeminiKey.txt` : chaque utilisateur place son propre fichier à côté de l'exe. Ne jamais embarquer de clé dans un exécutable distribué, ni commiter un exe dans un dépôt.
 - **Fonctions Eel synchrones uniquement.** Toute nouvelle fonction exposée à Python doit être synchrone (voir section 3).
 - **Convertisseur Markdown à base d'expressions régulières.** Il gère les cas courants mais reste fragile sur le HTML imbriqué. C'est le point le plus sensible du pont, puisque tout ce que Gemini renvoie passe par là.
 - **Mode développeur persistant.** Il est stocké dans le localStorage de Chrome et prime sur `config.yaml`. Une fois activé, modifier le YAML ne suffit plus pour le désactiver.

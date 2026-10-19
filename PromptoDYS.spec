@@ -10,7 +10,6 @@ a = Analysis(
         ('build_web/asset-manifest.json', 'build_web'),
         ('build_web/favicon.png', 'build_web'),
         ('prompto.dys', '.'),
-        ('GeminiKey.txt', '.'),
         ('assets/prompto.png', 'assets'),  # Icône et logo de l'application
     ],
     hiddenimports=[
