@@ -71,7 +71,6 @@ except:
 
 # --- NOUVELLE VARIABLE POUR CAPTURER TOUS LES LOGS ---
 logs_complets = []
-historique_llm = []
 
 # --- VARIABLES D'ÉTAT POUR L'ABANDON IA ---
 abandon_ia = False
@@ -772,23 +771,6 @@ def sauvegarder_rapport(contenu_original, logs_etapes, streaming_gemini, contenu
     return md_filepath, pdf_filepath
 
 
-def ajouter_message_llm(prompt_utilisé, réponse_complète, contenu_extrait, stats_tokens):
-    """Ajoute un message à l'historique LLM"""
-    global historique_llm
-
-    timestamp = datetime.now().strftime("%H:%M:%S")
-
-    message = {
-        "timestamp": timestamp,
-        "prompt": prompt_utilisé,
-        "réponse_complète": réponse_complète,
-        "contenu_extrait": contenu_extrait,
-        "stats": stats_tokens
-    }
-
-    historique_llm.append(message)
-
-
 # --- Fonctions Gemini ---
 
 GEMINI_API_KEY_PLACEHOLDER = "YOUR_GEMINI_API_KEY_HERE"
@@ -1109,16 +1091,12 @@ def traitement_gemini():
     else:
         log_message("⚠️ ATTENTION: Sauvegarde PDF échouée")
 
-    # 11. Ajouter à l'historique
-    ajouter_message_llm(prompt_final, full_answer, contenu_traite, stats_tokens)
-
     log_message("\n🎉 TERMINÉ: Traitement IA Gemini avec capture complète terminé !")
 
 
 # --- GUI Tkinter avec thème Sun Valley ---
 # --- Variable globale pour tracker si l'éditeur est lancé ---
 editeur_lance = False
-web_folder_global = None
 
 
 def on_closing():
@@ -1168,7 +1146,7 @@ def gui_control_panel():
     GUI de contrôle avec Tkinter + sv_ttk (thème Windows 11)
     Panneau compact avec 3 boutons principaux
     """
-    global editeur_lance, web_folder_global, root_global, status_label_global, btn_ia_global
+    global root_global, status_label_global, btn_ia_global
     log_message("🖥️ Démarrage du panneau de contrôle GUI...")
     
     # --- Fonctions des boutons ---
@@ -1733,14 +1711,12 @@ def gui_control_panel():
 
 def main():
     """Lance l'application - GUI d'abord, éditeur via bouton"""
-    global web_folder_global
-    
     log_message('🚀 Lancement de PromptoDYS...')
     log_message('💾 Sauvegarde automatique : PDF uniquement avec CAPTURE COMPLÈTE des logs')
 
     # Trouver le dossier web
-    web_folder_global = find_web_folder()
-    if not web_folder_global:
+    web_folder = find_web_folder()
+    if not web_folder:
         log_message("💡 Placez votre build React dans le dossier 'build/'")
         return
 
@@ -1749,7 +1725,7 @@ def main():
     log_message('📁 Dossier "reports" créé pour les sauvegardes automatiques')
 
     # Initialiser Eel (préparation, mais ne lance pas encore)
-    eel.init(web_folder_global)
+    eel.init(web_folder)
     log_message('✅ Eel initialisé, prêt à lancer l\'éditeur')
 
     # Lancer la GUI de contrôle (BLOQUANT - boucle principale)

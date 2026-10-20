@@ -6,7 +6,7 @@
 >
 > **Aucune modification de code n'a été faite.** Ce document est un constat et un plan ; chaque correction attend un GO.
 >
-> **Mise à jour du 20/10/2026** (commit `b873d32`) : le statut de chaque constat traité depuis la revue est indiqué sous son titre et dans le [tableau récapitulatif](#11-tableau-récapitulatif). Résolus : B7, D2. Partiellement résolus : C1, M1, M2, M5, D3, D4, D5. Les numéros de ligne cités renvoient toujours au commit `9e62040` et ont pu bouger depuis.
+> **Mise à jour du 20/10/2026** (commit `b873d32`) : le statut de chaque constat traité depuis la revue est indiqué sous son titre et dans le [tableau récapitulatif](#11-tableau-récapitulatif). Résolus : B7, M2, D2. Partiellement résolus : C1, M1, M5, D3, D4, D5. Les numéros de ligne cités renvoient toujours au commit `9e62040` et ont pu bouger depuis.
 
 ---
 
@@ -203,7 +203,7 @@ Cette option désactive la politique de même origine pour toute la fenêtre. El
 - `historique_llm` et `ajouter_message_llm()` : rempli à chaque traitement, jamais lu.
 - `web_folder_global` : déclaré global, utilisé uniquement dans `main()`.
 
-**Statut : 🟡 partiellement résolu.** Le menu console (`menu_console()`, `lire_contenu()`, `ecrire_contenu()`) a été supprimé (commit `793fe44`), et le README ne le décrit plus. `historique_llm`, `ajouter_message_llm()` et `web_folder_global` sont toujours là.
+**Statut : ✅ résolu.** Le menu console (`menu_console()`, `lire_contenu()`, `ecrire_contenu()`) a été supprimé (commit `793fe44`), et le README ne le décrit plus. `historique_llm` et `ajouter_message_llm()` ont été supprimés, ainsi que l'étape 11 « Historique de session » du traitement IA, qui en compte désormais dix. `web_folder_global` est devenue une variable locale de `main()`.
 
 ### M3. Signalements ruff automatiquement corrigeables
 
@@ -410,7 +410,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | 6 | `askGeminiPrompto.py` | Hauteur de fenêtre calculée depuis l'écran, `minsize` à 650 | B4 |
 | 7 | `askGeminiPrompto.py` | 🟡 En partie fait : `--disable-web-security` retiré. Restent : `port=0`, retirer le `--app=` manuel, ajouter `close_callback` | B5, B7 |
 | 8 | `askGeminiPrompto.py` | `http_options` avec timeout, fermeture du stream à l'abandon | B6 |
-| 9 | `askGeminiPrompto.py` | 🟡 En partie fait : imports morts et `menu_console` et compagnie retirés. Restent : `ruff --fix`, `historique_llm` ; `basename` sur le nom d'image ; log de clé sans extrait | M1, M2, M3, M5, M6, M7 |
+| 9 | `askGeminiPrompto.py` | 🟡 En partie fait : imports morts, `menu_console` et compagnie, `historique_llm` retirés. Restent : `ruff --fix` ; `basename` sur le nom d'image ; log de clé sans extrait | M1, M2, M3, M5, M6, M7 |
 | 10 | `build_web/static/` | Supprimer les trois vieux bundles et leurs `.map` | D1 |
 | 11 | `requirements.txt` | ✅ Fait : remplacé par `pyproject.toml` + `uv.lock` | D2 |
 | 12 | `README.md`, `CONTRIBUTING.md`, `BUILD_STATUS.md`, `.env.template`, `prompto.dys` | 🟡 En partie fait : corrections listées en D3, voir la colonne Statut | D3 |
@@ -446,7 +446,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | B6 | 🟠 Important | Pas de timeout Gemini, abandon inopérant si flux figé | Faible | 1 |
 | B7 | ✅ Résolu | `--disable-web-security` inutile (retiré) | Trivial | 1 |
 | M1 | 🟡 Partiellement résolu | Imports et dépendances inutilisés (retirés ; docstring d'en-tête encore obsolète) | Trivial | 1 |
-| M2 | 🟡 Partiellement résolu | Code mort (menu console retiré ; restent `historique_llm`, `web_folder_global`) | Trivial | 1 |
+| M2 | ✅ Résolu | Code mort (menu console, historique, `web_folder_global`) | Trivial | 1 |
 | M3 | 🟡 Mineur | `except:` nus, f-strings vides | Trivial | 1 |
 | M4 | 🟡 Mineur | Fichier monolithique, douze globales | Moyen | 3 |
 | M5 | 🟡 Partiellement résolu | Extrait de clé dans les logs et le PDF (raccourci aux 4 derniers caractères) | Trivial | 1 |

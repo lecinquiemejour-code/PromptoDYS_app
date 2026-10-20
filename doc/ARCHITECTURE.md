@@ -170,7 +170,7 @@ sequenceDiagram
 
 ### Les étapes dans le code Python
 
-La fonction `traitement_gemini()` de [askGeminiPrompto.py](../askGeminiPrompto.py) suit onze étapes numérotées dans ses logs :
+La fonction `traitement_gemini()` de [askGeminiPrompto.py](../askGeminiPrompto.py) suit dix étapes numérotées dans ses logs :
 
 1. Initialisation du client Gemini (clé lue dans `GeminiKey.txt`).
 2. Lecture du Markdown de l'éditeur.
@@ -182,7 +182,6 @@ La fonction `traitement_gemini()` de [askGeminiPrompto.py](../askGeminiPrompto.p
 8. Injection dans l'éditeur.
 9. Bilan des tokens (entrée, sortie, réflexion).
 10. Génération du rapport PDF avec ReportLab.
-11. Ajout à l'historique de session.
 
 ### Le rôle de prompto.dys
 
