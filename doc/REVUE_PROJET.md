@@ -6,7 +6,7 @@
 >
 > **Aucune modification de code n'a été faite.** Ce document est un constat et un plan ; chaque correction attend un GO.
 >
-> **Mise à jour du 20/10/2026** (commit `b873d32`) : le statut de chaque constat traité depuis la revue est indiqué sous son titre et dans le [tableau récapitulatif](#11-tableau-récapitulatif). Résolus : B7, M2, D2. Partiellement résolus : C1, M1, M5, D3, D4, D5. Les numéros de ligne cités renvoient toujours au commit `9e62040` et ont pu bouger depuis.
+> **Mise à jour du 20/10/2026** (commit `b873d32`) : le statut de chaque constat traité depuis la revue est indiqué sous son titre et dans le [tableau récapitulatif](#11-tableau-récapitulatif). Résolus : C1, B7, M2, D2. Partiellement résolus : M1, M5, D3, D4, D5. Les numéros de ligne cités renvoient toujours au commit `9e62040` et ont pu bouger depuis.
 
 ---
 
@@ -32,7 +32,7 @@ Le projet fonctionne et rend un vrai service. Le cœur du produit (lecture de la
 
 Les cinq priorités, dans l'ordre :
 
-1. **La clé API Gemini a été distribuée en clair** dans les deux archives de distribution (`PromptoDYS_v1.1.zip` et `promptoDYS_v1.2.zip`) et elle est en plus embarquée dans l'exécutable par le fichier spec. Elle doit être révoquée et régénérée.
+1. **La clé API Gemini a été distribuée en clair** dans les deux archives de distribution (`PromptoDYS_v1.1.zip` et `promptoDYS_v1.2.zip`) et elle est en plus embarquée dans l'exécutable par le fichier spec. Elle doit être révoquée et régénérée. ✅ Fait le 20/10/2026.
 2. **Le bouton "Traiter la prise de note" se bloque définitivement** quand le fichier de clé est absent : enchaînement de deux bugs (retour anticipé sans remise à zéro, puis plantage du failsafe sur une option Tkinter invalide). C'est exactement le scénario d'un nouvel utilisateur.
 3. **La fenêtre de contrôle fait 1100 px de haut** avec un minimum à 1000 px : sur un portable d'élève en 1366×768, le bas de la fenêtre (console, bouton Quitter) est hors écran.
 4. **Le code lit `GeminiKey.txt`, `prompto.dys` et écrit `reports/` dans le dossier courant**, pas dans le dossier de l'exécutable. Lancé depuis un raccourci, l'application ne trouve plus son prompt.
@@ -76,7 +76,7 @@ En plus, [PromptoDYS.spec:13](../PromptoDYS.spec#L13) embarque `GeminiKey.txt` *
 
 **Effort.** Faible. Une ligne dans le spec, une régénération de clé, un nettoyage des archives.
 
-**Statut : 🟡 partiellement résolu.** Le spec n'embarque plus `GeminiKey.txt` (commit `184eb4f`), et ARCHITECTURE.md le rappelle. Les deux archives zip et le dossier `dist/` ne sont plus à la racine du projet.
+**Statut : ✅ résolu.** Le spec n'embarque plus `GeminiKey.txt` (commit `184eb4f`), et ARCHITECTURE.md le rappelle. Les deux archives zip et le dossier `dist/` ne sont plus à la racine du projet. La clé diffusée a été révoquée dans Google AI Studio et remplacée (20/10/2026).
 
 ### C2. Les ressources embarquées ne sont jamais lues, et le chemin courant est roi
 
@@ -395,7 +395,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 
 ### Lot 0 : sécurité, hors code (à faire aujourd'hui)
 
-1. Révoquer la clé Gemini actuelle dans Google AI Studio et en générer une nouvelle. Mettre à jour `GeminiKey.txt` local. *(À confirmer.)*
+1. Révoquer la clé Gemini actuelle dans Google AI Studio et en générer une nouvelle. Mettre à jour `GeminiKey.txt` local. ✅ Fait (20/10/2026).
 2. ✅ Fait : `dist/` et les deux archives zip ne sont plus à la racine du projet. ~~Supprimer `dist/GeminiKey.txt`, et retirer la clé des deux archives zip (ou supprimer les archives).~~
 
 ### Lot 1 : corrections ciblées (une session)
@@ -436,7 +436,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 
 | Réf. | Gravité | Constat | Effort | Lot |
 |---|---|---|---|---|
-| C1 | 🟡 Partiellement résolu | Clé API distribuée dans les zips et embarquée dans l'exe (plus embarquée, zips retirés ; révocation à confirmer) | Faible | 0, 1 |
+| C1 | ✅ Résolu | Clé API distribuée dans les zips et embarquée dans l'exe (plus embarquée, zips retirés, clé révoquée) | Faible | 0, 1 |
 | C2 | 🔴 Critique | Chemins relatifs au dossier courant ; ressources embarquées jamais lues | Faible | 1 |
 | B1 | 🟠 Important | Failsafe du bouton plante (`style=` sur `tk.Button`) | Trivial | 1 |
 | B2 | 🟠 Important | Retour anticipé sans reset : bouton bloqué, faux statut « terminé » | Faible | 1 |
