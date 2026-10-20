@@ -12,7 +12,7 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 ### Modifié
 - Gestion des dépendances et de l'environnement Python avec `uv` (`pyproject.toml` + `uv.lock`)
 - Python 3.14 requis, fourni par uv (`python-preference = "only-managed"`)
-- Montées de version majeures : `google-genai` 1.59 → 2.29, `reportlab` 4.4 → 5.0, `gevent` 25.9 → 26.9
+- Montées de version majeures : `google-genai` 1.59 → 2.31, `reportlab` 4.4 → 5.0, `gevent` 25.9 → 26.9
 - Documentation d'installation et de build mise à jour pour uv (`uv sync --locked`, `uv run`)
 - Amélioration de la logique de chargement de l'API Key Gemini : lignes vides et commentaires ignorés, fichier enregistré avec BOM (Bloc-notes Windows) accepté, message clair si la valeur du template n'a pas été remplacée par l'utilisateur
 - Migration de Gemini 2.5 Flash vers `gemini-3.8-flash` : niveau de réflexion `thinking_level` LOW à la place de `thinking_budget`, paramètres `temperature` et `max_output_tokens` retirés (ignorés par Gemini 3)
