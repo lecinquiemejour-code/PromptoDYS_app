@@ -30,7 +30,6 @@ import sys
 import threading
 import time
 from datetime import datetime
-import markdown
 import re
 import base64
 import mimetypes
@@ -41,13 +40,18 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
-from reportlab.platypus.tableofcontents import TableOfContents
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 
 # --- Imports Gemini ---
 from google import genai
 from google.genai import types
 import google.genai.errors as genai_errors
+
+# Modèle Gemini utilisé (ex. "gemini-3.8-flash", "gemini-3.5-flash-lite")
+GEMINI_MODEL = "gemini-3.8-flash"
+
+# Niveau de réflexion Gemini 3.x
+GEMINI_THINKING_LEVEL = types.ThinkingLevel.LOW
 
 # --- Imports GUI Tkinter + sv_ttk ---
 import tkinter as tk
@@ -508,8 +512,8 @@ def preparer_contenu_rapport_complet(contenu_original, logs_etapes, streaming_ge
     # SECTION 7: Footer
     contenu_final += "## 📋 Informations de Session\n\n"
     contenu_final += f"- **Script :** PromptoDYS avec capture complète des logs\n"
-    contenu_final += f"- **Modèle IA :** Gemini 2.5 Flash\n"
-    contenu_final += f"- **Mode :** Thinking activé\n"
+    contenu_final += f"- **Modèle IA :** {GEMINI_MODEL}\n"
+    contenu_final += f"- **Thinking Level :** {GEMINI_THINKING_LEVEL.value.capitalize()}\n"
     contenu_final += f"- **Sauvegarde :** Automatique PDF uniquement\n\n"
 
     return contenu_final
@@ -842,6 +846,26 @@ def extraire_contenu_note(reponse_complete):
         return reponse_nettoyee
 
 
+def ajouter_note_origine(contenu_traite, contenu_original):
+    """Ajoute la note d'origine (sans les images) à la fin de la note corrigée.
+    Générée côté Python plutôt que par Gemini : copie exacte et tokens de sortie économisés."""
+    if not contenu_traite.strip():
+        return contenu_traite
+    # Images Markdown de l'éditeur, ex. ![photo](./images/photo.png){width=300px id=...}, ou balises <img>
+    note_sans_images = re.sub(r'!\[[^\]]*\]\([^)]*\)(\{[^}]*\})?|<img[^>]*>', '', contenu_original)
+    note_sans_images = re.sub(r'\n{3,}', '\n\n', note_sans_images).strip()  # Lignes vides laissées par les images
+    if not note_sans_images:
+        return contenu_traite
+    # Retirer un éventuel séparateur final pour ne pas le doubler
+    contenu_traite = re.sub(r'(\s*\n)?-{3,}\s*$', '', contenu_traite.rstrip())
+    log_message(f"📎 NOTE: Note d'origine ajoutée ({len(note_sans_images)} caractères)")
+    return (
+        f"{contenu_traite}\n\n---\n\n"
+        f"### <span style=\"color: #3399ff;\">Note d'origine</span>\n\n"
+        f"{note_sans_images}\n"
+    )
+
+
 def extraire_debrief_correction(reponse_complete):
     """Extrait le débrief après </NOTE>"""
     if "</NOTE>" in reponse_complete:
@@ -911,16 +935,12 @@ def traitement_gemini():
     # 5. Configuration Gemini
     log_message("\n⚙️ ÉTAPE 5: Configuration des paramètres Gemini...")
     config = types.GenerateContentConfig(
-        temperature=0.0,  # Cohérence pour corrections
-        max_output_tokens=None
+        thinking_config=types.ThinkingConfig(
+            thinking_level=GEMINI_THINKING_LEVEL,
+            include_thoughts=True
+        )
     )
-
-    # Thinking activé
-    config.thinking_config = types.ThinkingConfig(
-        thinking_budget=500,
-        include_thoughts=True
-    )
-    log_message("✅ SUCCÈS: Configuration Gemini prête (thinking activé)")
+    log_message(f"✅ SUCCÈS: Configuration Gemini prête (Modèle: {GEMINI_MODEL}, Thinking level: {GEMINI_THINKING_LEVEL.value})")
 
     # CAPTURER LES LOGS DES ÉTAPES 1-5
     logs_etapes_actuelles = logs_complets.copy()
@@ -939,7 +959,7 @@ def traitement_gemini():
     try:
         log_message("📡 Flux IA: Démarrage de la réception des données...")
         for chunk in client.models.generate_content_stream(
-                model="gemini-2.5-flash",
+                model=GEMINI_MODEL,
                 contents=prompt_final,
                 config=config
         ):
@@ -1011,6 +1031,9 @@ def traitement_gemini():
     else:
         log_message("⚠️ ATTENTION: Balises <NOTE> absentes, utilisation complète")
 
+    # Section « Note d'origine » ajoutée côté Python (n'est plus générée par Gemini)
+    contenu_traite = ajouter_note_origine(contenu_traite, contenu_original)
+
     # Extraire aussi le débrief
     debrief_correction = extraire_debrief_correction(full_answer)
 
@@ -1072,95 +1095,6 @@ def traitement_gemini():
     ajouter_message_llm(prompt_final, full_answer, contenu_traite, stats_tokens)
 
     log_message("\n🎉 TERMINÉ: Traitement IA Gemini avec capture complète terminé !")
-
-
-# --- Fonctions Console ---
-
-def lire_contenu():
-    """Interface console pour lire le contenu"""
-    log_message("\n🔍 ÉTAPE: LECTURE du contenu actuel...")
-    contenu = get_markdown()
-    afficher_contenu_editeur(contenu)
-
-
-def ecrire_contenu():
-    """Interface console pour écrire du contenu"""
-    log_message("\n✏️ ÉTAPE: ÉCRITURE dans l'éditeur...")
-    log_message("💡 Tapez votre contenu Markdown (lignes multiples autorisées)")
-    log_message("💡 Tapez 'EOF' sur une ligne vide pour terminer")
-    log_message("-" * 50)
-
-    lignes = []
-    while True:
-        try:
-            ligne = input()
-            if ligne.strip().upper() == "EOF":
-                break
-            lignes.append(ligne)
-        except KeyboardInterrupt:
-            log_message("\n❌ SAISIE ANNULÉE")
-            return
-
-    contenu = "\n".join(lignes)
-
-    if contenu.strip():
-        # Afficher le contenu qui va être injecté
-        afficher_contenu_editeur(contenu, "📄 CONTENU À INJECTER")
-
-        log_message("\n✏️ INJECTION dans l'éditeur...")
-        success = set_markdown(contenu)
-        if success:
-            log_message("✅ SUCCÈS: Contenu injecté avec succès !")
-        else:
-            log_message("❌ ÉCHEC: Erreur lors de l'injection")
-    else:
-        log_message("❌ ÉCHEC: Contenu vide, rien à injecter")
-
-
-def menu_console():
-    """Menu console qui s'exécute en parallèle (OBSOLÈTE - remplacé par GUI)"""
-    # Attendre que l'éditeur soit prêt
-    log_message("⏳ Attente que l'éditeur soit prêt...")
-    time.sleep(5)
-
-    log_message("\n" + "=" * 50)
-    log_message("🎮 ÉDITEUR MARKDOWN + IA GEMINI")
-    log_message("💾 Sauvegarde automatique: PDF uniquement (CAPTURE COMPLÈTE)")
-    log_message("🔧 PDF généré avec reportlab + TOUS LES LOGS")
-    log_message("=" * 50)
-
-    while True:
-        try:
-            log_message(f"\n📋 Options:")
-            log_message(f"  1 - Lire le contenu de l'éditeur")
-            log_message(f"  2 - Écrire dans l'éditeur")
-            log_message(f"  3 - 🤖 Traitement de la note par l'IA de PromptoDYS")
-            log_message(f"  0 - Quitter")
-            log_message("-" * 30)
-
-            choix = input("🎯 Votre choix (1/2/3/0): ").strip()
-
-            if choix == "1":
-                lire_contenu()
-
-            elif choix == "2":
-                ecrire_contenu()
-
-            elif choix == "3":
-                traitement_gemini()
-
-            elif choix == "0":
-                log_message("\n👋 Fermeture...")
-                os._exit(0)  # Forcer la fermeture complète
-
-            else:
-                log_message("❌ Choix invalide. Utilisez 1, 2, 3 ou 0")
-
-        except KeyboardInterrupt:
-            log_message("\n\n👋 Au revoir !")
-            os._exit(0)
-        except Exception as e:
-            log_message(f"❌ Erreur: {e}")
 
 
 # --- GUI Tkinter avec thème Sun Valley ---

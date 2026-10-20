@@ -32,8 +32,8 @@ PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'i
 - 🚫 Évite l'italique (difficile pour les DYS)
 
 ### 🤖 Powered by Google Gemini
-- ⚡ Modèle Gemini 2.5 Flash
-- 💭 Mode "thinking" pour analyse approfondie
+- ⚡ Modèle Gemini 3.8 Flash
+- 💭 Niveau de réflexion configurable (LOW par défaut, économe en tokens)
 - 📊 Statistiques de tokens détaillées
 - 🔄 Streaming en temps réel
 
@@ -88,24 +88,14 @@ cp .env.template GeminiKey.txt
 uv run python askGeminiPrompto.py
 ```
 
-L'application ouvre deux interfaces :
-1. **Interface graphique** : Éditeur Markdown React
-2. **Console interactive** : Menu avec 3 options
-
-### Menu console
-
-```
-📋 Options:
-  1 - Lire le contenu de l'éditeur
-  2 - Écrire dans l'éditeur
-  3 - 🤖 Traitement de la note par l'IA
-  0 - Quitter
-```
+L'application ouvre un panneau de contrôle, depuis lequel on lance l'éditeur Markdown :
+1. **Panneau de contrôle** : boutons « Ouvrir l'Éditeur », « Sauvegarder », « Ouvrir », « Traiter la prise de note », « Voir les rapports PDF » et « Quitter », avec une barre de statut et une zone Console / Logs
+2. **Éditeur Markdown** : interface React où l'élève saisit sa note
 
 ### Workflow typique
 
-1. **Saisir une note** dans l'éditeur graphique (ou via l'option 2)
-2. **Lancer le traitement IA** (option 3)
+1. **Saisir une note** dans l'éditeur graphique
+2. **Lancer le traitement IA** (bouton « Traiter la prise de note », qui devient « Abandonner » pendant le traitement)
 3. **L'IA analyse et corrige** la note en temps réel
 4. **Le résultat** est injecté automatiquement dans l'éditeur
 5. **Un rapport PDF** est généré automatiquement dans `reports/`
@@ -146,7 +136,7 @@ PromptoDYS/
 - HTML/CSS/JavaScript
 
 **IA:**
-- Google Gemini 2.5 Flash
+- Google Gemini 3.8 Flash
 
 ---
 
@@ -169,7 +159,8 @@ Le fichier `prompto.dys` définit le comportement de l'IA :
 
 - **Rôle** : Assistant dédié aux troubles DYS
 - **Matières supportées** : Français, Maths, Histoire-Géo, Sciences, Langues, etc.
-- **Format de sortie** : 8 sections structurées
+- **Fidélité** : aucune information de la note n'est supprimée ni ajoutée, les doutes sont signalés plutôt que corrigés
+- **Format de sortie** : 7 sections générées par Gemini
   1. Titre (Matière + Sujet + Date)
   2. Résumé en 1 phrase
   3. 8 mots-clés
@@ -177,7 +168,7 @@ Le fichier `prompto.dys` définit le comportement de l'IA :
   5. Avertissement IA
   6. Doutes/interrogations
   7. 3 questions d'approfondissement
-  8. Note originale
+- **Note originale** : ajoutée automatiquement par l'application à la suite (copie exacte, sans les images)
 
 ---
 
