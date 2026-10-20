@@ -212,6 +212,24 @@ PROMPTO_DOCS_DIR = os.path.join(_get_documents_folder(), "PromptoDYS")
 os.makedirs(PROMPTO_DOCS_DIR, exist_ok=True)
 print(f"📁 Dossier projets PromptoDYS: {PROMPTO_DOCS_DIR}")
 
+
+# --- Profil Chrome dédié à l'éditeur ---
+def _get_chrome_profile_dir():
+    """Dossier du profil Chrome isolé de PromptoDYS (hors Documents, non synchronisé par OneDrive)"""
+    if sys.platform == "win32":
+        base_dir = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~\\AppData\\Local")
+    elif sys.platform == "darwin":
+        base_dir = os.path.expanduser("~/Library/Application Support")
+    else:
+        # Fallback Linux et autres
+        base_dir = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    profile_dir = os.path.join(base_dir, "PromptoDYS", "ChromeProfile")
+    os.makedirs(profile_dir, exist_ok=True)
+    return profile_dir
+
+CHROME_PROFILE_DIR = _get_chrome_profile_dir()
+print(f"🌐 Profil Chrome PromptoDYS: {CHROME_PROFILE_DIR}")
+
 # --- Fonctions de sauvegarde/ouverture de documents complets (texte + images) ---
 # Principe "Arduino" : le dossier porte le même nom que le fichier .md principal
 
@@ -1177,9 +1195,10 @@ def gui_control_panel():
                           port=8080,
                           cmdline_args=[
                               '--app=http://localhost:8080/index.html',
-                              '--disable-web-security',
+                              f'--user-data-dir={CHROME_PROFILE_DIR}',
                               '--disable-features=VizDisplayCompositor',
                               '--no-first-run',
+                              '--no-default-browser-check',
                               '--disable-default-apps',
                               '--disable-extensions',
                               '--disable-plugins',
@@ -1191,7 +1210,13 @@ def gui_control_panel():
                 log_message(f"❌ Erreur lancement éditeur: {e}")
                 # Fallback
                 try:
-                    eel.start('index.html', mode='chrome-app', size=(1200, 800), port=8080, block=True)
+                    eel.start('index.html', mode='chrome-app', size=(1200, 800), port=8080,
+                              cmdline_args=[
+                                  f'--user-data-dir={CHROME_PROFILE_DIR}',
+                                  '--no-first-run',
+                                  '--no-default-browser-check'
+                              ],
+                              block=True)
                 except Exception as e2:
                     log_message(f"❌ Erreur fallback: {e2}")
                     root.after(0, lambda: status_label.config(text=f"❌ Erreur: {str(e)[:20]}"))
