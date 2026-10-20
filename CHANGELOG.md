@@ -24,6 +24,7 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 - `requirements.txt` (encodé en UTF-16), remplacé par `pyproject.toml` et `uv.lock`
 - `BUILD_STATUS.md`, obsolète (problème propre à Python 3.10.0)
 - Code mort : menu console (`menu_console()`, `lire_contenu()`, `ecrire_contenu()`), jamais appelé depuis le passage au panneau Tkinter
+- Code mort : historique de session (`historique_llm`, `ajouter_message_llm()`), rempli à chaque traitement mais jamais lu, et variable globale `web_folder_global`, utilisée uniquement dans `main()`
 - Imports inutilisés `markdown`, `PageBreak` et `TableOfContents`, et dépendance `markdown` retirée de `pyproject.toml`, `uv.lock` et des `hiddenimports` de `PromptoDYS.spec`
 
 ### Sécurité

@@ -25,7 +25,7 @@
 
 ## 1. Vue d'ensemble en un schéma
 
-Le traitement suit onze étapes numérotées, visibles telles quelles dans les logs de la console. Chaque étape écrit un message préfixé `ÉTAPE n`.
+Le traitement suit dix étapes numérotées, visibles telles quelles dans les logs de la console. Chaque étape écrit un message préfixé `ÉTAPE n`.
 
 ```mermaid
 flowchart TD
@@ -48,8 +48,7 @@ flowchart TD
     E7 --> E8["8. Injection<br/>eel.writeMarkdown"]
     E8 --> E9["9. Bilan des tokens"]
     E9 --> E10["10. Rapport PDF<br/>dans reports/"]
-    E10 --> E11["11. Historique de session"]
-    E11 --> FIN(["Fin, bouton réinitialisé"])
+    E10 --> FIN(["Fin, bouton réinitialisé"])
 ```
 
 ---
@@ -289,7 +288,7 @@ Le dernier morceau reçu, `last_response`, porte les métadonnées d'usage. Quat
 | `thinking` | Tokens consommés par la réflexion, facturés comme des tokens de sortie. Souvent absent en `LOW` : il s'affiche alors `None`, ce qui veut dire 0 |
 | `total` | Somme des trois |
 
-Ces statistiques servent à suivre le coût d'une correction. Elles sont affichées dans la console, écrites dans le PDF et conservées dans l'historique de session.
+Ces statistiques servent à suivre le coût d'une correction. Elles sont affichées dans la console et écrites dans le PDF.
 
 ---
 
@@ -368,8 +367,6 @@ flowchart LR
 - **`log_message()`** écrit dans la console et ajoute à la liste `logs_complets`.
 - **`RedirectText`** détourne `sys.stdout` et `sys.stderr` vers la zone de texte Tkinter, en gardant une copie vers la vraie console. Les exceptions non prévues apparaissent donc aussi dans l'interface.
 - **`logs_complets`** est remis à zéro au début de chaque traitement. Une copie est prise après l'étape 5 pour le PDF : la section 3 du rapport contient donc la préparation, pas le streaming, qui a sa propre section.
-
-Chaque traitement est aussi ajouté à `historique_llm`, une liste en mémoire contenant le prompt, la réponse complète, la note extraite et les statistiques. Cet historique n'est pas sauvegardé sur disque et disparaît à la fermeture de l'application.
 
 ---
 

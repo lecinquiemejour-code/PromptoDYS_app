@@ -71,7 +71,6 @@ except:
 
 # --- NOUVELLE VARIABLE POUR CAPTURER TOUS LES LOGS ---
 logs_complets = []
-historique_llm = []
 
 # --- VARIABLES D'ÉTAT POUR L'ABANDON IA ---
 abandon_ia = False
@@ -211,6 +210,24 @@ def _get_documents_folder():
 PROMPTO_DOCS_DIR = os.path.join(_get_documents_folder(), "PromptoDYS")
 os.makedirs(PROMPTO_DOCS_DIR, exist_ok=True)
 print(f"📁 Dossier projets PromptoDYS: {PROMPTO_DOCS_DIR}")
+
+
+# --- Profil Chrome dédié à l'éditeur ---
+def _get_chrome_profile_dir():
+    """Dossier du profil Chrome isolé de PromptoDYS (hors Documents, non synchronisé par OneDrive)"""
+    if sys.platform == "win32":
+        base_dir = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~\\AppData\\Local")
+    elif sys.platform == "darwin":
+        base_dir = os.path.expanduser("~/Library/Application Support")
+    else:
+        # Fallback Linux et autres
+        base_dir = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    profile_dir = os.path.join(base_dir, "PromptoDYS", "ChromeProfile")
+    os.makedirs(profile_dir, exist_ok=True)
+    return profile_dir
+
+CHROME_PROFILE_DIR = _get_chrome_profile_dir()
+print(f"🌐 Profil Chrome PromptoDYS: {CHROME_PROFILE_DIR}")
 
 # --- Fonctions de sauvegarde/ouverture de documents complets (texte + images) ---
 # Principe "Arduino" : le dossier porte le même nom que le fichier .md principal
@@ -754,23 +771,6 @@ def sauvegarder_rapport(contenu_original, logs_etapes, streaming_gemini, contenu
     return md_filepath, pdf_filepath
 
 
-def ajouter_message_llm(prompt_utilisé, réponse_complète, contenu_extrait, stats_tokens):
-    """Ajoute un message à l'historique LLM"""
-    global historique_llm
-
-    timestamp = datetime.now().strftime("%H:%M:%S")
-
-    message = {
-        "timestamp": timestamp,
-        "prompt": prompt_utilisé,
-        "réponse_complète": réponse_complète,
-        "contenu_extrait": contenu_extrait,
-        "stats": stats_tokens
-    }
-
-    historique_llm.append(message)
-
-
 # --- Fonctions Gemini ---
 
 GEMINI_API_KEY_PLACEHOLDER = "YOUR_GEMINI_API_KEY_HERE"
@@ -1091,16 +1091,12 @@ def traitement_gemini():
     else:
         log_message("⚠️ ATTENTION: Sauvegarde PDF échouée")
 
-    # 11. Ajouter à l'historique
-    ajouter_message_llm(prompt_final, full_answer, contenu_traite, stats_tokens)
-
     log_message("\n🎉 TERMINÉ: Traitement IA Gemini avec capture complète terminé !")
 
 
 # --- GUI Tkinter avec thème Sun Valley ---
 # --- Variable globale pour tracker si l'éditeur est lancé ---
 editeur_lance = False
-web_folder_global = None
 
 
 def on_closing():
@@ -1150,7 +1146,7 @@ def gui_control_panel():
     GUI de contrôle avec Tkinter + sv_ttk (thème Windows 11)
     Panneau compact avec 3 boutons principaux
     """
-    global editeur_lance, web_folder_global, root_global, status_label_global, btn_ia_global
+    global root_global, status_label_global, btn_ia_global
     log_message("🖥️ Démarrage du panneau de contrôle GUI...")
     
     # --- Fonctions des boutons ---
@@ -1177,9 +1173,10 @@ def gui_control_panel():
                           port=8080,
                           cmdline_args=[
                               '--app=http://localhost:8080/index.html',
-                              '--disable-web-security',
+                              f'--user-data-dir={CHROME_PROFILE_DIR}',
                               '--disable-features=VizDisplayCompositor',
                               '--no-first-run',
+                              '--no-default-browser-check',
                               '--disable-default-apps',
                               '--disable-extensions',
                               '--disable-plugins',
@@ -1191,7 +1188,13 @@ def gui_control_panel():
                 log_message(f"❌ Erreur lancement éditeur: {e}")
                 # Fallback
                 try:
-                    eel.start('index.html', mode='chrome-app', size=(1200, 800), port=8080, block=True)
+                    eel.start('index.html', mode='chrome-app', size=(1200, 800), port=8080,
+                              cmdline_args=[
+                                  f'--user-data-dir={CHROME_PROFILE_DIR}',
+                                  '--no-first-run',
+                                  '--no-default-browser-check'
+                              ],
+                              block=True)
                 except Exception as e2:
                     log_message(f"❌ Erreur fallback: {e2}")
                     root.after(0, lambda: status_label.config(text=f"❌ Erreur: {str(e)[:20]}"))
@@ -1708,14 +1711,12 @@ def gui_control_panel():
 
 def main():
     """Lance l'application - GUI d'abord, éditeur via bouton"""
-    global web_folder_global
-    
     log_message('🚀 Lancement de PromptoDYS...')
     log_message('💾 Sauvegarde automatique : PDF uniquement avec CAPTURE COMPLÈTE des logs')
 
     # Trouver le dossier web
-    web_folder_global = find_web_folder()
-    if not web_folder_global:
+    web_folder = find_web_folder()
+    if not web_folder:
         log_message("💡 Placez votre build React dans le dossier 'build/'")
         return
 
@@ -1724,7 +1725,7 @@ def main():
     log_message('📁 Dossier "reports" créé pour les sauvegardes automatiques')
 
     # Initialiser Eel (préparation, mais ne lance pas encore)
-    eel.init(web_folder_global)
+    eel.init(web_folder)
     log_message('✅ Eel initialisé, prêt à lancer l\'éditeur')
 
     # Lancer la GUI de contrôle (BLOQUANT - boucle principale)

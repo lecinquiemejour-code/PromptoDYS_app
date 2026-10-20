@@ -5,6 +5,8 @@
 > Date : 12/10/2026. Version revue : 1.2.0, commit `9e62040`. Périmètre : code Python, configuration PyInstaller, dépôt git, documentation, archives de distribution. L'éditeur React (dépôt `promptoDYS_editor`) n'est pas revu ici, seul son bundle compilé dans `build_web/` est examiné.
 >
 > **Aucune modification de code n'a été faite.** Ce document est un constat et un plan ; chaque correction attend un GO.
+>
+> **Mise à jour du 20/10/2026** (commit `b873d32`) : le statut de chaque constat traité depuis la revue est indiqué sous son titre et dans le [tableau récapitulatif](#11-tableau-récapitulatif). Résolus : C1, B7, M2, D2. Partiellement résolus : M1, M5, D3, D4, D5. Les numéros de ligne cités renvoient toujours au commit `9e62040` et ont pu bouger depuis.
 
 ---
 
@@ -30,7 +32,7 @@ Le projet fonctionne et rend un vrai service. Le cœur du produit (lecture de la
 
 Les cinq priorités, dans l'ordre :
 
-1. **La clé API Gemini a été distribuée en clair** dans les deux archives de distribution (`PromptoDYS_v1.1.zip` et `promptoDYS_v1.2.zip`) et elle est en plus embarquée dans l'exécutable par le fichier spec. Elle doit être révoquée et régénérée.
+1. **La clé API Gemini a été distribuée en clair** dans les deux archives de distribution (`PromptoDYS_v1.1.zip` et `promptoDYS_v1.2.zip`) et elle est en plus embarquée dans l'exécutable par le fichier spec. Elle doit être révoquée et régénérée. ✅ Fait le 20/10/2026.
 2. **Le bouton "Traiter la prise de note" se bloque définitivement** quand le fichier de clé est absent : enchaînement de deux bugs (retour anticipé sans remise à zéro, puis plantage du failsafe sur une option Tkinter invalide). C'est exactement le scénario d'un nouvel utilisateur.
 3. **La fenêtre de contrôle fait 1100 px de haut** avec un minimum à 1000 px : sur un portable d'élève en 1366×768, le bas de la fenêtre (console, bouton Quitter) est hors écran.
 4. **Le code lit `GeminiKey.txt`, `prompto.dys` et écrit `reports/` dans le dossier courant**, pas dans le dossier de l'exécutable. Lancé depuis un raccourci, l'application ne trouve plus son prompt.
@@ -73,6 +75,8 @@ En plus, [PromptoDYS.spec:13](../PromptoDYS.spec#L13) embarque `GeminiKey.txt` *
 3. Ne plus jamais inclure de clé dans une archive : livrer un `GeminiKey.txt` vide ou un `GeminiKey.example.txt`, et laisser l'utilisateur créer le sien (c'est déjà ce que dit `BUILD_v1.2.0_SUCCESS.md`, mais l'archive ne le respecte pas).
 
 **Effort.** Faible. Une ligne dans le spec, une régénération de clé, un nettoyage des archives.
+
+**Statut : ✅ résolu.** Le spec n'embarque plus `GeminiKey.txt` (commit `184eb4f`), et ARCHITECTURE.md le rappelle. Les deux archives zip et le dossier `dist/` ne sont plus à la racine du projet. La clé diffusée a été révoquée dans Google AI Studio et remplacée (20/10/2026).
 
 ### C2. Les ressources embarquées ne sont jamais lues, et le chemin courant est roi
 
@@ -179,6 +183,8 @@ Cette option désactive la politique de même origine pour toute la fenêtre. El
 
 **Effort.** Trivial, un test à faire.
 
+**Statut : ✅ résolu.** L'option a été retirée (commit `b873d32`), en même temps que l'ajout d'un profil Chrome dédié (`--user-data-dir`). Jusque-là, l'option était en fait ignorée par Chrome, qui ne l'applique qu'avec un profil séparé. Avec le profil dédié, elle devenait active et Chrome affichait le bandeau « flag de ligne de commande non pris en charge ». L'éditeur ne charge que des ressources servies par Eel sur `localhost` et des URL `blob:` et `data:`, qui n'ont pas besoin de cette option.
+
 ---
 
 ## 5. Constats mineurs : qualité du code
@@ -189,11 +195,15 @@ Cette option désactive la politique de même origine pour toute la fenêtre. El
 - `psutil` est dans `requirements.txt` mais plus dans le code (l'ancienne détection par processus a été retirée).
 - La docstring d'en-tête parle de `PromptoDYS.py` et de `build/index.html`, qui n'existent pas.
 
+**Statut : 🟡 partiellement résolu.** Les trois imports morts ont été retirés, ainsi que la dépendance `markdown` (`pyproject.toml`, `uv.lock`, `hiddenimports` du spec). `psutil` a disparu avec `requirements.txt` (voir D2). La docstring d'en-tête ne cite plus `PromptoDYS.py`, mais mentionne toujours `build/index.html` (le dossier est `build_web/`) et une « Interface console » qui n'existe plus.
+
 ### M2. Code mort
 
 - `menu_console()`, `lire_contenu()`, `ecrire_contenu()` ([lignes 1059 à 1143](../askGeminiPrompto.py#L1059-L1143)) : l'ancien menu console, jamais appelé depuis la refonte GUI, mais toujours documenté dans le README.
 - `historique_llm` et `ajouter_message_llm()` : rempli à chaque traitement, jamais lu.
 - `web_folder_global` : déclaré global, utilisé uniquement dans `main()`.
+
+**Statut : ✅ résolu.** Le menu console (`menu_console()`, `lire_contenu()`, `ecrire_contenu()`) a été supprimé (commit `793fe44`), et le README ne le décrit plus. `historique_llm` et `ajouter_message_llm()` ont été supprimés, ainsi que l'étape 11 « Historique de session » du traitement IA, qui en compte désormais dix. `web_folder_global` est devenue une variable locale de `main()`.
 
 ### M3. Signalements ruff automatiquement corrigeables
 
@@ -253,6 +263,8 @@ C'est le mécanisme utilisé partout pour revenir sur le thread Tkinter. Il fonc
 
 [Lignes 207 à 209](../askGeminiPrompto.py#L207-L209) créent `Documents\PromptoDYS` et impriment, au moment où le module est importé. Cela empêche d'importer le fichier dans un test sans toucher au disque. À déplacer dans `main()`.
 
+**Mise à jour du 20/10/2026.** Le commit `b873d32` ajoute un second effet de bord du même type : `CHROME_PROFILE_DIR = _get_chrome_profile_dir()` crée le dossier du profil Chrome dédié à l'import. À déplacer dans `main()` avec le premier.
+
 ---
 
 ## 6. Dépôt, build et documentation
@@ -279,25 +291,29 @@ Signature d'un `pip freeze > requirements.txt` sous PowerShell 5. `pip` le lit g
 
 ### D3. Documentation en partie obsolète ou contradictoire
 
-| Fichier | Problème |
-|---|---|
-| [README.md](../README.md) | La commande `pip install eel google-genai reportlab markdown` **oublie `sv_ttk`** : un nouveau contributeur obtient `ModuleNotFoundError` au premier lancement. Même oubli dans `README_ANTIVIRUS.md` et `BUILD_STATUS.md`. |
-| README.md | Décrit un « menu console avec 3 options » qui n'existe plus, une structure avec `/REPORTS` et `data/` (le code écrit `reports/`, `data/` n'est utilisé nulle part), « 848 lignes » (il y en a 1 784), « Python 3.8+ » alors que le build se fait en 3.13. |
-| [CONTRIBUTING.md](../CONTRIBUTING.md) | Parle de la branche `main`, le dépôt utilise `master`. Le remote `upstream` pointe sur `ORIGINAL_OWNER/PromptoDYS`, un reste de gabarit. |
-| `BUILD_STATUS.md` | ✅ Supprimé. Décrivait un problème Python 3.10.0 résolu depuis, et contredisait `BUILD_v1.2.0_SUCCESS.md`. |
-| [README_ANTIVIRUS.md](../README_ANTIVIRUS.md) | Lien VirusTotal « [À ajouter après build] » depuis janvier. |
-| [.env.template](../.env.template) | Le nom suggère un fichier `.env`, c'est en fait le gabarit de `GeminiKey.txt`. `GeminiKey.example.txt` serait plus clair. |
-| [CHANGELOG.md](../CHANGELOG.md) 1.2.0 | Annonce « Métadonnées Windows complètes », mais la ligne `version='version_info.txt'` est **commentée** dans le spec. L'exe n'a donc pas de métadonnées, ce qui aggrave les faux positifs antivirus que le même changelog prétend réduire. |
-| [prompto.dys](../prompto.dys) | Accolade `}` orpheline ligne 28 (le bloc `{` ouvert ligne 2 est déjà fermé ligne 6), « faire » pour « faite », « a colorer », « meme ». Gemini s'en accommode, mais c'est le cerveau pédagogique du produit. |
+| Fichier | Problème | Statut |
+|---|---|---|
+| [README.md](../README.md) | La commande `pip install eel google-genai reportlab markdown` **oublie `sv_ttk`** : un nouveau contributeur obtient `ModuleNotFoundError` au premier lancement. Même oubli dans `README_ANTIVIRUS.md` et `BUILD_STATUS.md`. | ✅ Résolu : installation par `uv sync --locked` dans README.md et README_ANTIVIRUS.md |
+| README.md | Décrit un « menu console avec 3 options » qui n'existe plus, une structure avec `/REPORTS` et `data/` (le code écrit `reports/`, `data/` n'est utilisé nulle part), « 848 lignes » (il y en a 1 784), « Python 3.8+ » alors que le build se fait en 3.13. | 🟡 Partiel : menu console, nombre de lignes et version de Python corrigés ; la structure liste encore `data/` |
+| [CONTRIBUTING.md](../CONTRIBUTING.md) | Parle de la branche `main`, le dépôt utilise `master`. Le remote `upstream` pointe sur `ORIGINAL_OWNER/PromptoDYS`, un reste de gabarit. | ❌ À faire |
+| `BUILD_STATUS.md` | Décrivait un problème Python 3.10.0 résolu depuis, et contredisait `BUILD_v1.2.0_SUCCESS.md`. | ✅ Supprimé |
+| [README_ANTIVIRUS.md](../README_ANTIVIRUS.md) | Lien VirusTotal « [À ajouter après build] » depuis janvier. | ❌ À faire |
+| [.env.template](../.env.template) | Le nom suggère un fichier `.env`, c'est en fait le gabarit de `GeminiKey.txt`. `GeminiKey.example.txt` serait plus clair. | ❌ À faire |
+| [CHANGELOG.md](../CHANGELOG.md) 1.2.0 | Annonce « Métadonnées Windows complètes », mais la ligne `version='version_info.txt'` est **commentée** dans le spec. L'exe n'a donc pas de métadonnées, ce qui aggrave les faux positifs antivirus que le même changelog prétend réduire. | ❌ À faire |
+| [prompto.dys](../prompto.dys) | Accolade `}` orpheline ligne 28 (le bloc `{` ouvert ligne 2 est déjà fermé ligne 6), « faire » pour « faite », « a colorer », « meme ». Gemini s'en accommode, mais c'est le cerveau pédagogique du produit. | 🟡 Partiel : accolade orpheline et « faite » corrigés (commit `564d873`) ; restent « a colorer » et « meme » |
 
 ### D4. Le numéro de version est dupliqué à quatre endroits
 
 `__version__` dans le code, le badge du README, `version_info.txt` et le CHANGELOG. Rien ne les relie. Le `__version__` du code n'est d'ailleurs lu nulle part (il pourrait au moins apparaître dans le titre de la fenêtre et dans le pied du rapport PDF, qui affiche en dur « Gemini 3.8 Flash »).
 
+**Statut : 🟡 partiellement résolu.** Le pied du rapport PDF affiche maintenant la constante `GEMINI_MODEL` au lieu d'un nom de modèle en dur. Le numéro de version est toujours dupliqué, et `__version__` n'est toujours lu nulle part.
+
 ### D5. Fichiers volumineux dans le dépôt et à sa racine
 
 - Le PDF « Procédure complète - Création d'un exécutable PyInstaller » (946 Ko) est versionné. Il doublonne ARCHITECTURE.md section 6 et les deux fichiers BUILD_*.
 - Deux archives de 39 et 45 Mo et un `build backup 290825.zip` vivent à la racine du projet (ignorés par git, mais synchronisés par Dropbox). Leur place est dans une release GitHub.
+
+**Statut : 🟡 partiellement résolu.** Les archives zip ne sont plus à la racine du projet. Le PDF de procédure est toujours versionné.
 
 ### D6. Aucun test automatisé
 
@@ -320,7 +336,7 @@ Ce sont des propositions, pas des défauts. Elles ne sont pas demandées et rest
 |---|---|---|---|
 | A1 | Rapport PDF en police OpenDyslexic ou Lexend (déjà dans `build_web/fonts/`) | Les rapports deviennent lisibles par le public cible, et M8 disparaît | Faible |
 | A2 | Lire la clé dans la variable d'environnement `GEMINI_API_KEY` en priorité, fichier en secours | Plus de clé sur disque pour qui le souhaite, compatible avec la pratique courante | Faible |
-| A3 | Regrouper modèle, `thinking_budget`, température, port, dimensions de fenêtre en constantes de tête de fichier (ou dans `config.yaml` qui existe déjà) | Changer de modèle sans chercher dans 1 784 lignes | Faible |
+| A3 | Regrouper modèle, `thinking_budget`, température, port, dimensions de fenêtre en constantes de tête de fichier (ou dans `config.yaml` qui existe déjà) | Changer de modèle sans chercher dans 1 784 lignes | Faible. 🟡 En partie fait : `GEMINI_MODEL` et `GEMINI_THINKING_LEVEL` sont des constantes (commit `3339731`) ; port et dimensions de fenêtre restent en dur |
 | A4 | Nommer le rapport PDF d'après le document courant (`rapport_MonCours_20261012_1530.pdf`) | Retrouver un rapport parmi cinquante | Faible |
 | A5 | Journal sur disque via le module `logging` (fichier `promptodys.log` avec rotation) | Diagnostiquer un problème chez un utilisateur sans lui demander de copier la console | Faible |
 | A6 | Afficher le coût estimé d'un traitement à partir des tokens | Sensibiliser à la consommation | Faible |
@@ -379,25 +395,25 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 
 ### Lot 0 : sécurité, hors code (à faire aujourd'hui)
 
-1. Révoquer la clé Gemini actuelle dans Google AI Studio et en générer une nouvelle. Mettre à jour `GeminiKey.txt` local.
-2. Supprimer `dist/GeminiKey.txt`, et retirer la clé des deux archives zip (ou supprimer les archives).
+1. Révoquer la clé Gemini actuelle dans Google AI Studio et en générer une nouvelle. Mettre à jour `GeminiKey.txt` local. ✅ Fait (20/10/2026).
+2. ✅ Fait : `dist/` et les deux archives zip ne sont plus à la racine du projet. ~~Supprimer `dist/GeminiKey.txt`, et retirer la clé des deux archives zip (ou supprimer les archives).~~
 
 ### Lot 1 : corrections ciblées (une session)
 
 | # | Fichier | Action | Constat |
 |---|---|---|---|
-| 1 | `PromptoDYS.spec` | Retirer `('GeminiKey.txt', '.')`, réactiver `version='version_info.txt'`, exclure les `.map` | C1, D3 |
+| 1 | `PromptoDYS.spec` | 🟡 En partie fait : `('GeminiKey.txt', '.')` retiré. Restent : réactiver `version='version_info.txt'`, exclure les `.map` | C1, D3 |
 | 2 | `askGeminiPrompto.py` | Introduire `BASE_DIR`, l'utiliser pour clé, prompt, `reports/`, `build_web/` | C2 |
 | 3 | `askGeminiPrompto.py` | Supprimer `style="Big.TButton"` ligne 1403 | B1 |
 | 4 | `askGeminiPrompto.py` | Englober `traitement_gemini()` dans un `try/finally` unique, retourner un booléen, corriger le statut ligne 1437 | B2 |
 | 5 | `askGeminiPrompto.py` | Capturer `str(e)` avant les deux lambdas (lignes 1243, 1442) | B3 |
 | 6 | `askGeminiPrompto.py` | Hauteur de fenêtre calculée depuis l'écran, `minsize` à 650 | B4 |
-| 7 | `askGeminiPrompto.py` | `port=0`, retirer le `--app=` manuel et `--disable-web-security`, ajouter `close_callback` | B5, B7 |
+| 7 | `askGeminiPrompto.py` | 🟡 En partie fait : `--disable-web-security` retiré. Restent : `port=0`, retirer le `--app=` manuel, ajouter `close_callback` | B5, B7 |
 | 8 | `askGeminiPrompto.py` | `http_options` avec timeout, fermeture du stream à l'abandon | B6 |
-| 9 | `askGeminiPrompto.py` | `ruff --fix`, retirer imports morts, `menu_console` et compagnie, `historique_llm` ; `basename` sur le nom d'image ; log de clé sans extrait | M1, M2, M3, M5, M6, M7 |
+| 9 | `askGeminiPrompto.py` | 🟡 En partie fait : imports morts, `menu_console` et compagnie, `historique_llm` retirés. Restent : `ruff --fix` ; `basename` sur le nom d'image ; log de clé sans extrait | M1, M2, M3, M5, M6, M7 |
 | 10 | `build_web/static/` | Supprimer les trois vieux bundles et leurs `.map` | D1 |
 | 11 | `requirements.txt` | ✅ Fait : remplacé par `pyproject.toml` + `uv.lock` | D2 |
-| 12 | `README.md`, `CONTRIBUTING.md`, `BUILD_STATUS.md`, `.env.template`, `prompto.dys` | Corrections listées en D3 | D3 |
+| 12 | `README.md`, `CONTRIBUTING.md`, `BUILD_STATUS.md`, `.env.template`, `prompto.dys` | 🟡 En partie fait : corrections listées en D3, voir la colonne Statut | D3 |
 | 13 | Build | `pyinstaller --clean`, test sur machine sans clé, avec clé, depuis un raccourci | Validation |
 
 ### Lot 2 : tests sur les fonctions pures (une demi-session)
@@ -420,7 +436,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 
 | Réf. | Gravité | Constat | Effort | Lot |
 |---|---|---|---|---|
-| C1 | 🔴 Critique | Clé API distribuée dans les zips et embarquée dans l'exe | Faible | 0, 1 |
+| C1 | ✅ Résolu | Clé API distribuée dans les zips et embarquée dans l'exe (plus embarquée, zips retirés, clé révoquée) | Faible | 0, 1 |
 | C2 | 🔴 Critique | Chemins relatifs au dossier courant ; ressources embarquées jamais lues | Faible | 1 |
 | B1 | 🟠 Important | Failsafe du bouton plante (`style=` sur `tk.Button`) | Trivial | 1 |
 | B2 | 🟠 Important | Retour anticipé sans reset : bouton bloqué, faux statut « terminé » | Faible | 1 |
@@ -428,9 +444,9 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | B4 | 🟠 Important | Fenêtre de 1100 px hors écran sur portable | Faible | 1 |
 | B5 | 🟠 Important | Port 8080 fixe, relance fragile, `--app` dupliqué | Faible | 1 |
 | B6 | 🟠 Important | Pas de timeout Gemini, abandon inopérant si flux figé | Faible | 1 |
-| B7 | 🟠 Important | `--disable-web-security` inutile | Trivial | 1 |
-| M1 | 🟡 Mineur | Imports et dépendances inutilisés | Trivial | 1 |
-| M2 | 🟡 Mineur | Code mort (menu console, historique) | Trivial | 1 |
+| B7 | ✅ Résolu | `--disable-web-security` inutile (retiré) | Trivial | 1 |
+| M1 | 🟡 Partiellement résolu | Imports et dépendances inutilisés (retirés ; docstring d'en-tête encore obsolète) | Trivial | 1 |
+| M2 | ✅ Résolu | Code mort (menu console, historique, `web_folder_global`) | Trivial | 1 |
 | M3 | 🟡 Mineur | `except:` nus, f-strings vides | Trivial | 1 |
 | M4 | 🟡 Mineur | Fichier monolithique, douze globales | Moyen | 3 |
 | M5 | 🟡 Partiellement résolu | Extrait de clé dans les logs et le PDF (raccourci aux 4 derniers caractères) | Trivial | 1 |
@@ -440,10 +456,10 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | M9 | 🟡 Mineur | Console Tk sans purge | Trivial | 1 |
 | M10 | 🟡 Mineur | `root.after` depuis threads | Faible | si symptôme |
 | M11 | 🟡 Mineur | `os._exit`, Chrome reste ouvert | Faible | 1 |
-| M12 | 🟡 Mineur | Effets de bord à l'import | Trivial | 2 |
+| M12 | 🟡 Mineur | Effets de bord à l'import (un second ajouté : dossier du profil Chrome) | Trivial | 2 |
 | D1 | 🟠 Important | Trois bundles React morts, `.map` dans l'exe | Trivial | 1 |
 | D2 | ✅ Résolu | `requirements.txt` en UTF-16 (remplacé par uv) | Trivial | 1 |
-| D3 | 🟠 Important | Docs obsolètes, `sv_ttk` absent de la commande d'installation, `version=` commenté | Faible | 1 |
-| D4 | 🟡 Mineur | Version dupliquée quatre fois | Faible | 3 |
-| D5 | 🟡 Mineur | Archives et PDF lourds dans le dépôt ou à la racine | Trivial | 1 |
+| D3 | 🟡 Partiellement résolu | Docs obsolètes, `sv_ttk` absent de la commande d'installation, `version=` commenté (installation et README corrigés ; restent CONTRIBUTING, VirusTotal, `.env.template`, `version=`) | Faible | 1 |
+| D4 | 🟡 Partiellement résolu | Version dupliquée quatre fois (modèle du pied PDF via `GEMINI_MODEL` ; version toujours dupliquée) | Faible | 3 |
+| D5 | 🟡 Partiellement résolu | Archives et PDF lourds dans le dépôt ou à la racine (archives retirées ; PDF toujours versionné) | Trivial | 1 |
 | D6 | 🟡 Mineur | Aucun test | Faible | 2 |
