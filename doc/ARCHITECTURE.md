@@ -290,6 +290,10 @@ flowchart LR
 
 ### Procédure pour produire l'exécutable
 
+**Voie recommandée : l'intégration continue.** Le workflow [release-windows.yml](../.github/workflows/release-windows.yml) builde l'exe sur un runner Windows GitHub, quel que soit le système du développeur. Un tag `v*` publie la Release (voir [CONTRIBUTING.md](../CONTRIBUTING.md#publier-une-version)), un lancement manuel produit un artefact de test.
+
+**Build en local**, qui ne donne un `.exe` que sur Windows (PyInstaller produit un exécutable pour le système qui le lance) :
+
 ```powershell
 uv sync --locked
 uv run pyinstaller --clean PromptoDYS.spec
@@ -332,6 +336,7 @@ Le résultat est `dist/PromptoDYS.exe`. Voir aussi [README_ANTIVIRUS.md](../READ
 ## 8. Points d'attention
 
 - **Clé API hors de l'exécutable.** Le spec n'embarque pas `GeminiKey.txt` : chaque utilisateur place son propre fichier à côté de l'exe. Ne jamais embarquer de clé dans un exécutable distribué, ni commiter un exe dans un dépôt.
+- **Droits de la CI.** Dans le workflow de release, seul le job `release` peut écrire sur le dépôt (`contents: write`), et il ne récupère ni n'exécute le code. Le job `build`, qui installe les dépendances et lance PyInstaller, tourne avec un jeton en lecture seule qu'il ne garde pas dans `.git/config` (`persist-credentials: false`).
 - **Fonctions Eel synchrones uniquement.** Toute nouvelle fonction exposée à Python doit être synchrone (voir section 3).
 - **Convertisseur Markdown à base d'expressions régulières.** Il gère les cas courants mais reste fragile sur le HTML imbriqué. C'est le point le plus sensible du pont, puisque tout ce que Gemini renvoie passe par là.
 - **Mode développeur persistant.** Il est stocké dans le localStorage de Chrome et prime sur `config.yaml`. Une fois activé, modifier le YAML ne suffit plus pour le désactiver.

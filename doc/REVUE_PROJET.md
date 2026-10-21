@@ -308,14 +308,14 @@ Signature d'un `pip freeze > requirements.txt` sous PowerShell 5. `pip` le lit g
 
 `__version__` dans le code, le badge du README, `version_info.txt` et le CHANGELOG. Rien ne les relie. Le `__version__` du code n'est d'ailleurs lu nulle part (il pourrait au moins apparaître dans le titre de la fenêtre et dans le pied du rapport PDF, qui affiche en dur « Gemini 3.8 Flash »).
 
-**Statut : 🟡 partiellement résolu.** Le pied du rapport PDF affiche maintenant la constante `GEMINI_MODEL` au lieu d'un nom de modèle en dur. Le numéro de version est toujours dupliqué, et `__version__` n'est toujours lu nulle part.
+**Statut : 🟡 partiellement résolu.** Le pied du rapport PDF affiche maintenant la constante `GEMINI_MODEL` au lieu d'un nom de modèle en dur. La constante `__version__`, jamais lue, a été supprimée. La version de référence est celle de `pyproject.toml`, que le workflow de release compare au tag. Restent dupliqués à la main : le badge du README, `version_info.txt` (désactivé dans le spec) et le CHANGELOG.
 
 ### D5. Fichiers volumineux dans le dépôt et à sa racine
 
 - Le PDF « Procédure complète - Création d'un exécutable PyInstaller » (946 Ko) est versionné. Il doublonne ARCHITECTURE.md section 6 et les deux fichiers BUILD_*.
 - Deux archives de 39 et 45 Mo et un `build backup 290825.zip` vivent à la racine du projet (ignorés par git, mais synchronisés par Dropbox). Leur place est dans une release GitHub.
 
-**Statut : 🟡 partiellement résolu.** Les archives zip ne sont plus à la racine du projet. Le PDF de procédure est toujours versionné.
+**Statut : 🟡 partiellement résolu.** Les archives zip ne sont plus à la racine du projet, et les livrables sont désormais publiés en Release GitHub par le workflow [release-windows.yml](../.github/workflows/release-windows.yml). Le PDF de procédure est toujours versionné.
 
 ### D6. Aucun test automatisé
 

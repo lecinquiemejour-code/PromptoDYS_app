@@ -147,6 +147,10 @@ git pull upstream main
 git checkout -b feature/ma-super-feature
 # OU pour un bugfix
 git checkout -b fix/correction-bug-xyz
+# OU pour le build ou la CI
+git checkout -b build/windows-release-workflow
+# OU pour préparer une livraison : release/v<numéro de version>
+git checkout -b release/v1.3.0b1
 ```
 
 ### 3. Développer
@@ -174,7 +178,8 @@ uv add <paquet>
 | Je modifie les dépendances | `uv add <paquet>` / `uv remove <paquet>`, ou `uv sync` après avoir édité `pyproject.toml` |
 | Je mets à jour une dépendance | `uv lock --upgrade-package <paquet>` puis `uv sync` |
 | Je lance l'application | `uv run python askGeminiPrompto.py` |
-| Je build l'exécutable de release | `uv sync --locked` puis `uv run pyinstaller --clean PromptoDYS.spec` |
+| Je build l'exécutable (pour le système courant) | `uv sync --locked` puis `uv run pyinstaller --clean PromptoDYS.spec` |
+| Je change la version du projet | `uv version 1.3.0b1` (met à jour `pyproject.toml` et `uv.lock` ensemble) |
 
 `--locked` installe exactement ce que contient `uv.lock` et s'arrête en erreur si le fichier ne correspond plus à `pyproject.toml`, au lieu de le modifier en silence. Sans `--locked`, `uv sync` met `uv.lock` à jour : à n'utiliser que lorsque c'est vous qui changez les dépendances, puis committez `pyproject.toml` ET `uv.lock` ensemble.
 
@@ -207,6 +212,63 @@ Avant de soumettre votre PR, vérifiez :
 - [ ] Les commits suivent la [structure des commits](#structure-des-commits)
 - [ ] Pas de fichiers sensibles (clés API, etc.)
 - [ ] Le code est commenté pour les parties complexes
+
+### Publier une version
+
+La numérotation suit le sens de SemVer (MAJEUR.MINEUR.CORRECTIF), écrite au format Python (PEP 440) :
+
+| Version | `pyproject.toml` | Tag git |
+|---|---|---|
+| Beta | `1.3.0b1`, `1.3.0b2`... | `v1.3.0b1` |
+| Release candidate | `1.3.0rc1` | `v1.3.0rc1` |
+| Finale | `1.3.0` | `v1.3.0` |
+
+Chaque livraison se prépare sur une branche `release/v<numéro de version>`, créée depuis `master` :
+
+```bash
+# 1. Créer la branche de livraison
+git checkout master
+git pull
+git checkout -b release/v1.3.0b1
+
+# 2. Changer la version (pyproject.toml et uv.lock ensemble, ne pas éditer à la main)
+uv version 1.3.0b1
+#    puis reporter le numéro à la main dans le badge de version du README.md
+
+# 3. Dans CHANGELOG.md, déplacer le contenu de [Non publié] dans une section [1.3.0b1] - AAAA-MM-JJ
+
+# 4. Commiter
+git commit -am "build(release): Bump version to 1.3.0b1"
+
+# 5. Poser le tag sur la branche de livraison et le pousser : il déclenche le workflow.
+#    Attendre qu'il soit vert dans l'onglet Actions, et vérifier la Release publiée.
+git tag v1.3.0b1
+git push origin v1.3.0b1
+
+# 6. Une fois la Release validée, fusionner dans master
+#    (--no-ff : toujours un commit de merge explicite)
+git checkout master
+git merge --no-ff release/v1.3.0b1
+git push origin master
+
+# 7. Supprimer la branche de livraison locale (-d refuse si elle n'a pas été fusionnée)
+git branch -d release/v1.3.0b1
+```
+
+`master` ne reçoit ainsi que des versions dont le build et la Release ont réussi. Après la fusion, le commit tagué fait partie de l'historique de `master`.
+
+**Si le workflow échoue**, corriger sur la branche de livraison, dans cet ordre :
+1. supprimer la Release si elle a été créée (onglet Releases, icône de suppression). Si on supprime le tag d'abord, la Release reste, détachée de tout tag ;
+2. supprimer le tag : `git push --delete origin v1.3.0b1` puis `git tag -d v1.3.0b1` ;
+3. corriger, commiter sur `release/v1.3.0b1`, puis reposer et pousser le tag (étape 5).
+
+Seul le tag déclenche le build : pousser la branche `release/...` ne lance rien. Le tag déclenche le workflow [release-windows.yml](.github/workflows/release-windows.yml), qui enchaîne deux jobs :
+1. **`build`** (runner Windows, jeton en lecture seule) : vérifie que le tag correspond à la version de `pyproject.toml` et s'arrête en erreur sinon, builde l'exécutable, puis envoie `PromptoDYS.exe` et `.env.template` comme artefact ;
+2. **`release`** (runner Linux, seulement sur un tag et si `build` a réussi) : récupère l'artefact, le zippe et publie la Release « PromptoDYS v1.3.0b1 » avec `PromptoDYS-v1.3.0b1.zip`, via `gh release create`.
+
+Une beta ou une rc est marquée « Pre-release » automatiquement, et n'est jamais affichée comme dernière version stable.
+
+**Règle de sécurité si vous modifiez le workflow :** `release` est le seul job qui reçoit `contents: write`, et il ne récupère ni n'exécute le code du dépôt. Ne jamais donner le droit d'écriture à un job qui fait un checkout, installe les dépendances ou lance le build : une dépendance compromise pourrait alors pousser du code ou des tags avec le jeton.
 
 ---
 
@@ -278,7 +340,8 @@ Nous utilisons la convention [Conventional Commits](https://www.conventionalcomm
 | `refactor` | Refactorisation du code | `refactor: extraire fonction PDF` |
 | `perf` | Amélioration de performance | `perf: optimiser streaming Gemini` |
 | `test` | Ajout de tests | `test: ajouter tests unitaires` |
-| `chore` | Maintenance, build, etc. | `chore: mettre à jour dépendances` |
+| `build` | Build, CI, livraison | `build(ci): ajouter le workflow de release Windows` |
+| `chore` | Maintenance | `chore: mettre à jour dépendances` |
 
 ### Exemples
 

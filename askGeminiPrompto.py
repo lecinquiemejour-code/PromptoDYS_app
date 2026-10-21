@@ -59,9 +59,6 @@ from tkinter import ttk, messagebox, filedialog
 import sv_ttk  # Thème Sun Valley (Windows 11 look)
 import subprocess  # Pour ouvrir le dossier reports
 
-# --- VERSION ---
-__version__ = "1.2.0"
-
 try:
     from ctypes import windll
     windll.shcore.SetProcessDpiAwareness(1)  # DPI per monitor

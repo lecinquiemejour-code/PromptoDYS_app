@@ -1,0 +1,87 @@
+name: Release Windows
+
+on:
+  push:
+    tags: ['v*']          # v1.3.0b1, v1.3.0... : build + Release GitHub
+  workflow_dispatch:      # build de test manuel : artefact seulement, pas de Release
+
+# Lecture seule par défaut : seul le job release reçoit le droit d'écriture
+permissions:
+  contents: read
+
+jobs:
+  # Exécute le code du dépôt et ses dépendances : jeton en lecture seule
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      nom: ${{ steps.version.outputs.nom }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false   # ne pas laisser le jeton dans .git/config
+      - uses: astral-sh/setup-uv@v6
+
+      # --locked : exactement les versions testées de uv.lock
+      - run: uv sync --locked
+
+      # Sur un tag : le tag doit correspondre à la version de pyproject.toml
+      - name: Vérification de la version
+        id: version
+        run: |
+          uv run python - <<'EOF'
+          import os, tomllib
+          from packaging.version import Version
+          projet = Version(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])
+          if os.environ["GITHUB_REF_TYPE"] == "tag":
+              tag = Version(os.environ["GITHUB_REF_NAME"].removeprefix("v"))
+              if tag != projet:
+                  raise SystemExit(f"Le tag {tag} ne correspond pas à pyproject.toml ({projet})")
+              nom = f"v{projet}"
+          else:
+              nom = f"v{projet}-{os.environ['GITHUB_SHA'][:7]}"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"nom={nom}\nprerelease={str(projet.is_prerelease).lower()}\n")
+          EOF
+
+      - run: uv run pyinstaller --clean PromptoDYS.spec
+
+      # Livrable : l'exe et le modèle de fichier de clé, que l'utilisateur copie en GeminiKey.txt
+      - run: cp .env.template dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PromptoDYS-${{ steps.version.outputs.nom }}
+          path: dist/
+          include-hidden-files: true   # .env.template commence par un point
+
+  # Publie la Release : droit d'écriture, mais ne récupère ni n'exécute le code du dépôt
+  release:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write     # créer la Release et y joindre le zip
+    env:
+      NOM: ${{ needs.build.outputs.nom }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: PromptoDYS-${{ needs.build.outputs.nom }}
+          path: livrable
+
+      - name: Archive de livraison
+        run: cd livrable && zip "../PromptoDYS-$NOM.zip" PromptoDYS.exe .env.template
+
+      - name: Création de la Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "PromptoDYS-$NOM.zip" \
+            --verify-tag \
+            --title "PromptoDYS $GITHUB_REF_NAME" \
+            --notes "Changements : voir [CHANGELOG.md](https://github.com/$GH_REPO/blob/$GITHUB_REF_NAME/CHANGELOG.md)" \
+            --prerelease="${{ needs.build.outputs.prerelease }}"
