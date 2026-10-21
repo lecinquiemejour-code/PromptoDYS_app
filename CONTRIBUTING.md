@@ -240,16 +240,27 @@ uv version 1.3.0b1
 # 4. Commiter
 git commit -am "build(release): Bump version to 1.3.0b1"
 
-# 5. Fusionner dans master (--no-ff : toujours un commit de merge explicite),
-#    puis poser le tag sur master et pousser les deux
+# 5. Poser le tag sur la branche de livraison et le pousser : il déclenche le workflow.
+#    Attendre qu'il soit vert dans l'onglet Actions, et vérifier la Release publiée.
+git tag v1.3.0b1
+git push origin v1.3.0b1
+
+# 6. Une fois la Release validée, fusionner dans master
+#    (--no-ff : toujours un commit de merge explicite)
 git checkout master
 git merge --no-ff release/v1.3.0b1
-git tag v1.3.0b1
-git push origin master v1.3.0b1
+git push origin master
 
-# 6. Supprimer la branche de livraison locale (-d refuse si elle n'a pas été fusionnée)
+# 7. Supprimer la branche de livraison locale (-d refuse si elle n'a pas été fusionnée)
 git branch -d release/v1.3.0b1
 ```
+
+`master` ne reçoit ainsi que des versions dont le build et la Release ont réussi. Après la fusion, le commit tagué fait partie de l'historique de `master`.
+
+**Si le workflow échoue**, corriger sur la branche de livraison, dans cet ordre :
+1. supprimer la Release si elle a été créée (onglet Releases, icône de suppression). Si on supprime le tag d'abord, la Release reste, détachée de tout tag ;
+2. supprimer le tag : `git push --delete origin v1.3.0b1` puis `git tag -d v1.3.0b1` ;
+3. corriger, commiter sur `release/v1.3.0b1`, puis reposer et pousser le tag (étape 5).
 
 Seul le tag déclenche le build : pousser la branche `release/...` ne lance rien. Le tag déclenche le workflow [release-windows.yml](.github/workflows/release-windows.yml), qui enchaîne deux jobs :
 1. **`build`** (runner Windows, jeton en lecture seule) : vérifie que le tag correspond à la version de `pyproject.toml` et s'arrête en erreur sinon, builde l'exécutable, puis envoie `PromptoDYS.exe` et `.env.template` comme artefact ;
