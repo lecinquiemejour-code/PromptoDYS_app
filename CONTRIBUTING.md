@@ -263,7 +263,7 @@ git branch -d release/v1.3.0b1
 3. corriger, commiter sur `release/v1.3.0b1`, puis reposer et pousser le tag (étape 5).
 
 Seul le tag déclenche le build : pousser la branche `release/...` ne lance rien. Le tag déclenche le workflow [release-windows.yml](.github/workflows/release-windows.yml), qui enchaîne deux jobs :
-1. **`build`** (runner Windows, jeton en lecture seule) : vérifie que le tag correspond à la version de `pyproject.toml` et s'arrête en erreur sinon, builde l'exécutable, puis envoie `PromptoDYS.exe` et `.env.template` comme artefact ;
+1. **`build`** (runner Windows, jeton en lecture seule) : vérifie que le tag correspond à la version de `pyproject.toml` et s'arrête en erreur sinon, builde l'exécutable, puis envoie `PromptoDYS.exe`, `GeminiKey.txt.template` et `LISEZMOI.txt` comme artefact ;
 2. **`release`** (runner Linux, seulement sur un tag et si `build` a réussi) : récupère l'artefact, le zippe et publie la Release « PromptoDYS v1.3.0b1 » avec `PromptoDYS-v1.3.0b1.zip`, via `gh release create`.
 
 Une beta ou une rc est marquée « Pre-release » automatiquement, et n'est jamais affichée comme dernière version stable.
