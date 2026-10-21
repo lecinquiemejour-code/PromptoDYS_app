@@ -3,11 +3,26 @@
 Tous les changements notables de ce projet seront documentés dans ce fichier.
 
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
-et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
+et la numérotation suit le sens du [Semantic Versioning](https://semver.org/lang/fr/) (MAJEUR.MINEUR.CORRECTIF),
+écrite au format Python ([PEP 440](https://peps.python.org/pep-0440/)) : pré-versions `1.3.0b1`, `1.3.0rc1`, tags git `v1.3.0b1`.
 
 ---
 
 ## [Non publié]
+
+### Prévu
+- Tests unitaires et d'intégration
+- Support export DOCX
+- Mode offline avec cache local
+- Tableau de bord statistiques élèves
+- Interface professeurs
+
+---
+
+## [1.3.0b1] - 2026-10-21
+
+### Ajouté
+- Workflow GitHub Actions de build et de release de l'exécutable Windows (`.github/workflows/release-windows.yml`) : un tag `v*` publie une Release contenant `PromptoDYS.exe` et `.env.template`
 
 ### Modifié
 - Gestion des dépendances et de l'environnement Python avec `uv` (`pyproject.toml` + `uv.lock`)
@@ -23,6 +38,7 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ### Supprimé
 - `requirements.txt` (encodé en UTF-16), remplacé par `pyproject.toml` et `uv.lock`
+- Constante `__version__`, jamais lue : la version de référence est celle de `pyproject.toml`
 - `BUILD_STATUS.md`, obsolète (problème propre à Python 3.10.0)
 - Code mort : menu console (`menu_console()`, `lire_contenu()`, `ecrire_contenu()`), jamais appelé depuis le passage au panneau Tkinter
 - Code mort : historique de session (`historique_llm`, `ajouter_message_llm()`), rempli à chaque traitement mais jamais lu, et variable globale `web_folder_global`, utilisée uniquement dans `main()`
@@ -32,13 +48,6 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 - Paramètres de sécurité pour Claude Code (`.claude/settings.json`) : lecture de `GeminiKey.txt` interdite, confirmation demandée pour les commandes destructives et les changements de dépendances
 - Le log de chargement de la clé API, recopié dans les rapports PDF, n'affiche plus que les 4 derniers caractères de la clé au lieu des 10 premiers
 - `GeminiKey.txt` n'est plus inclus dans l'exécutable : chaque utilisateur fournit sa propre clé à côté de l'exe
-
-### Prévu
-- Tests unitaires et d'intégration
-- Support export DOCX
-- Mode offline avec cache local
-- Tableau de bord statistiques élèves
-- Interface professeurs
 
 ---
 
