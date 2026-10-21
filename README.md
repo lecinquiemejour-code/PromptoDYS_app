@@ -2,7 +2,7 @@
 
 > **Assistant IA dédié à l'aide scolaire pour élèves avec troubles DYS**
 
-![Version](https://img.shields.io/badge/version-1.2.0-blue)
+![Version](https://img.shields.io/badge/version-1.3.0b1-blue)
 ![Python](https://img.shields.io/badge/python-3.14-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-orange)
 ![Status](https://img.shields.io/badge/status-stable-brightgreen)
@@ -148,7 +148,7 @@ Quel que soit votre système (Windows, macOS ou Linux), utilisez de préférence
 
 Le workflow GitHub Actions [release-windows.yml](.github/workflows/release-windows.yml) construit l'exécutable sur un runner Windows :
 - **Release** : pousser un tag de version (`git tag v1.3.0b1` puis `git push origin v1.3.0b1`). Le zip `PromptoDYS-v1.3.0b1.zip` (exe + `.env.template`) est publié dans les Releases GitHub, marqué « Pre-release » pour une beta ou une rc. Voir [CONTRIBUTING.md](CONTRIBUTING.md#publier-une-version).
-- **Build de test** : onglet Actions › Release Windows › Run workflow, puis télécharger l'artefact en bas de la page du run.
+- **Build de test** : onglet Actions › Release Windows › Run workflow, puis télécharger l'artefact en bas de la page du run. Le zip contient directement `PromptoDYS.exe` et `.env.template`, et aucune Release n'est publiée.
 
 ### 🛠️ Build en local
 

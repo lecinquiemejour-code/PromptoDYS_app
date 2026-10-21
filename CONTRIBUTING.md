@@ -233,6 +233,7 @@ git checkout -b release/v1.3.0b1
 
 # 2. Changer la version (pyproject.toml et uv.lock ensemble, ne pas éditer à la main)
 uv version 1.3.0b1
+#    puis reporter le numéro à la main dans le badge de version du README.md
 
 # 3. Dans CHANGELOG.md, déplacer le contenu de [Non publié] dans une section [1.3.0b1] - AAAA-MM-JJ
 
@@ -250,12 +251,13 @@ git push origin master v1.3.0b1
 git branch -d release/v1.3.0b1
 ```
 
-Seul le tag déclenche le build : pousser la branche `release/...` ne lance rien. Le tag déclenche le workflow [release-windows.yml](.github/workflows/release-windows.yml) sur un runner Windows :
-1. il vérifie que le tag correspond à la version de `pyproject.toml`, et s'arrête en erreur sinon ;
-2. il builde l'exécutable ;
-3. il publie la Release « PromptoDYS v1.3.0b1 » avec le zip `PromptoDYS-v1.3.0b1.zip` (`PromptoDYS.exe` + `.env.template`).
+Seul le tag déclenche le build : pousser la branche `release/...` ne lance rien. Le tag déclenche le workflow [release-windows.yml](.github/workflows/release-windows.yml), qui enchaîne deux jobs :
+1. **`build`** (runner Windows, jeton en lecture seule) : vérifie que le tag correspond à la version de `pyproject.toml` et s'arrête en erreur sinon, builde l'exécutable, puis envoie `PromptoDYS.exe` et `.env.template` comme artefact ;
+2. **`release`** (runner Linux, seulement sur un tag et si `build` a réussi) : récupère l'artefact, le zippe et publie la Release « PromptoDYS v1.3.0b1 » avec `PromptoDYS-v1.3.0b1.zip`, via `gh release create`.
 
 Une beta ou une rc est marquée « Pre-release » automatiquement, et n'est jamais affichée comme dernière version stable.
+
+**Règle de sécurité si vous modifiez le workflow :** `release` est le seul job qui reçoit `contents: write`, et il ne récupère ni n'exécute le code du dépôt. Ne jamais donner le droit d'écriture à un job qui fait un checkout, installe les dépendances ou lance le build : une dépendance compromise pourrait alors pousser du code ou des tags avec le jeton.
 
 ---
 
