@@ -2,7 +2,7 @@
 
 > Document de référence sur le cœur de PromptoDYS : comment une note d'élève part de l'éditeur, est corrigée par Google Gemini, revient dans l'éditeur et finit archivée en PDF.
 >
-> Dernière mise à jour : 19/10/2026. Code concerné : fonction `traitement_gemini()` et ses fonctions auxiliaires dans [askGeminiPrompto.py](../askGeminiPrompto.py), template [prompto.dys](../prompto.dys). Pour la vue d'ensemble des deux projets, voir [ARCHITECTURE.md](ARCHITECTURE.md).
+> Dernière mise à jour : 19/10/2026. Code concerné : fonction `traitement_gemini()` et ses fonctions auxiliaires dans [askGeminiPrompto.py](../askGeminiPrompto.py), template [promptodys.prompt](../promptodys.prompt). Pour la vue d'ensemble des deux projets, voir [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
@@ -36,7 +36,7 @@ flowchart TD
     THREAD --> E1["1. Client Gemini<br/>lecture GeminiKey.txt"]
     E1 -- échec --> ERR(["Fin, bouton réinitialisé"])
     E1 --> E2["2. Lecture éditeur<br/>eel.readMarkdown"]
-    E2 --> E3["3. Lecture prompto.dys"]
+    E2 --> E3["3. Lecture promptodys.prompt"]
     E3 -- échec --> ERR
     E3 --> E4["4. Substitution<br/>[TEXTE] et [DATE]"]
     E4 --> E5["5. Config Gemini<br/>GEMINI_MODEL<br/>GEMINI_THINKING_LEVEL"]
@@ -81,17 +81,17 @@ stateDiagram-v2
 
 ## 3. Construction du prompt
 
-Le prompt envoyé à Gemini n'est pas écrit dans le code Python. Il est lu dans le fichier [prompto.dys](../prompto.dys), un fichier texte modifiable sans toucher au programme.
+Le prompt envoyé à Gemini n'est pas écrit dans le code Python. Il est lu dans le fichier [promptodys.prompt](../promptodys.prompt), un fichier texte modifiable sans toucher au code. En développement, il est lu dans le dossier du script. L'exécutable lit uniquement la copie embarquée lors du build (`sys._MEIPASS`) : un fichier placé à côté de l'exe est ignoré.
 
 ```mermaid
 flowchart LR
-    DYS["prompto.dys<br/>template avec<br/>[TEXTE] et [DATE]"] --> SUB
+    DYS["promptodys.prompt<br/>template avec<br/>[TEXTE] et [DATE]"] --> SUB
     MD["Markdown de l'éditeur<br/>via eel.readMarkdown"] --> SUB
     DATE["Date du jour<br/>format JJ/MM/AAAA"] --> SUB
     SUB["Substitution<br/>.replace('[TEXTE]', ...)<br/>.replace('[DATE]', ...)"] --> PROMPT["Prompt final<br/>envoyé tel quel à Gemini"]
 ```
 
-### Structure de prompto.dys
+### Structure de promptodys.prompt
 
 Le fichier se lit en cinq blocs :
 
@@ -336,7 +336,7 @@ Si la génération du PDF échoue, le traitement n'est pas considéré comme rat
 |---|---|---|
 | `GeminiKey.txt` absent | `FileNotFoundError` à l'étape 1 | Arrêt, message dans les logs, éditeur inchangé |
 | Clé vide ou valeur du modèle `.env.template` non remplacée | Étape 1 | Arrêt, message demandant de renseigner la clé |
-| `prompto.dys` absent ou sans `[TEXTE]` | Étape 3 | Arrêt, message dans les logs |
+| `promptodys.prompt` absent ou sans `[TEXTE]` | Étape 3 | Arrêt, message dans les logs |
 | Éditeur vide | Pas d'erreur | Le prompt est envoyé avec une note vide, Gemini répond quand même |
 | Erreur serveur Gemini (5xx) | `genai_errors.ServerError` | Arrêt, message, bouton réinitialisé |
 | Erreur API Gemini (clé invalide, quota, 4xx) | `genai_errors.APIError` | Arrêt, message, bouton réinitialisé |
@@ -374,7 +374,7 @@ flowchart LR
 
 ### Changer les consignes pédagogiques
 
-Éditer [prompto.dys](../prompto.dys). Aucune modification de code n'est nécessaire. Points à respecter :
+Éditer [promptodys.prompt](../promptodys.prompt). Aucune modification de code n'est nécessaire, mais il faut relancer le build pour que l'exécutable embarque la nouvelle version. Points à respecter :
 
 - Garder la balise `[TEXTE]`, sinon le traitement refuse de démarrer.
 - Garder `[DATE]` si le titre doit contenir la date.

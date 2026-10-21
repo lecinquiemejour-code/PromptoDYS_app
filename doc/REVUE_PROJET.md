@@ -35,7 +35,7 @@ Les cinq priorités, dans l'ordre :
 1. **La clé API Gemini a été distribuée en clair** dans les deux archives de distribution (`PromptoDYS_v1.1.zip` et `promptoDYS_v1.2.zip`) et elle est en plus embarquée dans l'exécutable par le fichier spec. Elle doit être révoquée et régénérée. ✅ Fait le 20/10/2026.
 2. **Le bouton "Traiter la prise de note" se bloque définitivement** quand le fichier de clé est absent : enchaînement de deux bugs (retour anticipé sans remise à zéro, puis plantage du failsafe sur une option Tkinter invalide). C'est exactement le scénario d'un nouvel utilisateur.
 3. **La fenêtre de contrôle fait 1100 px de haut** avec un minimum à 1000 px : sur un portable d'élève en 1366×768, le bas de la fenêtre (console, bouton Quitter) est hors écran.
-4. **Le code lit `GeminiKey.txt`, `prompto.dys` et écrit `reports/` dans le dossier courant**, pas dans le dossier de l'exécutable. Lancé depuis un raccourci, l'application ne trouve plus son prompt.
+4. **Le code lit `GeminiKey.txt`, `promptodys.prompt` et écrit `reports/` dans le dossier courant**, pas dans le dossier de l'exécutable. Lancé depuis un raccourci, l'application ne trouve plus son prompt.
 5. **Le dépôt transporte des fichiers morts** : trois anciens bundles React (environ 3,5 Mo) qui gonflent l'exécutable, un `requirements.txt` en UTF-16 illisible sur GitHub, et une documentation en partie obsolète (commande d'installation incomplète, menu console disparu).
 
 ---
@@ -80,16 +80,18 @@ En plus, [PromptoDYS.spec:13](../PromptoDYS.spec#L13) embarque `GeminiKey.txt` *
 
 ### C2. Les ressources embarquées ne sont jamais lues, et le chemin courant est roi
 
-**Où.** [askGeminiPrompto.py:775](../askGeminiPrompto.py#L775) ouvre `"GeminiKey.txt"`, [askGeminiPrompto.py:790](../askGeminiPrompto.py#L790) ouvre `"prompto.dys"`, [askGeminiPrompto.py:707](../askGeminiPrompto.py#L707) crée `"reports"`. Ces trois chemins sont **relatifs au dossier courant** (celui depuis lequel le programme est lancé), pas au dossier de l'exécutable ni au dossier temporaire PyInstaller.
+**Où.** [askGeminiPrompto.py:782](../askGeminiPrompto.py#L782) ouvre `"GeminiKey.txt"`, [askGeminiPrompto.py:816](../askGeminiPrompto.py#L816) ouvre `"promptodys.prompt"`, [askGeminiPrompto.py:728](../askGeminiPrompto.py#L728) crée `"reports"`. Ces trois chemins sont **relatifs au dossier courant** (celui depuis lequel le programme est lancé), pas au dossier de l'exécutable ni au dossier temporaire PyInstaller.
 
 **Conséquences.**
-- Le spec embarque `prompto.dys` et `GeminiKey.txt` dans l'exe, mais ces copies ne sont jamais lues. Pour la clé, c'est une exposition sans aucun bénéfice (voir C1).
-- Lancé depuis un raccourci dont le champ « Démarrer dans » pointe ailleurs, ou depuis une invite de commande dans un autre dossier, l'application répond « Fichier prompto.dys introuvable » et crée `reports/` au mauvais endroit.
+- Le spec embarque `promptodys.prompt` et `GeminiKey.txt` dans l'exe, mais ces copies ne sont jamais lues. Pour la clé, c'est une exposition sans aucun bénéfice (voir C1).
+- Lancé depuis un raccourci dont le champ « Démarrer dans » pointe ailleurs, ou depuis une invite de commande dans un autre dossier, l'application répond « Fichier promptodys.prompt introuvable » et crée `reports/` au mauvais endroit.
 - En mode développement, `find_web_folder()` cherche `build_web/` depuis `.`, donc le script ne démarre que si on est dans le bon dossier.
 
-**Piste.** Définir une fois pour toutes un `BASE_DIR` : le dossier de `sys.executable` quand on est dans l'exe, celui de `__file__` sinon. Puis construire tous les chemins avec `os.path.join(BASE_DIR, ...)`. Garder `prompto.dys` et `build_web/` embarqués via `sys._MEIPASS` comme valeur de secours est possible, mais pas la clé.
+**Piste.** Définir une fois pour toutes un `BASE_DIR` : le dossier de `sys.executable` quand on est dans l'exe, celui de `__file__` sinon. Puis construire tous les chemins avec `os.path.join(BASE_DIR, ...)`. Garder `promptodys.prompt` et `build_web/` embarqués via `sys._MEIPASS` comme valeur de secours est possible, mais pas la clé.
 
 **Effort.** Faible à moyen. Une constante et cinq remplacements.
+
+**Statut : 🟡 partiellement résolu.** Le prompt, renommé `prompto.dys` → `promptodys.prompt`, est désormais lu par `lire_prompto_dys()` dans `sys._MEIPASS` (copie embarquée) quand on tourne dans l'exe, et dans le dossier du script en développement. Il ne dépend plus du dossier courant, et un fichier placé à côté de l'exe est ignoré. Restent relatifs au dossier courant : `GeminiKey.txt`, `reports/` et `build_web/` en mode développement.
 
 ---
 
@@ -300,7 +302,7 @@ Signature d'un `pip freeze > requirements.txt` sous PowerShell 5. `pip` le lit g
 | [README_ANTIVIRUS.md](../README_ANTIVIRUS.md) | Lien VirusTotal « [À ajouter après build] » depuis janvier. | ❌ À faire |
 | [.env.template](../.env.template) | Le nom suggère un fichier `.env`, c'est en fait le gabarit de `GeminiKey.txt`. `GeminiKey.example.txt` serait plus clair. | ❌ À faire |
 | [CHANGELOG.md](../CHANGELOG.md) 1.2.0 | Annonce « Métadonnées Windows complètes », mais la ligne `version='version_info.txt'` est **commentée** dans le spec. L'exe n'a donc pas de métadonnées, ce qui aggrave les faux positifs antivirus que le même changelog prétend réduire. | ❌ À faire |
-| [prompto.dys](../prompto.dys) | Accolade `}` orpheline ligne 28 (le bloc `{` ouvert ligne 2 est déjà fermé ligne 6), « faire » pour « faite », « a colorer », « meme ». Gemini s'en accommode, mais c'est le cerveau pédagogique du produit. | 🟡 Partiel : accolade orpheline et « faite » corrigés (commit `564d873`) ; restent « a colorer » et « meme » |
+| [promptodys.prompt](../promptodys.prompt) | Accolade `}` orpheline ligne 28 (le bloc `{` ouvert ligne 2 est déjà fermé ligne 6), « faire » pour « faite », « a colorer », « meme ». Gemini s'en accommode, mais c'est le cerveau pédagogique du produit. | 🟡 Partiel : accolade orpheline et « faite » corrigés (commit `564d873`) ; restent « a colorer » et « meme » |
 
 ### D4. Le numéro de version est dupliqué à quatre endroits
 
@@ -413,7 +415,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | 9 | `askGeminiPrompto.py` | 🟡 En partie fait : imports morts, `menu_console` et compagnie, `historique_llm` retirés. Restent : `ruff --fix` ; `basename` sur le nom d'image ; log de clé sans extrait | M1, M2, M3, M5, M6, M7 |
 | 10 | `build_web/static/` | Supprimer les trois vieux bundles et leurs `.map` | D1 |
 | 11 | `requirements.txt` | ✅ Fait : remplacé par `pyproject.toml` + `uv.lock` | D2 |
-| 12 | `README.md`, `CONTRIBUTING.md`, `BUILD_STATUS.md`, `.env.template`, `prompto.dys` | 🟡 En partie fait : corrections listées en D3, voir la colonne Statut | D3 |
+| 12 | `README.md`, `CONTRIBUTING.md`, `BUILD_STATUS.md`, `.env.template`, `promptodys.prompt` | 🟡 En partie fait : corrections listées en D3, voir la colonne Statut | D3 |
 | 13 | Build | `pyinstaller --clean`, test sur machine sans clé, avec clé, depuis un raccourci | Validation |
 
 ### Lot 2 : tests sur les fonctions pures (une demi-session)
