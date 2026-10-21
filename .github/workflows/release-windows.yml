@@ -49,13 +49,13 @@ jobs:
 
       - run: uv run pyinstaller --clean PromptoDYS.spec
 
-      # Livrable : l'exe et le modèle de fichier de clé, que l'utilisateur copie en GeminiKey.txt
-      - run: cp .env.template dist/
+      # Livrable : l'exe, le modèle de fichier de clé (enregistré par l'utilisateur en GeminiKey.txt)
+      # et la notice d'installation
+      - run: cp GeminiKey.txt.template LISEZMOI.txt dist/
       - uses: actions/upload-artifact@v4
         with:
           name: PromptoDYS-${{ steps.version.outputs.nom }}
           path: dist/
-          include-hidden-files: true   # .env.template commence par un point
 
   # Publie la Release : droit d'écriture, mais ne récupère ni n'exécute le code du dépôt
   release:
@@ -73,7 +73,7 @@ jobs:
           path: livrable
 
       - name: Archive de livraison
-        run: cd livrable && zip "../PromptoDYS-$NOM.zip" PromptoDYS.exe .env.template
+        run: cd livrable && zip "../PromptoDYS-$NOM.zip" PromptoDYS.exe GeminiKey.txt.template LISEZMOI.txt
 
       - name: Création de la Release
         env:
@@ -83,5 +83,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" "PromptoDYS-$NOM.zip" \
             --verify-tag \
             --title "PromptoDYS $GITHUB_REF_NAME" \
-            --notes "Changements : voir [CHANGELOG.md](https://github.com/$GH_REPO/blob/$GITHUB_REF_NAME/CHANGELOG.md)" \
+            --notes "Installation : suivre [LISEZMOI.txt](https://github.com/$GH_REPO/blob/$GITHUB_REF_NAME/LISEZMOI.txt), inclus dans le zip.
+
+          Changements : voir [CHANGELOG.md](https://github.com/$GH_REPO/blob/$GITHUB_REF_NAME/CHANGELOG.md)" \
             --prerelease="${{ needs.build.outputs.prerelease }}"

@@ -41,6 +41,8 @@ PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'i
 
 ## 🚀 Installation
 
+> **Vous voulez seulement utiliser l'application ?** Téléchargez le zip de la dernière version dans les [Releases](https://github.com/lecinquiemejour-code/PromptoDYS_app/releases), puis suivez le fichier `LISEZMOI.txt` qu'il contient. La suite de cette section s'adresse aux développeurs.
+
 ### Prérequis
 
 - **[uv](https://docs.astral.sh/uv/)** (gestion de Python, des dépendances et de l'environnement virtuel)
@@ -70,9 +72,9 @@ Pour ajouter une dépendance : `uv add <paquet>` puis committez `pyproject.toml`
 ```bash
 # 1. Copier le template de configuration
 # Windows
-copy .env.template GeminiKey.txt
+copy GeminiKey.txt.template GeminiKey.txt
 # MacOS / Linux
-cp .env.template GeminiKey.txt
+cp GeminiKey.txt.template GeminiKey.txt
 
 # 2. Éditer GeminiKey.txt et remplacer par votre vraie clé API
 # IMPORTANT: Ne commitez JAMAIS ce fichier !
@@ -112,7 +114,8 @@ PromptoDYS/
 ├── .python-version           # Version de Python utilisée par uv
 ├── PromptoDYS.spec           # Configuration PyInstaller
 ├── promptodys.prompt         # Template de prompt IA
-├── .env.template             # Modèle de GeminiKey.txt
+├── GeminiKey.txt.template    # Modèle de GeminiKey.txt
+├── LISEZMOI.txt              # Notice d'installation livrée dans le zip
 ├── GeminiKey.txt             # Clé API (à créer, ignoré par Git)
 ├── build_web/                # Interface React compilée
 │   ├── index.html
@@ -147,8 +150,8 @@ Quel que soit votre système (Windows, macOS ou Linux), utilisez de préférence
 ### 🔄 Intégration continue (recommandé)
 
 Le workflow GitHub Actions [release-windows.yml](.github/workflows/release-windows.yml) construit l'exécutable sur un runner Windows :
-- **Release** : pousser un tag de version (`git tag v1.3.0b1` puis `git push origin v1.3.0b1`). Le zip `PromptoDYS-v1.3.0b1.zip` (exe + `.env.template`) est publié dans les Releases GitHub, marqué « Pre-release » pour une beta ou une rc. Voir [CONTRIBUTING.md](CONTRIBUTING.md#publier-une-version).
-- **Build de test** : onglet Actions › Release Windows › Run workflow, puis télécharger l'artefact en bas de la page du run. Le zip contient directement `PromptoDYS.exe` et `.env.template`, et aucune Release n'est publiée.
+- **Release** : pousser un tag de version (`git tag v1.3.0b1` puis `git push origin v1.3.0b1`). Le zip `PromptoDYS-v1.3.0b1.zip` (exe, `GeminiKey.txt.template` et `LISEZMOI.txt`) est publié dans les Releases GitHub, marqué « Pre-release » pour une beta ou une rc. Voir [CONTRIBUTING.md](CONTRIBUTING.md#publier-une-version).
+- **Build de test** : onglet Actions › Release Windows › Run workflow, puis télécharger l'artefact en bas de la page du run. Le zip contient directement `PromptoDYS.exe`, `GeminiKey.txt.template` et `LISEZMOI.txt`, et aucune Release n'est publiée.
 
 ### 🛠️ Build en local
 

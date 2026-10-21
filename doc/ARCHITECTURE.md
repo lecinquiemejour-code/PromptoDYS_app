@@ -311,7 +311,8 @@ Le résultat est `dist/PromptoDYS.exe`. Voir aussi [README_ANTIVIRUS.md](../READ
 |---|---|
 | [askGeminiPrompto.py](../askGeminiPrompto.py) | Tout le code Python : GUI, pont Eel, Gemini, PDF, sauvegarde |
 | [promptodys.prompt](../promptodys.prompt) | Template du prompt envoyé à Gemini |
-| `GeminiKey.txt` | Clé API, **ignoré par git**, à créer depuis [.env.template](../.env.template) |
+| `GeminiKey.txt` | Clé API, **ignoré par git**, à créer depuis [GeminiKey.txt.template](../GeminiKey.txt.template) |
+| [LISEZMOI.txt](../LISEZMOI.txt) | Notice d'installation pour l'utilisateur final, livrée dans le zip de release |
 | [PromptoDYS.spec](../PromptoDYS.spec) | Configuration PyInstaller |
 | `build_web/` | Éditeur React compilé, copié depuis le projet editor |
 | `build_web/config.yaml` | Mode développeur de l'éditeur (lu au premier lancement seulement) |

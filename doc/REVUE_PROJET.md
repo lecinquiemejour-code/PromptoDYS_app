@@ -300,7 +300,7 @@ Signature d'un `pip freeze > requirements.txt` sous PowerShell 5. `pip` le lit g
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Parle de la branche `main`, le dépôt utilise `master`. Le remote `upstream` pointe sur `ORIGINAL_OWNER/PromptoDYS`, un reste de gabarit. | ❌ À faire |
 | `BUILD_STATUS.md` | Décrivait un problème Python 3.10.0 résolu depuis, et contredisait `BUILD_v1.2.0_SUCCESS.md`. | ✅ Supprimé |
 | [README_ANTIVIRUS.md](../README_ANTIVIRUS.md) | Lien VirusTotal « [À ajouter après build] » depuis janvier. | ❌ À faire |
-| [.env.template](../.env.template) | Le nom suggère un fichier `.env`, c'est en fait le gabarit de `GeminiKey.txt`. `GeminiKey.example.txt` serait plus clair. | ❌ À faire |
+| `.env.template` | Le nom suggère un fichier `.env`, c'est en fait le gabarit de `GeminiKey.txt`. `GeminiKey.example.txt` serait plus clair. | ✅ Résolu : renommé en [GeminiKey.txt.template](../GeminiKey.txt.template), visible même avec les extensions masquées dans Windows, et livré avec la notice [LISEZMOI.txt](../LISEZMOI.txt) |
 | [CHANGELOG.md](../CHANGELOG.md) 1.2.0 | Annonce « Métadonnées Windows complètes », mais la ligne `version='version_info.txt'` est **commentée** dans le spec. L'exe n'a donc pas de métadonnées, ce qui aggrave les faux positifs antivirus que le même changelog prétend réduire. | ❌ À faire |
 | [promptodys.prompt](../promptodys.prompt) | Accolade `}` orpheline ligne 28 (le bloc `{` ouvert ligne 2 est déjà fermé ligne 6), « faire » pour « faite », « a colorer », « meme ». Gemini s'en accommode, mais c'est le cerveau pédagogique du produit. | 🟡 Partiel : accolade orpheline et « faite » corrigés (commit `564d873`) ; restent « a colorer » et « meme » |
 
@@ -415,7 +415,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | 9 | `askGeminiPrompto.py` | 🟡 En partie fait : imports morts, `menu_console` et compagnie, `historique_llm` retirés. Restent : `ruff --fix` ; `basename` sur le nom d'image ; log de clé sans extrait | M1, M2, M3, M5, M6, M7 |
 | 10 | `build_web/static/` | Supprimer les trois vieux bundles et leurs `.map` | D1 |
 | 11 | `requirements.txt` | ✅ Fait : remplacé par `pyproject.toml` + `uv.lock` | D2 |
-| 12 | `README.md`, `CONTRIBUTING.md`, `BUILD_STATUS.md`, `.env.template`, `promptodys.prompt` | 🟡 En partie fait : corrections listées en D3, voir la colonne Statut | D3 |
+| 12 | `README.md`, `CONTRIBUTING.md`, `BUILD_STATUS.md`, `GeminiKey.txt.template`, `promptodys.prompt` | 🟡 En partie fait : corrections listées en D3, voir la colonne Statut | D3 |
 | 13 | Build | `pyinstaller --clean`, test sur machine sans clé, avec clé, depuis un raccourci | Validation |
 
 ### Lot 2 : tests sur les fonctions pures (une demi-session)
@@ -461,7 +461,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | M12 | 🟡 Mineur | Effets de bord à l'import (un second ajouté : dossier du profil Chrome) | Trivial | 2 |
 | D1 | 🟠 Important | Trois bundles React morts, `.map` dans l'exe | Trivial | 1 |
 | D2 | ✅ Résolu | `requirements.txt` en UTF-16 (remplacé par uv) | Trivial | 1 |
-| D3 | 🟡 Partiellement résolu | Docs obsolètes, `sv_ttk` absent de la commande d'installation, `version=` commenté (installation et README corrigés ; restent CONTRIBUTING, VirusTotal, `.env.template`, `version=`) | Faible | 1 |
+| D3 | 🟡 Partiellement résolu | Docs obsolètes, `sv_ttk` absent de la commande d'installation, `version=` commenté (installation et README corrigés ; restent CONTRIBUTING, VirusTotal, `version=`) | Faible | 1 |
 | D4 | 🟡 Partiellement résolu | Version dupliquée quatre fois (modèle du pied PDF via `GEMINI_MODEL` ; version toujours dupliquée) | Faible | 3 |
 | D5 | 🟡 Partiellement résolu | Archives et PDF lourds dans le dépôt ou à la racine (archives retirées ; PDF toujours versionné) | Trivial | 1 |
 | D6 | 🟡 Mineur | Aucun test | Faible | 2 |

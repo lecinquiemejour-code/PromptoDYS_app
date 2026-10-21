@@ -1,0 +1,13 @@
+# PromptoDYS - Modèle du fichier GeminiKey.txt
+#
+# 1. Remplacez la ligne YOUR_GEMINI_API_KEY_HERE ci-dessous par votre clé API
+# 2. Fichier > Enregistrer sous, dans le dossier de PromptoDYS.exe :
+#    nom « GeminiKey.txt », type « Tous les fichiers »
+# Les lignes qui commencent par # sont ignorées, vous pouvez les laisser.
+#
+# ============================================
+# GOOGLE GEMINI API
+# ============================================
+# Obtenez votre clé sur : https://aistudio.google.com/apikey
+# IMPORTANT : votre clé est personnelle, ne la partagez pas et ne la commitez JAMAIS !
+YOUR_GEMINI_API_KEY_HERE
