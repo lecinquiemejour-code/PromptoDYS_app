@@ -17,8 +17,8 @@ GeminiKey.txt
 data/
 REPORTS/
 reports/
-*.dys.bak
-*.dys.tmp
+*.prompt.bak
+*.prompt.tmp
 
 # ============================================
 # PYTHON

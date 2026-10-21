@@ -111,7 +111,7 @@ PromptoDYS/
 ├── uv.lock                   # Versions figées de toutes les dépendances (généré par uv)
 ├── .python-version           # Version de Python utilisée par uv
 ├── PromptoDYS.spec           # Configuration PyInstaller
-├── prompto.dys               # Template de prompt IA
+├── promptodys.prompt         # Template de prompt IA
 ├── .env.template             # Modèle de GeminiKey.txt
 ├── GeminiKey.txt             # Clé API (à créer, ignoré par Git)
 ├── build_web/                # Interface React compilée
@@ -153,9 +153,9 @@ uv run pyinstaller --clean PromptoDYS.spec
 
 ---
 
-## 🎓 Template de prompt (prompto.dys)
+## 🎓 Template de prompt (promptodys.prompt)
 
-Le fichier `prompto.dys` définit le comportement de l'IA :
+Le fichier `promptodys.prompt` définit le comportement de l'IA :
 
 - **Rôle** : Assistant dédié aux troubles DYS
 - **Matières supportées** : Français, Maths, Histoire-Géo, Sciences, Langues, etc.
@@ -169,6 +169,8 @@ Le fichier `prompto.dys` définit le comportement de l'IA :
   6. Doutes/interrogations
   7. 3 questions d'approfondissement
 - **Note originale** : ajoutée automatiquement par l'application à la suite (copie exacte, sans les images)
+
+En développement, le fichier est lu dans le dossier du script à chaque traitement. L'exécutable utilise uniquement la copie embarquée lors du build : un `promptodys.prompt` placé à côté de l'exe est ignoré, et toute modification du prompt demande de relancer le build.
 
 ---
 

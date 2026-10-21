@@ -17,8 +17,9 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 - Amélioration de la logique de chargement de l'API Key Gemini : lignes vides et commentaires ignorés, fichier enregistré avec BOM (Bloc-notes Windows) accepté, message clair si la valeur du template n'a pas été remplacée par l'utilisateur
 - Migration de Gemini 2.5 Flash vers `gemini-3.8-flash` : niveau de réflexion `thinking_level` LOW à la place de `thinking_budget`, paramètres `temperature` et `max_output_tokens` retirés (ignorés par Gemini 3)
 - Modèle et niveau de réflexion extraits en constantes `GEMINI_MODEL` et `GEMINI_THINKING_LEVEL`, repris dans les logs et le pied du rapport PDF
-- Prompt `prompto.dys` : règles de fidélité au contenu, reformulation et réorganisation explicites, sous-parties sans titre `####`, titre « Note corrigée » obligatoire, doutes établis en comparant la note corrigée à la note d'origine, nouvelle règle de mise en page des lignes
+- Prompt `promptodys.prompt` : règles de fidélité au contenu, reformulation et réorganisation explicites, sous-parties sans titre `####`, titre « Note corrigée » obligatoire, doutes établis en comparant la note corrigée à la note d'origine, nouvelle règle de mise en page des lignes
 - La note d'origine est ajoutée par l'application au lieu d'être recopiée par Gemini : copie exacte, et environ 27 % de tokens de sortie en moins (13 % du total) sur la note de test
+- `prompto.dys` renommé en `promptodys.prompt`. L'exécutable utilise uniquement le prompt embarqué (un fichier placé à côté de l'exe est ignoré) ; en développement, le prompt est lu dans le dossier du script et non plus dans le dossier courant
 
 ### Supprimé
 - `requirements.txt` (encodé en UTF-16), remplacé par `pyproject.toml` et `uv.lock`

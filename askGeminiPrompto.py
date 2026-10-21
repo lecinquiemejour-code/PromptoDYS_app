@@ -13,7 +13,7 @@ uv run python askGeminiPrompto.py
 
 Fichiers requis:
 - GeminiKey.txt (clé API Gemini)
-- prompto.dys (template de traitement IA)
+- promptodys.prompt (template de traitement IA)
 - build/index.html (interface web)
 
 Fonctionnalités:
@@ -809,21 +809,23 @@ def init_gemini_client():
 
 
 def lire_prompto_dys():
-    """Lit le fichier prompto.dys"""
+    """Lit promptodys.prompt : la copie embarquée dans l'exécutable PyInstaller,
+    ou celle du dossier du script en mode développement"""
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(__file__))
     try:
-        with open("prompto.dys", "r", encoding="utf-8") as f:
+        with open(os.path.join(base_path, "promptodys.prompt"), "r", encoding="utf-8") as f:
             contenu = f.read()
 
         if "[TEXTE]" not in contenu:
-            log_message("❌ ÉCHEC: Balise [TEXTE] manquante dans prompto.dys")
+            log_message("❌ ÉCHEC: Balise [TEXTE] manquante dans promptodys.prompt")
             return None
 
         return contenu
     except FileNotFoundError:
-        log_message("❌ ÉCHEC: Fichier prompto.dys introuvable")
+        log_message("❌ ÉCHEC: Fichier promptodys.prompt introuvable")
         return None
     except Exception as e:
-        log_message(f"❌ ÉCHEC: Erreur lecture prompto.dys: {e}")
+        log_message(f"❌ ÉCHEC: Erreur lecture promptodys.prompt: {e}")
         return None
 
 
@@ -910,12 +912,12 @@ def traitement_gemini():
     afficher_contenu_editeur(contenu_editeur, "📄 CONTENU LU DEPUIS L'ÉDITEUR")
 
     # 3. Lire le prompt template
-    log_message("\n📋 ÉTAPE 3: Lecture du template prompto.dys...")
+    log_message("\n📋 ÉTAPE 3: Lecture du template promptodys.prompt...")
     prompt_template = lire_prompto_dys()
     if not prompt_template:
-        log_message("❌ ÉCHEC: Impossible de lire prompto.dys")
+        log_message("❌ ÉCHEC: Impossible de lire promptodys.prompt")
         return
-    log_message("✅ SUCCÈS: Template prompto.dys chargé")
+    log_message("✅ SUCCÈS: Template promptodys.prompt chargé")
 
     # 4. Substituer [TEXTE] et [DATE] par le contenu éditeur et la date du jour
     log_message("\n🔗 ÉTAPE 4: Préparation du prompt final...")

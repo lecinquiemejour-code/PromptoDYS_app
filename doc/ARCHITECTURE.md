@@ -153,7 +153,7 @@ sequenceDiagram
     TK->>R: eel.readMarkdown()
     R->>R: HTML du DOM → Markdown
     R-->>TK: Markdown de la note
-    TK->>TK: Lit prompto.dys, remplace [TEXTE] et [DATE]
+    TK->>TK: Lit promptodys.prompt, remplace [TEXTE] et [DATE]
     TK->>G: generate_content_stream (GEMINI_MODEL, GEMINI_THINKING_LEVEL)
     loop Streaming
         G-->>TK: morceaux de réflexion 💭 et de réponse
@@ -174,7 +174,7 @@ La fonction `traitement_gemini()` de [askGeminiPrompto.py](../askGeminiPrompto.p
 
 1. Initialisation du client Gemini (clé lue dans `GeminiKey.txt`).
 2. Lecture du Markdown de l'éditeur.
-3. Lecture du template [prompto.dys](../prompto.dys).
+3. Lecture du template [promptodys.prompt](../promptodys.prompt).
 4. Substitution de `[TEXTE]` et `[DATE]`.
 5. Configuration : modèle `GEMINI_MODEL` (`gemini-3.8-flash`) et niveau de réflexion `GEMINI_THINKING_LEVEL` (`LOW`), deux constantes en tête du fichier.
 6. Streaming de la réponse, avec vérification du flag d'abandon à chaque morceau.
@@ -183,9 +183,9 @@ La fonction `traitement_gemini()` de [askGeminiPrompto.py](../askGeminiPrompto.p
 9. Bilan des tokens (entrée, sortie, réflexion).
 10. Génération du rapport PDF avec ReportLab.
 
-### Le rôle de prompto.dys
+### Le rôle de promptodys.prompt
 
-Le fichier [prompto.dys](../prompto.dys) est le cerveau pédagogique. Il impose à Gemini :
+Le fichier [promptodys.prompt](../promptodys.prompt) est le cerveau pédagogique. Il impose à Gemini :
 
 - une structure en **sept sections** : titre, résumé, mots-clés, note corrigée, avertissement, doutes, questions. La note d'origine est ajoutée ensuite par Python, copie exacte sans les images ;
 - une **fidélité au contenu** : aucune information supprimée ni ajoutée, les doutes sont signalés au lieu d'être corrigés ;
@@ -270,7 +270,7 @@ flowchart LR
 
     subgraph APP["Dépôt PromptoDYS_app"]
         WEB["build_web/<br/>bundle React compilé"]
-        PYS["askGeminiPrompto.py<br/>prompto.dys<br/>assets/prompto.png"]
+        PYS["askGeminiPrompto.py<br/>promptodys.prompt<br/>assets/prompto.png"]
         SPEC["PromptoDYS.spec<br/>PyInstaller"]
         EXE["dist/PromptoDYS.exe<br/>tout embarqué"]
         WEB --> SPEC
@@ -306,7 +306,7 @@ Le résultat est `dist/PromptoDYS.exe`. Voir aussi [README_ANTIVIRUS.md](../READ
 | Fichier | Rôle |
 |---|---|
 | [askGeminiPrompto.py](../askGeminiPrompto.py) | Tout le code Python : GUI, pont Eel, Gemini, PDF, sauvegarde |
-| [prompto.dys](../prompto.dys) | Template du prompt envoyé à Gemini |
+| [promptodys.prompt](../promptodys.prompt) | Template du prompt envoyé à Gemini |
 | `GeminiKey.txt` | Clé API, **ignoré par git**, à créer depuis [.env.template](../.env.template) |
 | [PromptoDYS.spec](../PromptoDYS.spec) | Configuration PyInstaller |
 | `build_web/` | Éditeur React compilé, copié depuis le projet editor |
