@@ -142,6 +142,18 @@ PromptoDYS/
 
 ## 📦 Build (Exécutable Windows)
 
+Quel que soit votre système (Windows, macOS ou Linux), utilisez de préférence l'intégration continue : l'exécutable est construit sur une machine Windows propre, avec exactement les versions de `uv.lock`.
+
+### 🔄 Intégration continue (recommandé)
+
+Le workflow GitHub Actions [release-windows.yml](.github/workflows/release-windows.yml) construit l'exécutable sur un runner Windows :
+- **Release** : pousser un tag de version (`git tag v1.3.0b1` puis `git push origin v1.3.0b1`). Le zip `PromptoDYS-v1.3.0b1.zip` (exe + `.env.template`) est publié dans les Releases GitHub, marqué « Pre-release » pour une beta ou une rc. Voir [CONTRIBUTING.md](CONTRIBUTING.md#publier-une-version).
+- **Build de test** : onglet Actions › Release Windows › Run workflow, puis télécharger l'artefact en bas de la page du run.
+
+### 🛠️ Build en local
+
+PyInstaller produit un exécutable pour le système qui le lance : ces commandes ne donnent un `.exe` que sur Windows (sur macOS, on obtient un exécutable macOS).
+
 ```bash
 # PyInstaller est dans le groupe "dev" (installé par défaut avec uv sync)
 # --locked : le build utilise exactement les versions testées de uv.lock.
