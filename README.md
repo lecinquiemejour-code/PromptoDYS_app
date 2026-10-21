@@ -41,6 +41,8 @@ PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'i
 
 ## 🚀 Installation
 
+> **Vous voulez seulement utiliser l'application ?** Téléchargez le zip de la dernière version dans les [Releases](https://github.com/lecinquiemejour-code/PromptoDYS_app/releases), puis suivez le fichier `LISEZMOI.txt` qu'il contient. La suite de cette section s'adresse aux développeurs.
+
 ### Prérequis
 
 - **[uv](https://docs.astral.sh/uv/)** (gestion de Python, des dépendances et de l'environnement virtuel)

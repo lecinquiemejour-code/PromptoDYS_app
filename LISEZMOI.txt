@@ -1,0 +1,129 @@
+PromptoDYS - Installation et premier lancement
+==============================================
+
+PromptoDYS aide à corriger et à mettre en forme une prise de note grâce à
+l'intelligence artificielle Google Gemini.
+
+
+1. CE QU'IL FAUT
+----------------
+
+- Un ordinateur sous Windows 10 ou Windows 11.
+- Google Chrome installé (l'éditeur de notes s'ouvre dans une fenêtre Chrome).
+  Téléchargement : https://www.google.com/chrome/
+- Un compte Google, pour obtenir une clé API Gemini (étape 3).
+- Une connexion Internet pendant le traitement des notes.
+
+
+2. INSTALLER
+------------
+
+1. Faites un clic droit sur le fichier zip téléchargé
+   (PromptoDYS-vX.Y.Z.zip), puis choisissez « Extraire tout... ».
+2. Choisissez un dossier où l'application restera, par exemple :
+   Documents\PromptoDYS
+3. Ouvrez ce dossier. Il contient trois fichiers :
+   - PromptoDYS.exe            l'application
+   - GeminiKey.txt.template    le modèle du fichier de clé
+   - LISEZMOI.txt              ce fichier
+
+Attention : ne lancez pas PromptoDYS.exe directement depuis le zip, sans
+l'avoir extrait. L'application ne trouverait pas sa clé.
+
+
+3. OBTENIR UNE CLÉ API GEMINI
+-----------------------------
+
+1. Allez sur https://aistudio.google.com/apikey
+2. Connectez-vous avec votre compte Google et acceptez les conditions.
+3. Cliquez sur « Créer une clé API » (« Create API key »).
+4. Copiez la clé affichée : une longue suite de lettres et de chiffres qui
+   commence par « AIza ».
+
+Votre clé est personnelle : ne la donnez à personne et ne la publiez pas.
+Si elle a été divulguée, supprimez-la dans Google AI Studio et créez-en une
+nouvelle.
+
+
+4. CRÉER LE FICHIER GeminiKey.txt
+---------------------------------
+
+1. Faites un clic droit sur GeminiKey.txt.template, puis
+   « Ouvrir avec » > « Bloc-notes ».
+2. Remplacez la ligne YOUR_GEMINI_API_KEY_HERE par votre clé
+   (collez-la avec Ctrl+V). Les lignes qui commencent par # peuvent rester.
+3. Menu Fichier > « Enregistrer sous » :
+   - dossier : le même dossier que PromptoDYS.exe ;
+   - Nom du fichier : GeminiKey.txt
+   - Type : « Tous les fichiers (*.*) »
+   Cliquez sur « Enregistrer ».
+
+Vérifiez le nom du fichier. Windows masque souvent les extensions, et le
+fichier peut finir en « GeminiKey.txt.txt » sans que cela se voie. Pour
+vérifier, dans l'Explorateur de fichiers :
+- Windows 11 : Affichage > Afficher > cochez « Extensions de noms de fichiers »
+- Windows 10 : onglet Affichage > cochez « Extensions de noms de fichiers »
+Le fichier doit s'appeler exactement GeminiKey.txt. Sinon, renommez-le.
+
+
+5. LANCER L'APPLICATION
+-----------------------
+
+Double-cliquez sur PromptoDYS.exe, dans le dossier qui contient
+GeminiKey.txt.
+
+Au premier lancement, Windows peut afficher « Windows a protégé votre
+ordinateur ». Cliquez sur « Informations complémentaires », puis sur
+« Exécuter quand même ». Ce message apparaît parce que l'application n'a pas
+de signature numérique payante.
+
+Si votre antivirus bloque le fichier, c'est un faux positif connu. Voir :
+https://github.com/lecinquiemejour-code/PromptoDYS_app/blob/master/README_ANTIVIRUS.md
+
+Raccourci sur le Bureau : si vous en créez un, faites un clic droit dessus >
+Propriétés, et vérifiez que le champ « Démarrer dans » contient bien le
+dossier de PromptoDYS.exe. Sinon l'application ne trouve pas GeminiKey.txt.
+
+
+6. UTILISER PROMPTODYS
+----------------------
+
+L'application ouvre un panneau de contrôle :
+1. « Ouvrir l'Éditeur » : ouvre l'éditeur dans une fenêtre Chrome.
+   Saisissez ou collez votre prise de note.
+2. « Traiter la prise de note » : envoie la note à Gemini. La note corrigée
+   remplace la note dans l'éditeur. Pendant le traitement, le bouton devient
+   « Abandonner le traitement ».
+3. « Voir les rapports PDF » : ouvre le dossier « reports », créé à côté de
+   PromptoDYS.exe. Chaque traitement y ajoute un rapport PDF (note d'origine,
+   note corrigée et journal).
+4. « Sauvegarder » et « Ouvrir » : enregistrent et rouvrent une note.
+
+La zone Console / Logs, en bas du panneau, indique ce que fait l'application
+et affiche les erreurs.
+
+
+7. EN CAS DE PROBLÈME
+---------------------
+
+Message « Fichier GeminiKey.txt introuvable »
+  -> Le fichier n'est pas dans le dossier de PromptoDYS.exe, ou il s'appelle
+     GeminiKey.txt.txt (voir l'étape 4), ou l'application a été lancée par
+     un raccourci mal réglé (voir l'étape 5).
+
+Message « GeminiKey.txt contient encore la valeur du template »
+  -> La ligne YOUR_GEMINI_API_KEY_HERE n'a pas été remplacée par votre clé.
+
+Message « Aucune clé API trouvée dans GeminiKey.txt »
+  -> Le fichier est vide ou ne contient que des lignes qui commencent par #.
+     Ajoutez votre clé sur une ligne à part.
+
+Message d'erreur de Gemini (clé invalide, quota dépassé...)
+  -> Vérifiez que la clé est complète et toujours active dans
+     https://aistudio.google.com/apikey
+
+L'éditeur ne s'ouvre pas
+  -> Vérifiez que Google Chrome est installé.
+
+Autre problème : signalez-le sur
+https://github.com/lecinquiemejour-code/PromptoDYS_app/issues
