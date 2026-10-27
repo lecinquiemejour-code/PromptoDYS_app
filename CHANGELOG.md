@@ -10,18 +10,22 @@ et la numérotation suit le sens du [Semantic Versioning](https://semver.org/lan
 
 ## [Non publié]
 
-### Ajouté
-- Notice d'installation pour l'utilisateur final (`LISEZMOI.txt`), incluse dans le zip de release et citée dans les notes de Release : extraction du zip, création de la clé API Gemini et de `GeminiKey.txt`, premier lancement, résolution des problèmes courants
-
-### Modifié
-- Renommé : `.env.template` → `GeminiKey.txt.template`. Le nom ne commence plus par un point et indique le fichier à créer
-
 ### Prévu
 - Tests unitaires et d'intégration
 - Support export DOCX
 - Mode offline avec cache local
 - Tableau de bord statistiques élèves
 - Interface professeurs
+
+---
+
+## [1.3.0b2] - 2026-10-27
+
+### Ajouté
+- Notice d'installation pour l'utilisateur final (`LISEZMOI.txt`), incluse dans le zip de release et citée dans les notes de Release : extraction du zip, création de la clé API Gemini et de `GeminiKey.txt`, premier lancement, résolution des problèmes courants
+
+### Modifié
+- Renommé : `.env.template` → `GeminiKey.txt.template`. Le nom ne commence plus par un point et indique le fichier à créer
 
 ---
 
