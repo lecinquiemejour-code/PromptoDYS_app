@@ -71,7 +71,6 @@ logs_complets = []
 # --- VARIABLES D'ÉTAT POUR L'ABANDON IA ---
 abandon_ia = False
 traitement_en_cours = False
-btn_ia_global = None  # Référence au bouton pour changer son état
 
 # --- VARIABLE POUR TRACKING TEMPOREL DE L'ÉDITEUR ---
 last_editor_activity = None  # Timestamp de la dernière activité éditeur détectée
@@ -880,14 +879,13 @@ def extraire_debrief_correction(reponse_complete):
 
 
 def traitement_gemini():
-    """Traitement IA Gemini : lecture → prompt → stream → injection + CAPTURE COMPLÈTE"""
-    global abandon_ia, traitement_en_cours, btn_ia_global
+    """Traitement IA Gemini : lecture → prompt → stream → injection + CAPTURE COMPLÈTE
 
-    # RÉINITIALISER LES LOGS ET LE FLAG D'ABANDON
+    Renvoie True si le traitement est allé jusqu'au bout, False en cas d'échec ou d'abandon.
+    """
+    # RÉINITIALISER LES LOGS
     global logs_complets
     logs_complets = []
-    abandon_ia = False
-    traitement_en_cours = True
 
     log_message("\n🤖 DÉMARRAGE: TRAITEMENT IA GEMINI (ANNULABLE)")
     log_message("=" * 50)
@@ -902,7 +900,7 @@ def traitement_gemini():
     client = init_gemini_client()
     if not client:
         log_message("❌ ÉCHEC: Impossible d'initialiser Gemini")
-        return
+        return False
     log_message("✅ SUCCÈS: Client Gemini initialisé")
 
     # 2. Lire le contenu de l'éditeur
@@ -918,7 +916,7 @@ def traitement_gemini():
     prompt_template = lire_prompto_dys()
     if not prompt_template:
         log_message("❌ ÉCHEC: Impossible de lire promptodys.prompt")
-        return
+        return False
     log_message("✅ SUCCÈS: Template promptodys.prompt chargé")
 
     # 4. Substituer [TEXTE] et [DATE] par le contenu éditeur et la date du jour
@@ -1001,29 +999,18 @@ def traitement_gemini():
 
     except genai_errors.ServerError as e:
         log_message(f"\n❌ ÉCHEC: Erreur serveur Gemini: {e}")
-        return
+        return False
     except genai_errors.APIError as e:
         log_message(f"\n❌ ÉCHEC: Erreur API Gemini: {e}")
-        return
+        return False
     except Exception as e:
         log_message(f"\n❌ ÉCHEC: Erreur inattendue: {e}")
-        return
-    finally:
-        # TOUJOURS RÉINITIALISER L'ÉTAT DU BOUTON
-        traitement_en_cours = False
-        if btn_ia_global:
-            log_message("🔄 FIN: Réinitialisation du bouton de contrôle")
-            def reset_btn():
-                btn_ia_global.configure(
-                    text="🤖 Traiter la prise de note",
-                    state="normal"  # Rétablir l'interactivité
-                )
-            root_global.after(0, reset_btn)
+        return False
 
     # VÉRIFIER SI ON A QUITTÉ À CAUSE D'UN ABANDON
     if abandon_ia:
         log_message("⚠️ INFOS: Injection et sauvegarde PDF annulées.")
-        return
+        return False
 
     log_message("\n" + "-" * 60)
     log_message("✅ SUCCÈS: Réponse Gemini complète reçue")
@@ -1099,6 +1086,7 @@ def traitement_gemini():
         log_message("⚠️ ATTENTION: Sauvegarde PDF échouée")
 
     log_message("\n🎉 TERMINÉ: Traitement IA Gemini avec capture complète terminé !")
+    return True
 
 
 # --- GUI Tkinter avec thème Sun Valley ---
@@ -1153,7 +1141,7 @@ def gui_control_panel():
     GUI de contrôle avec Tkinter + sv_ttk (thème Windows 11)
     Panneau compact avec 3 boutons principaux
     """
-    global root_global, status_label_global, btn_ia_global
+    global root_global, status_label_global
     log_message("🖥️ Démarrage du panneau de contrôle GUI...")
 
     # --- Fonctions des boutons ---
@@ -1353,7 +1341,7 @@ def gui_control_panel():
 
     def btn_traitement_ia():
         """Lance le traitement IA Gemini ou demande l'abandon"""
-        global editeur_lance, traitement_en_cours, abandon_ia, btn_ia_global
+        global editeur_lance, traitement_en_cours, abandon_ia
 
         # SI DÉJÀ EN COURS -> DEMANDER L'ABANDON
         if traitement_en_cours:
@@ -1391,22 +1379,36 @@ def gui_control_panel():
         log_message("🤖 Action: Lancement du traitement IA...")
         status_label.config(text="⏳ Traitement IA en cours...")
 
+        # Marquer le traitement en cours AVANT root.update() et le thread,
+        # pour qu'un second clic soit traité comme une demande d'abandon
+        abandon_ia = False
+        traitement_en_cours = True
+
         # Mise à jour du bouton en mode "Abandon"
         btn_ia.configure(text="⛔ Abandonner le traitement")
         root.update()
 
         # Lancer le traitement dans un thread pour ne pas bloquer la GUI
         def run_traitement():
+            global traitement_en_cours
             try:
-                traitement_gemini()
+                success = traitement_gemini()
                 # Mise à jour du statut après traitement (thread-safe)
-                if not abandon_ia:
+                # success d'abord : un abandon demandé après le streaming n'a plus d'effet
+                if success:
                     root.after(0, lambda: status_label.config(text="✅ Traitement IA terminé !"))
-                else:
+                elif abandon_ia:
                     root.after(0, lambda: status_label.config(text="🚫 Traitement annulé"))
+                else:
+                    root.after(0, lambda: status_label.config(text="❌ Échec du traitement IA (voir les logs)"))
             except Exception as e:
                 log_message(f"❌ Erreur critique IA: {e}")
                 root.after(0, lambda: status_label.config(text=f"❌ Erreur: {str(e)[:30]}"))
+            finally:
+                # TOUJOURS RÉINITIALISER L'ÉTAT DU BOUTON
+                traitement_en_cours = False
+                log_message("🔄 FIN: Réinitialisation du bouton de contrôle")
+                root.after(0, lambda: btn_ia.configure(text="🤖 Traiter la prise de note", state="normal"))
 
         thread = threading.Thread(target=run_traitement, daemon=True)
         thread.start()
@@ -1614,7 +1616,6 @@ def gui_control_panel():
     btn_ia.bind("<Leave>", lambda e: on_button_leave(e, btn_ia))
     btn_ia.bind("<ButtonPress-1>", lambda e: on_button_press(e, btn_ia))
     btn_ia.bind("<ButtonRelease-1>", lambda e: on_button_release(e, btn_ia))
-    btn_ia_global = btn_ia  # Garder la référence globale
 
 
     # Bouton 3: Ouvrir rapports PDF
