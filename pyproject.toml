@@ -14,9 +14,18 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pyinstaller>=6",
+    "ruff>=0.17.3",
 ]
 
 [tool.uv]
 package = false
 # Toujours utiliser le Python géré par uv (inclut Tkinter), jamais celui du système ou de Homebrew
 python-preference = "only-managed"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# F : erreurs (noms non définis, imports inutilisés), E/W : pycodestyle,
+# B : bugs probables (flake8-bugbear), UP : syntaxe Python moderne, SIM : simplifications
+select = ["F", "E", "W", "B", "UP", "SIM"]
