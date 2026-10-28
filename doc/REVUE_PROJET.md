@@ -124,6 +124,8 @@ btn_ia.configure(text="🤖 Traiter la prise de note", style="Big.TButton", stat
 
 **Effort.** Faible. Déplacement d'un `try`.
 
+**Statut : ✅ résolu.** Plutôt qu'élargir le `try`, l'état est rendu à l'appelant. `traitement_gemini()` ne modifie plus `traitement_en_cours`, `abandon_ia` ni le bouton : elle renvoie `True` si le traitement est allé au bout, `False` sinon. `btn_traitement_ia()` lève le drapeau avant de lancer le thread, ce qui ferme aussi une fenêtre où `root.update()` pouvait lancer un second traitement. `run_traitement()` remet le drapeau et le bouton à zéro dans un `finally` et affiche « terminé », « annulé » ou « échec » selon le résultat. La globale `btn_ia_global` a disparu. Le bouton reste désormais sur « Abandonner » jusqu'à la fin de l'injection et du PDF.
+
 ### B3. Deux messages d'erreur différés déclenchent un `NameError`
 
 **Où.** [askGeminiPrompto.py:1243](../askGeminiPrompto.py#L1243) et [askGeminiPrompto.py:1442](../askGeminiPrompto.py#L1442), signalés par ruff (`F821 Undefined name 'e'`).
@@ -441,7 +443,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | C1 | ✅ Résolu | Clé API distribuée dans les zips et embarquée dans l'exe (plus embarquée, zips retirés, clé révoquée) | Faible | 0, 1 |
 | C2 | 🔴 Critique | Chemins relatifs au dossier courant ; ressources embarquées jamais lues | Faible | 1 |
 | B1 | 🟠 Important | Failsafe du bouton plante (`style=` sur `tk.Button`) | Trivial | 1 |
-| B2 | 🟠 Important | Retour anticipé sans reset : bouton bloqué, faux statut « terminé » | Faible | 1 |
+| B2 | ✅ Résolu | Retour anticipé sans reset : bouton bloqué, faux statut « terminé » (état rendu à l'appelant) | Faible | 1 |
 | B3 | 🟠 Important | `NameError` dans deux messages d'erreur différés | Trivial | 1 |
 | B4 | 🟠 Important | Fenêtre de 1100 px hors écran sur portable | Faible | 1 |
 | B5 | 🟠 Important | Port 8080 fixe, relance fragile, `--app` dupliqué | Faible | 1 |
