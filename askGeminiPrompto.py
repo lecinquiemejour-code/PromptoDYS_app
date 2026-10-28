@@ -46,17 +46,17 @@ from google import genai
 from google.genai import types
 import google.genai.errors as genai_errors
 
-# Modèle Gemini utilisé (ex. "gemini-3.8-flash", "gemini-3.5-flash-lite")
-GEMINI_MODEL = "gemini-3.8-flash"
-
-# Niveau de réflexion Gemini 3.x
-GEMINI_THINKING_LEVEL = types.ThinkingLevel.LOW
-
 # --- Imports GUI Tkinter + sv_ttk ---
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import sv_ttk  # Thème Sun Valley (Windows 11 look)
 import subprocess  # Pour ouvrir le dossier reports
+
+# Modèle Gemini utilisé (ex. "gemini-3.8-flash", "gemini-3.5-flash-lite")
+GEMINI_MODEL = "gemini-3.8-flash"
+
+# Niveau de réflexion Gemini 3.x
+GEMINI_THINKING_LEVEL = types.ThinkingLevel.LOW
 
 try:
     from ctypes import windll
@@ -406,7 +406,10 @@ def load_document(path):
     print(f"🔍 DEBUG:   markdown: {len(data_to_send['markdown'])} car., début: {repr(data_to_send['markdown'][:100])}")
     print(f"🔍 DEBUG:   images: {len(data_to_send['images'])} élément(s)")
     for i, img in enumerate(data_to_send['images']):
-        print(f"🔍 DEBUG:   image[{i}]: filename={img['filename']}, mimeType={img['mimeType']}, data={len(img['data'])} car. base64")
+        print(
+            f"🔍 DEBUG:   image[{i}]: filename={img['filename']}, mimeType={img['mimeType']}, "
+            f"data={len(img['data'])} car. base64"
+        )
 
     try:
         result = eel.writeDocumentData(data_to_send)()
@@ -414,7 +417,10 @@ def load_document(path):
         print(f"🔍 DEBUG writeDocumentData retour → type={type(result).__name__}, valeur={repr(result)}")
 
         if result is None:
-            print(f"✅ OUVERTURE TERMINÉE: '{document_name}' chargé (retour: None/undefined — normal si JS ne retourne rien)")
+            print(
+                f"✅ OUVERTURE TERMINÉE: '{document_name}' chargé "
+                "(retour: None/undefined — normal si JS ne retourne rien)"
+            )
         elif result:
             print(f"✅ OUVERTURE TERMINÉE: '{document_name}' chargé dans l'éditeur")
         else:
@@ -938,7 +944,10 @@ def traitement_gemini():
             include_thoughts=True
         )
     )
-    log_message(f"✅ SUCCÈS: Configuration Gemini prête (Modèle: {GEMINI_MODEL}, Thinking level: {GEMINI_THINKING_LEVEL.value})")
+    log_message(
+        f"✅ SUCCÈS: Configuration Gemini prête "
+        f"(Modèle: {GEMINI_MODEL}, Thinking level: {GEMINI_THINKING_LEVEL.value})"
+    )
 
     # CAPTURER LES LOGS DES ÉTAPES 1-5
     logs_etapes_actuelles = logs_complets.copy()
@@ -1226,7 +1235,10 @@ def gui_control_panel():
             status_label.config(text="⚠️ Éditeur non ouvert")
             return
 
-        log_message(f"🔍 DEBUG btn_sauvegarder: editeur_lance={editeur_lance}, current_document_path={current_document_path}")
+        log_message(
+            f"🔍 DEBUG btn_sauvegarder: editeur_lance={editeur_lance}, "
+            f"current_document_path={current_document_path}"
+        )
 
         # Toujours afficher le dialogue — pré-rempli si document déjà ouvert/sauvegardé
         initial_dir = os.path.dirname(current_document_path) if current_document_path else PROMPTO_DOCS_DIR
