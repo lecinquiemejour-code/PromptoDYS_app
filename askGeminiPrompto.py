@@ -68,9 +68,9 @@ except:
 # --- NOUVELLE VARIABLE POUR CAPTURER TOUS LES LOGS ---
 logs_complets = []
 
-# --- VARIABLES D'ÉTAT POUR L'ABANDON IA ---
-abandon_ia = False
-traitement_en_cours = False
+# --- ÉTAT DU TRAITEMENT IA ---
+# Jeton d'annulation (threading.Event) du traitement IA en cours, None si aucun traitement en cours
+annulation_en_cours = None
 
 # --- VARIABLE POUR TRACKING TEMPOREL DE L'ÉDITEUR ---
 last_editor_activity = None  # Timestamp de la dernière activité éditeur détectée
@@ -878,8 +878,11 @@ def extraire_debrief_correction(reponse_complete):
         return ""
 
 
-def traitement_gemini():
+def traitement_gemini(annulation):
     """Traitement IA Gemini : lecture → prompt → stream → injection + CAPTURE COMPLÈTE
+
+    annulation : threading.Event propre à ce traitement, déclenché par le bouton « Abandonner ».
+    Un traitement abandonné s'arrête à la sortie du flux, sans rien écrire dans l'éditeur ni le PDF.
 
     Renvoie True si le traitement est allé jusqu'au bout, False en cas d'échec ou d'abandon.
     """
@@ -968,6 +971,10 @@ def traitement_gemini():
                 contents=prompt_final,
                 config=config
         ):
+            # VÉRIFICATION DE L'ABANDON À CHAQUE CHUNK (traité à la sortie du flux)
+            if annulation.is_set():
+                break
+
             last_response = chunk
             # log_message("📡 Flux IA: Chunk reçu...") # Heartbeat discret
 
@@ -977,11 +984,6 @@ def traitement_gemini():
                 continue
 
             for part in chunk.candidates[0].content.parts:
-                # VÉRIFICATION DE L'ABANDON À CHAQUE CHUNK
-                if abandon_ia:
-                    log_message("\n🚫 ABANDON: Traitement arrêté par l'utilisateur.")
-                    break
-
                 if not part.text:
                     continue
                 if part.thought:
@@ -994,21 +996,26 @@ def traitement_gemini():
                     full_answer += part.text
                     streaming_gemini_complet += part.text
 
-            if abandon_ia:
-                break
-
+    # Après un abandon, une erreur de connexion n'est pas un échec à signaler
     except genai_errors.ServerError as e:
+        if annulation.is_set():
+            return False
         log_message(f"\n❌ ÉCHEC: Erreur serveur Gemini: {e}")
         return False
     except genai_errors.APIError as e:
+        if annulation.is_set():
+            return False
         log_message(f"\n❌ ÉCHEC: Erreur API Gemini: {e}")
         return False
     except Exception as e:
+        if annulation.is_set():
+            return False
         log_message(f"\n❌ ÉCHEC: Erreur inattendue: {e}")
         return False
 
     # VÉRIFIER SI ON A QUITTÉ À CAUSE D'UN ABANDON
-    if abandon_ia:
+    # (break dans la boucle, ou abandon pendant l'attente du dernier chunk)
+    if annulation.is_set():
         log_message("⚠️ INFOS: Injection et sauvegarde PDF annulées.")
         return False
 
@@ -1341,23 +1348,18 @@ def gui_control_panel():
 
     def btn_traitement_ia():
         """Lance le traitement IA Gemini ou demande l'abandon"""
-        global editeur_lance, traitement_en_cours, abandon_ia
+        global editeur_lance, annulation_en_cours
 
-        # SI DÉJÀ EN COURS -> DEMANDER L'ABANDON
-        if traitement_en_cours:
-            log_message("🚫 Action: Demande d'abandon du traitement IA...")
-            abandon_ia = True
-            btn_ia.configure(text="⏳ Abandon en cours...", state="disabled")
-
-            # FAILSAFE UI: Forcer le reset du bouton après 5s quoi qu'il arrive
-            def failsafe_reset():
-                global traitement_en_cours
-                if traitement_en_cours or btn_ia.cget("text") == "⏳ Abandon en cours...":
-                    log_message("⚠️ FAILSAFE: Déblocage forcé de l'interface (reset bouton)")
-                    traitement_en_cours = False
-                    btn_ia.configure(text="🤖 Traiter la prise de note", style="Big.TButton", state="normal")
-
-            root.after(5000, failsafe_reset)
+        # SI DÉJÀ EN COURS -> ABANDON IMMÉDIAT
+        # Le thread de traitement ne peut pas être interrompu s'il attend Gemini :
+        # on déclenche son jeton et on libère l'interface sans l'attendre.
+        # S'il se réveille plus tard, il voit son jeton déclenché et s'arrête sans rien écrire.
+        if annulation_en_cours is not None:
+            log_message("\n🚫 ABANDON: Traitement IA arrêté par l'utilisateur.")
+            annulation_en_cours.set()
+            annulation_en_cours = None
+            btn_ia.configure(text="🤖 Traiter la prise de note", state="normal")
+            status_label.config(text="🚫 Traitement annulé")
             return
 
         # VÉRIFICATION 1: Connexion internet - SUPPRIMÉE
@@ -1379,36 +1381,40 @@ def gui_control_panel():
         log_message("🤖 Action: Lancement du traitement IA...")
         status_label.config(text="⏳ Traitement IA en cours...")
 
-        # Marquer le traitement en cours AVANT root.update() et le thread,
-        # pour qu'un second clic soit traité comme une demande d'abandon
-        abandon_ia = False
-        traitement_en_cours = True
+        # Nouveau jeton d'annulation, propre à ce traitement. Il est enregistré AVANT root.update()
+        # et le thread, pour qu'un second clic soit traité comme une demande d'abandon
+        annulation = threading.Event()
+        annulation_en_cours = annulation
 
         # Mise à jour du bouton en mode "Abandon"
         btn_ia.configure(text="⛔ Abandonner le traitement")
         root.update()
 
+        def terminer_traitement(success):
+            """Fin du traitement, exécutée sur le thread principal (via root.after)"""
+            global annulation_en_cours
+            # Traitement abandonné (et peut-être remplacé par un autre) : l'interface est déjà à jour
+            if annulation_en_cours is not annulation:
+                return
+            annulation_en_cours = None
+            log_message("🔄 FIN: Réinitialisation du bouton de contrôle")
+            btn_ia.configure(text="🤖 Traiter la prise de note", state="normal")
+            if success:
+                status_label.config(text="✅ Traitement IA terminé !")
+            else:
+                status_label.config(text="❌ Échec du traitement IA (voir les logs)")
+
         # Lancer le traitement dans un thread pour ne pas bloquer la GUI
+        # Ce thread ne modifie aucune variable d'état : il confie la fin au thread principal
         def run_traitement():
-            global traitement_en_cours
+            success = False
             try:
-                success = traitement_gemini()
-                # Mise à jour du statut après traitement (thread-safe)
-                # success d'abord : un abandon demandé après le streaming n'a plus d'effet
-                if success:
-                    root.after(0, lambda: status_label.config(text="✅ Traitement IA terminé !"))
-                elif abandon_ia:
-                    root.after(0, lambda: status_label.config(text="🚫 Traitement annulé"))
-                else:
-                    root.after(0, lambda: status_label.config(text="❌ Échec du traitement IA (voir les logs)"))
+                success = traitement_gemini(annulation)
             except Exception as e:
-                log_message(f"❌ Erreur critique IA: {e}")
-                root.after(0, lambda: status_label.config(text=f"❌ Erreur: {str(e)[:30]}"))
+                if not annulation.is_set():
+                    log_message(f"❌ Erreur critique IA: {e}")
             finally:
-                # TOUJOURS RÉINITIALISER L'ÉTAT DU BOUTON
-                traitement_en_cours = False
-                log_message("🔄 FIN: Réinitialisation du bouton de contrôle")
-                root.after(0, lambda: btn_ia.configure(text="🤖 Traiter la prise de note", state="normal"))
+                root.after(0, lambda: terminer_traitement(success))
 
         thread = threading.Thread(target=run_traitement, daemon=True)
         thread.start()
