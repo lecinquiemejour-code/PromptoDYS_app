@@ -79,13 +79,15 @@ Ce que ruff **ne trouve pas** : B1, B2, C2, B6. Ce sont des bugs de logique, que
 
 Un découpage qui déplace du code défectueux déplace aussi les bugs et brouille les diffs. Ces corrections sont décrites dans REVUE_PROJET.md ; voici où elles se trouvent aujourd'hui.
 
-| Réf. revue | Où | Problème |
-|---|---|---|
-| B2 | [l. 900](../askGeminiPrompto.py#L900), [l. 916](../askGeminiPrompto.py#L916) | `return` avant le `try/finally` : le bouton reste sur « Abandonner » |
-| B1 | [l. 1359](../askGeminiPrompto.py#L1359) | `style="Big.TButton"` sur un `tk.Button` : le failsafe plante |
-| B3 | [l. 1199](../askGeminiPrompto.py#L1199), [l. 1398](../askGeminiPrompto.py#L1398) | Lambda qui utilise `e` après le bloc `except` |
-| C2 | [l. 779](../askGeminiPrompto.py#L779), [l. 725](../askGeminiPrompto.py#L725), [l. 1406](../askGeminiPrompto.py#L1406), [l. 1723](../askGeminiPrompto.py#L1723), [l. 142](../askGeminiPrompto.py#L142) | `GeminiKey.txt`, `reports/` et `build_web/` relatifs au dossier courant |
-| B6 | [l. 799](../askGeminiPrompto.py#L799) | Client Gemini sans timeout |
+| Réf. revue | Où | Problème | Statut |
+|---|---|---|---|
+| B2 | [l. 900](../askGeminiPrompto.py#L900), [l. 916](../askGeminiPrompto.py#L916) | `return` avant le `try/finally` : le bouton reste sur « Abandonner » | ✅ Fait : l'appelant gère l'état, `traitement_gemini()` renvoie un booléen |
+| B1 | [l. 1359](../askGeminiPrompto.py#L1359) | `style="Big.TButton"` sur un `tk.Button` : le failsafe plante | ✅ Fait : failsafe supprimé avec B6 |
+| B3 | [l. 1199](../askGeminiPrompto.py#L1199), [l. 1398](../askGeminiPrompto.py#L1398) | Lambda qui utilise `e` après le bloc `except` | 🟡 Reste celle de `lancer_eel()` |
+| C2 | [l. 779](../askGeminiPrompto.py#L779), [l. 725](../askGeminiPrompto.py#L725), [l. 1406](../askGeminiPrompto.py#L1406), [l. 1723](../askGeminiPrompto.py#L1723), [l. 142](../askGeminiPrompto.py#L142) | `GeminiKey.txt`, `reports/` et `build_web/` relatifs au dossier courant | À faire |
+| B6 | [l. 799](../askGeminiPrompto.py#L799) | Client Gemini sans timeout | ✅ Fait autrement : pas de timeout (durée de réponse imprévisible), abandon immédiat par jeton d'annulation |
+
+Les numéros de ligne sont ceux de la rédaction et ont bougé depuis.
 
 À noter : la correction de B1 et B2 par le découpage (priorité 3, le pipeline renvoie un résultat au lieu de piloter le bouton) rend la correction ponctuelle provisoire. On la fait quand même, car elle débloque les utilisateurs actuels sans attendre.
 
@@ -169,8 +171,8 @@ Un commit par couche, tests et `import-linter` relancés à chaque étape :
 Les dix `global` disparaissent au fil du découpage, mais il faut décider par quoi les remplacer.
 
 - **Un objet d'état de l'éditeur** : ouvert ou non, `threading.Event` « prêt », document courant. Il remplace `editeur_lance`, `last_editor_activity` et `current_document_path`, et il est partagé entre la GUI et les rappels d'Eel.
-- **`abandon_ia` devient un `threading.Event`**, et l'attente active du signal React (`time.sleep(0.5)` en boucle, [l. 1313](../askGeminiPrompto.py#L1313)) devient `Event.wait(timeout=30)`.
-- **`PanneauControle` dans `presentation/`** : widgets et gestionnaires de boutons deviennent attributs et méthodes. Les six fonctions imbriquées de `gui_control_panel` ([l. 1143](../askGeminiPrompto.py#L1143)) se comportent déjà ainsi, par closures sur `root`, `status_label` et `btn_ia`. Il remplace `root_global`, `btn_ia_global`, `status_label_global` et `streaming_text_global`.
+- **`abandon_ia` devient un `threading.Event`** : fait avec B6. `abandon_ia` et `traitement_en_cours` sont remplacées par un jeton d'annulation propre à chaque traitement, et par `annulation_en_cours`, le jeton du traitement en cours. Reste l'attente active du signal React (`time.sleep(0.5)` en boucle, [l. 1313](../askGeminiPrompto.py#L1313)), qui doit devenir `Event.wait(timeout=30)`.
+- **`PanneauControle` dans `presentation/`** : widgets et gestionnaires de boutons deviennent attributs et méthodes. Les six fonctions imbriquées de `gui_control_panel` ([l. 1143](../askGeminiPrompto.py#L1143)) se comportent déjà ainsi, par closures sur `root`, `status_label` et `btn_ia`. Il remplace `root_global`, `status_label_global` et `streaming_text_global` (`btn_ia_global` a déjà disparu avec B2). `annulation_en_cours`, utilisée uniquement par le thread principal, y devient un attribut.
 - **La logique métier reste en fonctions**, testables sans Tk.
 
 **À éviter** : une classe `PromptoApp` qui regrouperait GUI, Gemini, PDF et fichiers. Ce serait le même monolithe déplacé dans une classe. L'option 3 de la revue (§9) est écartée pour cette raison, et parce qu'elle suppose de tout réécrire d'un coup. Des classes qui portent un état localisé sont en revanche bienvenues.

@@ -157,7 +157,7 @@ sequenceDiagram
     TK->>G: generate_content_stream (GEMINI_MODEL, GEMINI_THINKING_LEVEL)
     loop Streaming
         G-->>TK: morceaux de réflexion 💭 et de réponse
-        TK->>TK: Affiche dans la console, vérifie le flag abandon
+        TK->>TK: Affiche dans la console, vérifie le jeton d'annulation
     end
     TK->>TK: Extrait le contenu entre NOTE et /NOTE
     TK->>TK: Ajoute la note d'origine (sans les images)
@@ -177,7 +177,7 @@ La fonction `traitement_gemini()` de [askGeminiPrompto.py](../askGeminiPrompto.p
 3. Lecture du template [promptodys.prompt](../promptodys.prompt).
 4. Substitution de `[TEXTE]` et `[DATE]`.
 5. Configuration : modèle `GEMINI_MODEL` (`gemini-3.8-flash`) et niveau de réflexion `GEMINI_THINKING_LEVEL` (`LOW`), deux constantes en tête du fichier.
-6. Streaming de la réponse, avec vérification du flag d'abandon à chaque morceau.
+6. Streaming de la réponse, avec vérification du jeton d'annulation à chaque morceau.
 7. Extraction du contenu entre `<NOTE>` et `</NOTE>`, puis ajout de la note d'origine sans les images.
 8. Injection dans l'éditeur.
 9. Bilan des tokens (entrée, sortie, réflexion).

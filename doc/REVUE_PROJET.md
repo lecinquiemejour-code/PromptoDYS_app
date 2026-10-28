@@ -109,6 +109,8 @@ btn_ia.configure(text="🤖 Traiter la prise de note", style="Big.TButton", stat
 
 **Piste.** Supprimer `style="Big.TButton"`. Une ligne.
 
+**Statut : ✅ résolu.** Le failsafe a été supprimé avec la correction de B6 : l'abandon remet désormais le bouton à zéro immédiatement, le failsafe n'avait plus de raison d'être.
+
 ### B2. Un échec avant le streaming laisse le bouton en mode « Abandonner »
 
 **Où.** [askGeminiPrompto.py:842](../askGeminiPrompto.py#L842) met `traitement_en_cours = True`, puis les étapes 1 et 3 font `return` ([ligne 857](../askGeminiPrompto.py#L857), [ligne 873](../askGeminiPrompto.py#L873)) **avant** le bloc `try/finally` de l'étape 6, qui est le seul endroit où le bouton et le drapeau sont remis à zéro.
@@ -140,6 +142,8 @@ En Python 3, la variable `e` d'un bloc `except` est **effacée à la sortie du b
 **Piste.** Capturer le texte avant : `msg = str(e)[:30]` puis `lambda: status_label.config(text=f"❌ Erreur: {msg}")`.
 
 **Effort.** Trivial.
+
+**Statut : 🟡 partiellement résolu.** L'occurrence du traitement IA a disparu avec la réécriture de `run_traitement()` pour B6 : l'erreur est loggée et le statut « ❌ Échec du traitement IA (voir les logs) » est affiché par le thread principal. Reste celle du lancement de l'éditeur, dans `lancer_eel()`.
 
 ### B4. La fenêtre de contrôle ne tient pas sur un écran de portable
 
@@ -176,6 +180,8 @@ Le public cible (collégiens) utilise majoritairement des portables. Les boutons
 **Piste.** `genai.Client(api_key=..., http_options={'timeout': 120_000})` (en millisecondes dans ce SDK), et fermer explicitement l'itérateur de streaming lors d'un abandon (`stream.close()`).
 
 **Effort.** Faible.
+
+**Statut : ✅ résolu, sans timeout.** Le temps de réponse de Gemini est imprévisible, parfois très long, et le `timeout` de `HttpOptions` est en plus transmis au serveur comme délai total (`X-Server-Timeout`) : aucune valeur ne convenait. C'est l'abandon qui a été rendu immédiat. Chaque traitement reçoit son propre jeton d'annulation (`threading.Event`), et la globale `annulation_en_cours` désigne celui du traitement en cours ; elle remplace `abandon_ia` et `traitement_en_cours`. Au clic sur « Abandonner », le jeton est déclenché et l'interface libérée sans attendre le thread, qui ne peut pas être interrompu s'il attend Gemini. Ce thread vérifie son jeton à chaque morceau reçu et à la sortie du flux : s'il se réveille plus tard, il s'arrête avant l'injection dans l'éditeur et le PDF. Sa fin est confiée au thread principal (`root.after`), qui ne touche à l'interface que si ce traitement est toujours celui en cours. Limite connue : si la connexion meurt sans prévenir, le thread abandonné reste bloqué jusqu'à la fermeture de l'application (thread `daemon`, inactif).
 
 ### B7. Chrome est lancé avec `--disable-web-security`
 
@@ -442,12 +448,12 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 |---|---|---|---|---|
 | C1 | ✅ Résolu | Clé API distribuée dans les zips et embarquée dans l'exe (plus embarquée, zips retirés, clé révoquée) | Faible | 0, 1 |
 | C2 | 🔴 Critique | Chemins relatifs au dossier courant ; ressources embarquées jamais lues | Faible | 1 |
-| B1 | 🟠 Important | Failsafe du bouton plante (`style=` sur `tk.Button`) | Trivial | 1 |
+| B1 | ✅ Résolu | Failsafe du bouton plante (`style=` sur `tk.Button`) (failsafe supprimé) | Trivial | 1 |
 | B2 | ✅ Résolu | Retour anticipé sans reset : bouton bloqué, faux statut « terminé » (état rendu à l'appelant) | Faible | 1 |
-| B3 | 🟠 Important | `NameError` dans deux messages d'erreur différés | Trivial | 1 |
+| B3 | 🟡 Partiellement résolu | `NameError` dans deux messages d'erreur différés (reste celui de `lancer_eel()`) | Trivial | 1 |
 | B4 | 🟠 Important | Fenêtre de 1100 px hors écran sur portable | Faible | 1 |
 | B5 | 🟠 Important | Port 8080 fixe, relance fragile, `--app` dupliqué | Faible | 1 |
-| B6 | 🟠 Important | Pas de timeout Gemini, abandon inopérant si flux figé | Faible | 1 |
+| B6 | ✅ Résolu | Pas de timeout Gemini, abandon inopérant si flux figé (abandon immédiat, sans timeout) | Faible | 1 |
 | B7 | ✅ Résolu | `--disable-web-security` inutile (retiré) | Trivial | 1 |
 | M1 | 🟡 Partiellement résolu | Imports et dépendances inutilisés (retirés ; docstring d'en-tête encore obsolète) | Trivial | 1 |
 | M2 | ✅ Résolu | Code mort (menu console, historique, `web_folder_global`) | Trivial | 1 |

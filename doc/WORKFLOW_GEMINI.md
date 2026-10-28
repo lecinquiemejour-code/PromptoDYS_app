@@ -42,7 +42,7 @@ flowchart TD
     E4 --> E5["5. Config Gemini<br/>GEMINI_MODEL<br/>GEMINI_THINKING_LEVEL"]
     E5 --> E6["6. Streaming"]
 
-    E6 -- abandon --> ABORT["Injection et PDF annulés"] --> ERR
+    E6 -- abandon --> ABORT["Injection et PDF annulés"] --> FINA(["Fin, bouton déjà libéré au clic"])
     E6 -- erreur API --> ERR
     E6 --> E7["7. Extraction entre NOTE et /NOTE<br/>+ ajout de la note d'origine"]
     E7 --> E8["8. Injection<br/>eel.writeMarkdown"]
@@ -55,27 +55,28 @@ flowchart TD
 
 ## 2. Déclenchement et cycle de vie du bouton
 
-Le bouton **Traiter la prise de note** a deux rôles selon l'état : lancer le traitement, ou l'abandonner s'il est en cours. Trois variables globales pilotent cet état.
+Le bouton **Traiter la prise de note** a deux rôles selon l'état : lancer le traitement, ou l'abandonner s'il est en cours. L'état repose sur un jeton d'annulation (`threading.Event`) propre à chaque traitement.
 
-| Variable | Rôle |
+| Élément | Rôle |
 |---|---|
-| `traitement_en_cours` | Vrai pendant toute la durée du traitement |
-| `abandon_ia` | Mis à vrai par le bouton pour demander l'arrêt |
-| `btn_ia_global` | Référence au bouton pour changer son texte depuis le thread |
+| `annulation` | Jeton créé à chaque lancement et passé à `traitement_gemini(annulation)`. Le thread de traitement ne lit que celui-là |
+| `annulation_en_cours` | Variable globale : jeton du traitement en cours, `None` s'il n'y en a pas. Lue et modifiée uniquement par le thread principal |
+| `terminer_traitement(success)` | Fin du traitement, exécutée sur le thread principal : remet le bouton à zéro et affiche « terminé » ou « échec » |
 
 ```mermaid
 stateDiagram-v2
     [*] --> Pret : application lancée
-    Pret --> EnCours : clic, éditeur ouvert
+    Pret --> EnCours : clic, éditeur ouvert<br/>(nouveau jeton)
     Pret --> Pret : clic, éditeur fermé<br/>(message d'avertissement)
-    EnCours --> AbandonDemande : clic "Abandonner"
-    EnCours --> Pret : traitement terminé<br/>ou erreur (bloc finally)
-    AbandonDemande --> Pret : flag détecté au prochain morceau<br/>ou failsafe après 5 s
+    EnCours --> Pret : clic "Abandonner"<br/>(jeton déclenché, immédiat)
+    EnCours --> Pret : traitement terminé ou échec<br/>(terminer_traitement)
 ```
 
-**Pourquoi un thread séparé :** Tkinter fige la fenêtre si une opération longue tourne dans la boucle principale. Le traitement s'exécute donc dans un thread, et toute mise à jour de l'interface passe par `root.after(0, ...)` pour revenir sur le thread principal.
+**Pourquoi un thread séparé :** Tkinter fige la fenêtre si une opération longue tourne dans la boucle principale. Le traitement s'exécute donc dans un thread, et toute mise à jour de l'interface passe par `root.after(0, ...)` pour revenir sur le thread principal. Le thread de traitement ne modifie aucune variable d'état : il confie la fin du traitement à `terminer_traitement`.
 
-**Le failsafe :** si l'abandon est demandé mais que Gemini n'envoie plus de morceau pendant plusieurs secondes, le flag ne serait jamais lu. Un minuteur de 5 secondes force le retour du bouton à l'état Prêt quoi qu'il arrive.
+**L'abandon immédiat :** un thread qui attend une réponse de Gemini ne peut pas être interrompu. Au clic sur « Abandonner », le thread principal déclenche donc le jeton du traitement, remet `annulation_en_cours` à `None` et libère le bouton sans attendre le thread. Si ce thread se réveille plus tard, il voit son jeton déclenché et s'arrête sans injecter dans l'éditeur ni écrire de PDF. À sa fin, `terminer_traitement` constate qu'il n'est plus le traitement en cours et ne touche pas à l'interface, même si un nouveau traitement a été lancé entre-temps.
+
+**Limite :** si la connexion meurt sans prévenir, le thread abandonné reste bloqué jusqu'à la fermeture de l'application. Il est `daemon`, inactif, et n'écrit plus rien.
 
 ---
 
@@ -155,25 +156,32 @@ sequenceDiagram
     participant TK as Thread Python
     participant G as Gemini
     participant GUI as Console Tkinter
+    participant MAIN as Thread principal Tkinter
 
     TK->>G: generate_content_stream(prompt)
     loop Pour chaque morceau reçu
         G-->>TK: chunk
-        TK->>TK: last_response = chunk
-        loop Pour chaque partie du morceau
-            alt abandon_ia est vrai
-                TK->>GUI: "ABANDON : traitement arrêté"
-                TK->>TK: break
-            else partie.thought
-                TK->>GUI: "💭 texte de réflexion"
-                TK->>TK: ajoute au flux complet (archive)
-            else partie texte
-                TK->>GUI: texte de réponse
-                TK->>TK: ajoute à full_answer et au flux complet
+        alt jeton d'annulation déclenché
+            TK->>TK: break (sans log)
+        else jeton intact
+            TK->>TK: last_response = chunk
+            loop Pour chaque partie du morceau
+                alt partie.thought
+                    TK->>GUI: "💭 texte de réflexion"
+                    TK->>TK: ajoute au flux complet (archive)
+                else partie texte
+                    TK->>GUI: texte de réponse
+                    TK->>TK: ajoute à full_answer et au flux complet
+                end
             end
         end
     end
-    TK->>TK: bloc finally : bouton réinitialisé
+    alt jeton d'annulation déclenché
+        TK->>GUI: "Injection et sauvegarde PDF annulées"
+    else jeton intact
+        TK->>TK: étapes 7 à 10
+    end
+    TK->>MAIN: root.after → terminer_traitement(success)
 ```
 
 Deux accumulateurs distincts sont remplis pendant le streaming :
@@ -181,7 +189,7 @@ Deux accumulateurs distincts sont remplis pendant le streaming :
 - **`full_answer`** : uniquement le texte de réponse, sans les réflexions. C'est lui qui sera analysé pour extraire la note.
 - **`streaming_gemini_complet`** : réflexions et réponse mélangées, dans l'ordre d'arrivée. C'est lui qui sera archivé dans le PDF.
 
-**Si l'abandon est détecté**, la boucle sort immédiatement. L'injection et le PDF sont annulés, le contenu de l'éditeur reste inchangé. Le bloc `finally` garantit que le bouton revient à l'état Prêt dans tous les cas, abandon, succès ou erreur.
+**Si l'abandon est détecté**, au début d'un morceau ou à la sortie du flux (abandon pendant l'attente du dernier morceau), `traitement_gemini()` renvoie `False` sans injecter ni écrire de PDF : le contenu de l'éditeur reste inchangé. Le bouton, lui, a déjà été libéré au moment du clic (voir [§2](#2-déclenchement-et-cycle-de-vie-du-bouton)). Dans les autres cas, succès ou erreur, `terminer_traitement` remet le bouton à l'état Prêt.
 
 ---
 
@@ -341,12 +349,13 @@ Si la génération du PDF échoue, le traitement n'est pas considéré comme rat
 | Erreur serveur Gemini (5xx) | `genai_errors.ServerError` | Arrêt, message, bouton réinitialisé |
 | Erreur API Gemini (clé invalide, quota, 4xx) | `genai_errors.APIError` | Arrêt, message, bouton réinitialisé |
 | Coupure réseau pendant le streaming | `Exception` générique | Arrêt, message, bouton réinitialisé |
-| Abandon par l'utilisateur | Flag `abandon_ia` | Sortie de boucle, injection et PDF annulés |
+| Abandon par l'utilisateur | Jeton d'annulation, vérifié à chaque morceau et à la sortie du flux | Bouton libéré au clic, injection et PDF annulés |
+| Abandon alors que Gemini ne répond plus | Jeton d'annulation | Bouton libéré au clic sans attendre le thread. S'il se réveille, il s'arrête sans rien écrire ; une erreur de connexion survenue après l'abandon n'est pas loggée |
 | Balises `<NOTE>` absentes | Test de présence | Réponse complète injectée, avertissement |
 | Échec d'injection dans l'éditeur | Exception Eel | Message d'échec, le PDF est quand même généré |
 | Échec de génération PDF | Exception ReportLab | Message, la note reste dans l'éditeur |
 
-Dans tous les cas, le bloc `finally` de l'étape 6 remet le bouton à l'état Prêt. Aucune exception ne remonte jusqu'à Tkinter.
+Hors abandon, c'est `terminer_traitement`, sur le thread principal, qui remet le bouton à l'état Prêt et affiche « ✅ Traitement IA terminé ! » ou « ❌ Échec du traitement IA (voir les logs) ». Aucune exception ne remonte jusqu'à Tkinter.
 
 ---
 
