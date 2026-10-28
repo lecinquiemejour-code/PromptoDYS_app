@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Script Python unifié pour l'éditeur Markdown avec intégration Eel + IA Gemini
 Combinaison : Interface desktop + Assistant IA pour traitement de texte
@@ -85,7 +84,7 @@ current_document_path = None  # Ex: "C:/.../PromptoDYS/MonDoc" → sauvegarde di
 
 # Classe pour rediriger stdout vers la GUI
 # Classe pour rediriger stdout/stderr vers la GUI tout en gardant la console
-class RedirectText(object):
+class RedirectText:
     def __init__(self, text_widget_updater, is_stderr=False):
         self.updater = text_widget_updater
         self.is_stderr = is_stderr
@@ -103,7 +102,7 @@ class RedirectText(object):
                 self.terminal.flush()
             except:
                 pass
-        
+
         # Mettre à jour la GUI
         try:
             self.updater(message)
@@ -249,15 +248,15 @@ def save_document(document_name, save_directory):
         str|False: Chemin du dossier créé si succès, False sinon
     """
     print(f"💾 SAUVEGARDE: Début pour '{document_name}' dans '{save_directory}'")
-    
+
     # 1. Récupérer les données depuis l'éditeur JS (texte + images base64)
     print(f"🔍 DEBUG: editeur_lance={editeur_lance}, last_editor_activity={last_editor_activity}")
-    print(f"🔍 DEBUG: Appel eel.readDocumentData()()...")
+    print("🔍 DEBUG: Appel eel.readDocumentData()()...")
     try:
         data = eel.readDocumentData()()
         print(f"🔍 DEBUG readDocumentData retour → type={type(data).__name__}")
         if data is None:
-            print(f"🔍 DEBUG readDocumentData → None (la fonction JS retourne undefined ou null)")
+            print("🔍 DEBUG readDocumentData → None (la fonction JS retourne undefined ou null)")
         elif isinstance(data, dict):
             print(f"🔍 DEBUG readDocumentData → dict avec clés: {list(data.keys())}")
             if 'markdown' in data:
@@ -275,22 +274,22 @@ def save_document(document_name, save_directory):
         import traceback
         traceback.print_exc()
         return False
-    
+
     if not data:
         print(f"❌ SAUVEGARDE: Aucune donnée reçue de l'éditeur (data est falsy: {repr(data)})")
         return False
-    
+
     print(f"📄 SAUVEGARDE: Markdown reçu ({len(data.get('markdown', ''))} caractères)")
     print(f"🖼️ SAUVEGARDE: {len(data.get('images', []))} image(s) reçue(s)")
-    
+
     # 2. Créer la structure de dossiers
     doc_dir = os.path.join(save_directory, document_name)
     images_dir = os.path.join(doc_dir, "images")
-    
+
     # Gestion des conflits de noms (style Arduino : on écrase le contenu existant)
     os.makedirs(images_dir, exist_ok=True)
     print(f"📁 SAUVEGARDE: Dossier créé/existant: {doc_dir}")
-    
+
     # 3. Écrire le fichier Markdown
     md_path = os.path.join(doc_dir, f"{document_name}.md")
     try:
@@ -300,7 +299,7 @@ def save_document(document_name, save_directory):
     except Exception as e:
         print(f"❌ SAUVEGARDE: Erreur écriture MD: {e}")
         return False
-    
+
     # 4. Écrire chaque image (décodage base64 → binaire)
     images_saved = 0
     for image in data.get("images", []):
@@ -313,7 +312,7 @@ def save_document(document_name, save_directory):
             print(f"  🖼️ Image sauvée: {image['filename']} ({len(image_bytes)} octets)")
         except Exception as e:
             print(f"  ❌ Erreur image '{image['filename']}': {e}")
-    
+
     print(f"✅ SAUVEGARDE TERMINÉE: {md_path} + {images_saved} image(s)")
     return doc_dir
 
@@ -332,7 +331,7 @@ def load_document(path):
         bool: True si succès, False sinon
     """
     print(f"📂 OUVERTURE: Chemin reçu: '{path}'")
-    
+
     # Détection intelligente : fichier .md ou dossier ?
     if path.endswith(".md") and os.path.isfile(path):
         # L'utilisateur a sélectionné le fichier .md directement
@@ -341,29 +340,29 @@ def load_document(path):
     elif os.path.isdir(path):
         # L'utilisateur a sélectionné le dossier
         doc_dir = path
-        print(f"📂 OUVERTURE: Dossier sélectionné directement")
+        print("📂 OUVERTURE: Dossier sélectionné directement")
     else:
         print(f"❌ OUVERTURE: Chemin invalide (ni dossier, ni fichier .md): {path}")
         return False
-    
+
     # Déduire les chemins (convention : nom du dossier = nom du fichier .md)
     document_name = os.path.basename(doc_dir)
     md_path = os.path.join(doc_dir, f"{document_name}.md")
     images_dir = os.path.join(doc_dir, "images")
-    
+
     # 1. Lire le fichier Markdown
     if not os.path.exists(md_path):
         print(f"❌ OUVERTURE: Fichier non trouvé: {md_path}")
         return False
-    
+
     try:
-        with open(md_path, "r", encoding="utf-8") as f:
+        with open(md_path, encoding="utf-8") as f:
             markdown_content = f.read()
         print(f"📄 OUVERTURE: Markdown lu ({len(markdown_content)} caractères)")
     except Exception as e:
         print(f"❌ OUVERTURE: Erreur lecture MD: {e}")
         return False
-    
+
     # 2. Lire et encoder les images en base64
     images = []
     if os.path.exists(images_dir):
@@ -371,16 +370,16 @@ def load_document(path):
             image_path = os.path.join(images_dir, filename)
             if not os.path.isfile(image_path):
                 continue
-            
+
             mime_type, _ = mimetypes.guess_type(image_path)
             if not mime_type or not mime_type.startswith("image/"):
                 print(f"  ⚠️ Fichier ignoré (pas une image): {filename}")
                 continue
-            
+
             try:
                 with open(image_path, "rb") as f:
                     image_data = base64.b64encode(f.read()).decode("utf-8")
-                
+
                 images.append({
                     "filename": filename,
                     "data": image_data,
@@ -390,14 +389,14 @@ def load_document(path):
             except Exception as e:
                 print(f"  ❌ Erreur lecture image '{filename}': {e}")
     else:
-        print(f"📁 OUVERTURE: Pas de dossier images/ (document texte seul)")
-    
+        print("📁 OUVERTURE: Pas de dossier images/ (document texte seul)")
+
     print(f"📤 OUVERTURE: Envoi à l'éditeur ({len(markdown_content)} car. + {len(images)} image(s))...")
-    
+
     # 3. Envoyer à l'éditeur JS via le pont Eel
     print(f"🔍 DEBUG: editeur_lance={editeur_lance}, last_editor_activity={last_editor_activity}")
     print(f"🔍 DEBUG: Appel eel.writeDocumentData() avec {len(markdown_content)} car. + {len(images)} image(s)...")
-    
+
     # Détail des données envoyées
     data_to_send = {
         "markdown": markdown_content,
@@ -408,12 +407,12 @@ def load_document(path):
     print(f"🔍 DEBUG:   images: {len(data_to_send['images'])} élément(s)")
     for i, img in enumerate(data_to_send['images']):
         print(f"🔍 DEBUG:   image[{i}]: filename={img['filename']}, mimeType={img['mimeType']}, data={len(img['data'])} car. base64")
-    
+
     try:
         result = eel.writeDocumentData(data_to_send)()
-        
+
         print(f"🔍 DEBUG writeDocumentData retour → type={type(result).__name__}, valeur={repr(result)}")
-        
+
         if result is None:
             print(f"✅ OUVERTURE TERMINÉE: '{document_name}' chargé (retour: None/undefined — normal si JS ne retourne rien)")
         elif result:
@@ -477,7 +476,7 @@ def preparer_contenu_rapport_complet(contenu_original, logs_etapes, streaming_ge
                                      debrief_correction, stats_tokens=None):
     """Prépare le contenu COMPLET du rapport avec TOUS les logs - VERSION LISIBLE"""
 
-    contenu_final = f"# Rapport PromptoDYS - Session Complète\n\n"
+    contenu_final = "# Rapport PromptoDYS - Session Complète\n\n"
     contenu_final += f"**Date de génération :** {datetime.now().strftime('%d/%m/%Y à %H:%M:%S')}\n\n"
 
     # SECTION 1: Métadonnées
@@ -525,10 +524,10 @@ def preparer_contenu_rapport_complet(contenu_original, logs_etapes, streaming_ge
 
     # SECTION 7: Footer
     contenu_final += "## 📋 Informations de Session\n\n"
-    contenu_final += f"- **Script :** PromptoDYS avec capture complète des logs\n"
+    contenu_final += "- **Script :** PromptoDYS avec capture complète des logs\n"
     contenu_final += f"- **Modèle IA :** {GEMINI_MODEL}\n"
     contenu_final += f"- **Thinking Level :** {GEMINI_THINKING_LEVEL.value.capitalize()}\n"
-    contenu_final += f"- **Sauvegarde :** Automatique PDF uniquement\n\n"
+    contenu_final += "- **Sauvegarde :** Automatique PDF uniquement\n\n"
 
     return contenu_final
 
@@ -600,7 +599,7 @@ def convertir_markdown_vers_paragraphes(contenu_md):
         if bold_count > 0:
             log_message(f"🔄 NETTOYAGE: {bold_count} marqueurs __BOLD_n__ remplacés par des séparateurs ---")
         text = re.sub(r'__BOLD_\d+__', '---', text)
-        
+
         # Supprimer les balises <span> avec styles
         text = re.sub(r'<span[^>]*>', '', text)
         text = re.sub(r'</span>', '', text)
@@ -776,7 +775,7 @@ GEMINI_API_KEY_PLACEHOLDER = "YOUR_GEMINI_API_KEY_HERE"
 def lire_cle_api():
     """Lit la clé API dans GeminiKey.txt (ignore lignes vides et commentaires #)"""
     # utf-8-sig : tolère le BOM ajouté par le Bloc-notes Windows
-    with open("GeminiKey.txt", "r", encoding="utf-8-sig") as f:
+    with open("GeminiKey.txt", encoding="utf-8-sig") as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith("#"):
@@ -810,7 +809,7 @@ def lire_prompto_dys():
     ou celle du dossier du script en mode développement"""
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(__file__))
     try:
-        with open(os.path.join(base_path, "promptodys.prompt"), "r", encoding="utf-8") as f:
+        with open(os.path.join(base_path, "promptodys.prompt"), encoding="utf-8") as f:
             contenu = f.read()
 
         if "[TEXTE]" not in contenu:
@@ -987,7 +986,7 @@ def traitement_gemini():
                     log_message(part.text)
                     full_answer += part.text
                     streaming_gemini_complet += part.text
-            
+
             if abandon_ia:
                 break
 
@@ -1007,7 +1006,7 @@ def traitement_gemini():
             log_message("🔄 FIN: Réinitialisation du bouton de contrôle")
             def reset_btn():
                 btn_ia_global.configure(
-                    text="🤖 Traiter la prise de note", 
+                    text="🤖 Traiter la prise de note",
                     state="normal"  # Rétablir l'interactivité
                 )
             root_global.after(0, reset_btn)
@@ -1044,7 +1043,7 @@ def traitement_gemini():
     if contenu_traite:
         success = set_markdown(contenu_traite)
         if success:
-            log_message(f"✅ SUCCÈS: Contenu injecté avec succès !")
+            log_message("✅ SUCCÈS: Contenu injecté avec succès !")
         else:
             log_message("❌ ÉCHEC: Erreur lors de l'injection dans l'éditeur")
     else:
@@ -1085,8 +1084,8 @@ def traitement_gemini():
     )
 
     if pdf_file:
-        log_message(f"🎉 SUCCÈS: Rapport PDF sauvegardé !")
-        log_message(f"📁 Rapport PDF dans 'reports/'")
+        log_message("🎉 SUCCÈS: Rapport PDF sauvegardé !")
+        log_message("📁 Rapport PDF dans 'reports/'")
     else:
         log_message("⚠️ ATTENTION: Sauvegarde PDF échouée")
 
@@ -1125,7 +1124,7 @@ def on_closing():
         else:  # User choisit "Non" = annuler
             log_message("⚠️ Fermeture annulée : veuillez fermer l'éditeur d'abord")
             return  # Bloquer la fermeture
-    
+
     # Pas d'éditeur ouvert, fermeture autorisée
     log_message("👋 Fermeture de l'application...")
     root_global.destroy()
@@ -1147,21 +1146,21 @@ def gui_control_panel():
     """
     global root_global, status_label_global, btn_ia_global
     log_message("🖥️ Démarrage du panneau de contrôle GUI...")
-    
+
     # --- Fonctions des boutons ---
     def btn_ouvrir_editeur():
         """Lance l'éditeur Eel dans un thread séparé"""
         global editeur_lance
-        
+
         if editeur_lance:
             log_message("📝 L'éditeur est déjà ouvert")
             status_label.config(text="✅ L'éditeur est déjà ouvert")
             return
-        
+
         log_message("📝 Action: Lancement de l'éditeur...")
         status_label.config(text="⏳ Ouverture de l'éditeur...")
         root.update()
-        
+
         def lancer_eel():
             global editeur_lance
             try:
@@ -1199,23 +1198,23 @@ def gui_control_panel():
                     root.after(0, lambda: status_label.config(text=f"❌ Erreur: {str(e)[:20]}"))
                     editeur_lance = False
                     return
-            
+
             # Quand l'éditeur se ferme, on met à jour le statut
             root.after(0, lambda: status_label.config(text="🔴 Éditeur fermé"))
             editeur_lance = False
-        
+
         # Lancer dans un thread pour ne pas bloquer la GUI
         thread = threading.Thread(target=lancer_eel, daemon=True)
         thread.start()
-        
+
         # Mettre à jour le statut après un court délai
         root.after(2000, lambda: status_label.config(text="✅ Éditeur ouvert") if editeur_lance else None)
-    
+
     def btn_sauvegarder_document():
         """Sauvegarde le document — toujours en mode "Enregistrer sous" (dialogue à chaque fois).
         Si un document est déjà ouvert, le dialogue pré-remplit le nom et le dossier courant."""
         global editeur_lance, current_document_path
-        
+
         if not editeur_lance:
             messagebox.showwarning(
                 "PromptoDYS - Éditeur requis",
@@ -1226,13 +1225,13 @@ def gui_control_panel():
             )
             status_label.config(text="⚠️ Éditeur non ouvert")
             return
-        
+
         log_message(f"🔍 DEBUG btn_sauvegarder: editeur_lance={editeur_lance}, current_document_path={current_document_path}")
-        
+
         # Toujours afficher le dialogue — pré-rempli si document déjà ouvert/sauvegardé
         initial_dir = os.path.dirname(current_document_path) if current_document_path else PROMPTO_DOCS_DIR
         initial_name = os.path.basename(current_document_path) if current_document_path else "nouveau_document"
-        
+
         selected = filedialog.asksaveasfilename(
             title="Enregistrer le document PromptoDYS...",
             initialdir=initial_dir,
@@ -1243,21 +1242,21 @@ def gui_control_panel():
         if not selected:
             log_message("💾 Sauvegarde annulée par l'utilisateur")
             return
-        
+
         save_dir = os.path.dirname(selected)
         doc_name = os.path.splitext(os.path.basename(selected))[0]
         doc_name = re.sub(r'[<>:"/\\|?*]', '_', doc_name).strip()
-        
+
         # Anti-récursion : si l'utilisateur a navigué à l'intérieur du dossier projet
         # (ex: PromptoDYS/equations/equations au lieu de PromptoDYS/equations)
         # on remonte au bon niveau pour éviter equations/equations/equations.md
         while os.path.basename(save_dir) == doc_name:
             log_message(f"⚠️ Anti-récursion: save_dir '{save_dir}' se termine par '{doc_name}' → on remonte")
             save_dir = os.path.dirname(save_dir)
-        
+
         status_label.config(text="⏳ Sauvegarde en cours...")
         root.update()
-        
+
         def run_save():
             global current_document_path
             log_message(f"🔍 DEBUG run_save: doc_name='{doc_name}', save_dir='{save_dir}'")
@@ -1268,15 +1267,15 @@ def gui_control_panel():
                 log_message(f"✅ Document sauvegardé dans: {result}")
             else:
                 root.after(0, lambda: status_label.config(text="❌ Erreur de sauvegarde"))
-        
+
         thread = threading.Thread(target=run_save, daemon=True)
         thread.start()
-    
+
     def btn_ouvrir_document():
         """Ouvre un document complet (texte + images) via filedialog — accepte dossier ou fichier .md
         Si l'éditeur n'est pas lancé, il est ouvert automatiquement avant le chargement."""
         global editeur_lance, current_document_path
-        
+
         # 1. Choisir le fichier AVANT de lancer l'éditeur (le filedialog est indépendant)
         selected_path = filedialog.askopenfilename(
             title="Ouvrir un document PromptoDYS",
@@ -1289,7 +1288,7 @@ def gui_control_panel():
         if not selected_path:
             log_message("📂 Ouverture annulée par l'utilisateur")
             return
-        
+
         # 2. Si l'éditeur n'est pas ouvert, le lancer automatiquement
         need_wait = not editeur_lance
         if need_wait:
@@ -1297,10 +1296,10 @@ def gui_control_panel():
             status_label.config(text="⏳ Lancement de l'éditeur...")
             root.update()
             btn_ouvrir_editeur()
-        
+
         status_label.config(text="⏳ Ouverture en cours...")
         root.update()
-        
+
         # 3. Attendre que l'éditeur soit prêt, puis charger le document
         def run_load():
             if need_wait:
@@ -1312,17 +1311,17 @@ def gui_control_panel():
                 while last_editor_activity is None and waited < timeout:
                     time.sleep(0.5)
                     waited += 0.5
-                
+
                 if last_editor_activity is None:
                     log_message("❌ Timeout: React n'a pas signalé on_editor_open() dans les 30 secondes")
                     root.after(0, lambda: status_label.config(text="❌ Éditeur non prêt (timeout)"))
                     return
-                
+
                 # Petit délai pour laisser React finir l'initialisation complète des composants
                 time.sleep(1.5)
-            
-            log_message(f"✅ Éditeur prêt, chargement du document...")
-            
+
+            log_message("✅ Éditeur prêt, chargement du document...")
+
             result = load_document(selected_path)
             if result:
                 global current_document_path
@@ -1336,20 +1335,20 @@ def gui_control_panel():
                 root.after(0, lambda: status_label.config(text=f"✅ '{doc_name}' ouvert !"))
             else:
                 root.after(0, lambda: status_label.config(text="❌ Erreur d'ouverture"))
-        
+
         thread = threading.Thread(target=run_load, daemon=True)
         thread.start()
-    
+
     def btn_traitement_ia():
         """Lance le traitement IA Gemini ou demande l'abandon"""
         global editeur_lance, traitement_en_cours, abandon_ia, btn_ia_global
-        
+
         # SI DÉJÀ EN COURS -> DEMANDER L'ABANDON
         if traitement_en_cours:
             log_message("🚫 Action: Demande d'abandon du traitement IA...")
             abandon_ia = True
             btn_ia.configure(text="⏳ Abandon en cours...", state="disabled")
-            
+
             # FAILSAFE UI: Forcer le reset du bouton après 5s quoi qu'il arrive
             def failsafe_reset():
                 global traitement_en_cours
@@ -1357,13 +1356,13 @@ def gui_control_panel():
                     log_message("⚠️ FAILSAFE: Déblocage forcé de l'interface (reset bouton)")
                     traitement_en_cours = False
                     btn_ia.configure(text="🤖 Traiter la prise de note", style="Big.TButton", state="normal")
-            
+
             root.after(5000, failsafe_reset)
             return
 
         # VÉRIFICATION 1: Connexion internet - SUPPRIMÉE
         log_message("\n🔍 VÉRIFICATION PRÉ-TRAITEMENT IA...")
-        
+
         # VÉRIFICATION 2: Éditeur ouvert
         if not editeur_lance:
             log_message("⚠️ L'éditeur n'est pas ouvert !")
@@ -1376,14 +1375,14 @@ def gui_control_panel():
             )
             status_label.config(text="⚠️ Éditeur non ouvert")
             return
-        
+
         log_message("🤖 Action: Lancement du traitement IA...")
         status_label.config(text="⏳ Traitement IA en cours...")
-        
+
         # Mise à jour du bouton en mode "Abandon"
         btn_ia.configure(text="⛔ Abandonner le traitement")
         root.update()
-        
+
         # Lancer le traitement dans un thread pour ne pas bloquer la GUI
         def run_traitement():
             try:
@@ -1396,31 +1395,31 @@ def gui_control_panel():
             except Exception as e:
                 log_message(f"❌ Erreur critique IA: {e}")
                 root.after(0, lambda: status_label.config(text=f"❌ Erreur: {str(e)[:30]}"))
-        
+
         thread = threading.Thread(target=run_traitement, daemon=True)
         thread.start()
-    
+
     def btn_ouvrir_rapports():
         """Ouvre le dossier des rapports PDF dans l'explorateur Windows"""
         log_message("📂 Action: Ouverture du dossier reports...")
         reports_path = os.path.abspath("reports")
-        
+
         # Créer le dossier s'il n'existe pas
         os.makedirs(reports_path, exist_ok=True)
-        
+
         # Ouvrir le dossier dans l'explorateur Windows
         try:
             subprocess.Popen(f'explorer "{reports_path}"')
-            status_label.config(text=f"📂 Dossier reports ouvert")
+            status_label.config(text="📂 Dossier reports ouvert")
         except Exception as e:
             status_label.config(text=f"❌ Erreur ouverture: {str(e)[:20]}")
             log_message(f"❌ Erreur ouverture dossier: {e}")
-    
+
     def btn_quitter():
         """Ferme l'application complète"""
         # Réutiliser la fonction on_closing pour la cohérence
         on_closing()
-    
+
     # --- Création de la fenêtre principale ---
     root = tk.Tk()
     root_global = root  # Référence globale pour les callbacks Eel
@@ -1428,11 +1427,11 @@ def gui_control_panel():
     root.geometry("688x1100")  # Largeur 688px, hauteur 1100px
     root.configure(bg="#F3F3F3")  # Fond gris
     root.resizable(True, True)  # Fenêtre redimensionnable
-    
+
     # Intercepter la fermeture de la fenêtre (X rouge)
     root.protocol("WM_DELETE_WINDOW", on_closing)
     root.minsize(550, 1000)  # Taille minimale ajustée
-    
+
     # --- Icône de la fenêtre ---
     try:
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "prompto.png")
@@ -1441,22 +1440,22 @@ def gui_control_panel():
         log_message(f"✅ Icône chargée: {icon_path}")
     except Exception as e:
         log_message(f"⚠️ Icône non chargée: {e}")
-    
+
     # Appliquer le thème Sun Valley (mode clair)
     sv_ttk.set_theme("light")  # Thème clair Windows 11
-    
+
     # --- Créer un style pour le fond gris ---
     style = ttk.Style()
     style.configure("Gray.TFrame", background="#F3F3F3")
-    
+
     # --- Frame principal avec padding ---
     main_frame = ttk.Frame(root, padding=(20, 20, 20, 0), style="Gray.TFrame")  # Fond gris, pas de padding en bas
     main_frame.pack(fill="both", expand=True)
-    
+
     # --- Titre avec logo ---
     title_frame = ttk.Frame(main_frame)
     title_frame.pack(pady=(0, 5))  # Réduit de 10 à 5
-    
+
     # Charger le logo prompto pour le titre (redimensionné)
     try:
         logo_path = os.path.join(os.path.dirname(__file__), "assets", "prompto.png")
@@ -1469,16 +1468,16 @@ def gui_control_panel():
         log_message("✅ Logo titre chargé")
     except Exception as e:
         log_message(f"⚠️ Logo titre non chargé: {e}")
-    
+
     title_label = ttk.Label(
-        title_frame, 
-        text="PromptoDYS", 
+        title_frame,
+        text="PromptoDYS",
         font=("Segoe UI", 24, "bold")  # Réduit de 32 à 24
     )
     title_label.pack(side="left")
-    
-    
-    
+
+
+
     # --- Fonctions pour effets de survol sur boutons tk.Button ---
     def on_button_enter(event, btn):
         """Effet au survol : bordure bleue, fond bleu clair, texte bleu"""
@@ -1488,7 +1487,7 @@ def gui_control_panel():
             highlightbackground="#0078D4",  # Bordure bleue
             highlightthickness=12  # Bordure épaisse au survol
         )
-    
+
     def on_button_leave(event, btn):
         """Retour à l'état normal"""
         btn.config(
@@ -1497,15 +1496,15 @@ def gui_control_panel():
             highlightbackground="#333333",  # Bordure sombre
             highlightthickness=12  # Bordure épaisse maintenue
         )
-    
+
     def on_button_press(event, btn):
         """Effet au clic : enfoncement visuel"""
         btn.config(relief="sunken")
-    
+
     def on_button_release(event, btn):
         """Retour au relief normal après clic"""
         btn.config(relief="raised")
-    
+
     # --- Boutons (tk.Button classiques pour bordures épaisses) ---
     # Bouton 1: Ouvrir l'éditeur
     btn1 = tk.Button(
@@ -1529,15 +1528,15 @@ def gui_control_panel():
     btn1.bind("<Leave>", lambda e: on_button_leave(e, btn1))
     btn1.bind("<ButtonPress-1>", lambda e: on_button_press(e, btn1))
     btn1.bind("<ButtonRelease-1>", lambda e: on_button_release(e, btn1))
-    
+
     # --- Section Document : Sauvegarder / Ouvrir (côte à côte dans un LabelFrame) ---
     doc_frame = ttk.LabelFrame(main_frame, text="📄 Document", padding=(10, 5))
     doc_frame.pack(fill="x", padx=20, pady=8)
-    
+
     # Configurer 2 colonnes de poids égal pour répartir l'espace
     doc_frame.columnconfigure(0, weight=1)
     doc_frame.columnconfigure(1, weight=1)
-    
+
     # Bouton Sauvegarder (colonne gauche)
     btn_save = tk.Button(
         doc_frame,
@@ -1559,7 +1558,7 @@ def gui_control_panel():
     btn_save.bind("<Leave>", lambda e: on_button_leave(e, btn_save))
     btn_save.bind("<ButtonPress-1>", lambda e: on_button_press(e, btn_save))
     btn_save.bind("<ButtonRelease-1>", lambda e: on_button_release(e, btn_save))
-    
+
     # Bouton Ouvrir (colonne droite)
     btn_open = tk.Button(
         doc_frame,
@@ -1581,7 +1580,7 @@ def gui_control_panel():
     btn_open.bind("<Leave>", lambda e: on_button_leave(e, btn_open))
     btn_open.bind("<ButtonPress-1>", lambda e: on_button_press(e, btn_open))
     btn_open.bind("<ButtonRelease-1>", lambda e: on_button_release(e, btn_open))
-    
+
     # Bouton 2: Traitement IA
     btn_ia = tk.Button(
         main_frame,
@@ -1605,7 +1604,7 @@ def gui_control_panel():
     btn_ia.bind("<ButtonRelease-1>", lambda e: on_button_release(e, btn_ia))
     btn_ia_global = btn_ia  # Garder la référence globale
 
-    
+
     # Bouton 3: Ouvrir rapports PDF
     btn3 = tk.Button(
         main_frame,
@@ -1627,11 +1626,11 @@ def gui_control_panel():
     btn3.bind("<Leave>", lambda e: on_button_leave(e, btn3))
     btn3.bind("<ButtonPress-1>", lambda e: on_button_press(e, btn3))
     btn3.bind("<ButtonRelease-1>", lambda e: on_button_release(e, btn3))
-    
+
     # --- Séparateur ---
     separator = ttk.Separator(main_frame, orient="horizontal")
     separator.pack(fill="x", pady=10)  # Réduit de 20 à 10
-    
+
     # --- Barre de statut ---
     status_label = ttk.Label(
         main_frame,
@@ -1640,12 +1639,12 @@ def gui_control_panel():
     )
     status_label.pack(pady=5)  # Réduit de 10 à 5
     status_label_global = status_label  # Référence globale pour les callbacks Eel
-    
+
     # --- Zone de texte pour le streaming IA ---
     # Renommé pour refléter qu'il contient tous les logs
     streaming_frame = ttk.LabelFrame(main_frame, text="📝 Console / Logs", padding=10)
     streaming_frame.pack(fill="both", expand=False, pady=10)
-    
+
     # Créer une zone de texte avec scrollbar
     streaming_text = tk.Text(
         streaming_frame,
@@ -1659,14 +1658,14 @@ def gui_control_panel():
     )
     scrollbar = ttk.Scrollbar(streaming_frame, orient="vertical", command=streaming_text.yview)
     streaming_text.configure(yscrollcommand=scrollbar.set)
-    
+
     streaming_text.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
-    
+
     # Référence globale pour le streaming
     global streaming_text_global
     streaming_text_global = streaming_text
-    
+
     # --- Redirection de stdout ET stderr vers la GUI ---
     def update_gui_logs(msg):
         # Filtrer les messages vides
@@ -1674,14 +1673,14 @@ def gui_control_panel():
             update_streaming_text(msg)
         elif msg == "\n":
             update_streaming_text("\n")
-        
+
     # Rediriger stdout (prints normaux)
     sys.stdout = RedirectText(update_gui_logs, is_stderr=False)
     # Rediriger stderr (erreurs, exceptions)
     sys.stderr = RedirectText(update_gui_logs, is_stderr=True)
-    
+
     print("✅ Console et Erreurs redirigées vers la GUI")
-    
+
     # --- Bouton Quitter (plus petit, en bas) ---
     btn_quit = tk.Button(
         main_frame,
@@ -1702,7 +1701,7 @@ def gui_control_panel():
     # Effets de survol spécifiques pour le bouton Quitter
     btn_quit.bind("<Enter>", lambda e: btn_quit.config(bg="#FFE6E6", fg="#CC0000", highlightbackground="#CC0000"))
     btn_quit.bind("<Leave>", lambda e: btn_quit.config(bg="#F5F5F5", fg="#666666", highlightbackground="#999999"))
-    
+
     # --- Lancer la boucle principale ---
     print("✅ Panneau de contrôle GUI prêt !")
     root.mainloop()
