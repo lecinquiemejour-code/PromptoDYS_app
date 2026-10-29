@@ -196,6 +196,19 @@ Cette option désactive la politique de même origine pour toute la fenêtre. El
 
 **Statut : ✅ résolu.** L'option a été retirée (commit `b873d32`), en même temps que l'ajout d'un profil Chrome dédié (`--user-data-dir`). Jusque-là, l'option était en fait ignorée par Chrome, qui ne l'applique qu'avec un profil séparé. Avec le profil dédié, elle devenait active et Chrome affichait le bandeau « flag de ligne de commande non pris en charge ». L'éditeur ne charge que des ressources servies par Eel sur `localhost` et des URL `blob:` et `data:`, qui n'ont pas besoin de cette option.
 
+### B8. Un nom de document vide est accepté, et peut figer l'application
+
+**Où.** [askGeminiPrompto.py:221](../askGeminiPrompto.py#L221), `preparer_chemin_sauvegarde()`. Trouvé en écrivant les tests de R3, le 29/10/2026.
+
+Le nom saisi dans le dialogue « Enregistrer sous » perd son extension, ses caractères interdits et ses espaces. Rien ne vérifie qu'il en reste quelque chose : `"  .md"` donne un nom vide, transmis tel quel à `save_document()`.
+
+- Ailleurs qu'à la racine, le document est sauvegardé sans nom.
+- À la racine d'un disque Windows (`C:\  .md`), la boucle anti-récursion ([l. 231](../askGeminiPrompto.py#L231)) ne s'arrête jamais : le dossier `C:\` a lui aussi un nom vide, et le remonter redonne `C:\`. Le thread de la GUI tourne en boucle, l'application se fige. Reproduit en simulant les chemins Windows (`ntpath`).
+
+**Piste.** Refuser un nom vide dans `btn_sauvegarder_document` avec un message clair à l'élève et rouvrir le dialogue, plutôt que de choisir un nom à sa place. Borner la boucle en arrêtant la remontée quand `dirname` ne change plus. Ajouter les deux cas à `tests/test_sauvegarde.py`.
+
+**Effort.** Faible. À traiter dans une branche dédiée.
+
 ---
 
 ## 5. Constats mineurs : qualité du code
@@ -339,7 +352,7 @@ Déjà noté dans les docs. Ce qui rend la chose facile à démarrer : plusieurs
 
 Dix tests `pytest` suffiraient à protéger le cœur contre les régressions, notamment pendant le découpage M4.
 
-**Statut : 🟡 partiellement résolu.** pytest est installé (groupe `dev`, `uv run pytest`) avec un premier test, `tests/test_import.py`, qui protège la correction de M12. Les tests des fonctions pures restent à écrire (R3 de [RECOMMANDATIONS.md](RECOMMANDATIONS.md)).
+**Statut : ✅ résolu.** pytest est installé (groupe `dev`, `uv run pytest`). `tests/test_import.py` protège la correction de M12 ; `test_note.py`, `test_rapport.py` et `test_sauvegarde.py` couvrent les fonctions pures (R3 de [RECOMMANDATIONS.md](RECOMMANDATIONS.md)). `nettoyer_html_tags()` a été sortie de `convertir_markdown_vers_paragraphes()` et l'anti-récursion extraite dans `preparer_chemin_sauvegarde()`. `convertir_markdown_vers_paragraphes()` (qui produit des objets reportlab) reste sans test : elle sera remplacée par R8. `lire_prompto_dys()` lit un fichier sur le disque : hors du périmètre des fonctions pures, elle n'est pas testée non plus.
 
 ---
 
@@ -460,6 +473,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | B5 | 🟠 Important | Port 8080 fixe, relance fragile, `--app` dupliqué | Faible | 1 |
 | B6 | ✅ Résolu | Pas de timeout Gemini, abandon inopérant si flux figé (abandon immédiat, sans timeout) | Faible | 1 |
 | B7 | ✅ Résolu | `--disable-web-security` inutile (retiré) | Trivial | 1 |
+| B8 | 🟠 Important | Nom de document vide accepté, boucle infinie à la racine d'un disque | Faible | 1 |
 | M1 | 🟡 Partiellement résolu | Imports et dépendances inutilisés (retirés ; docstring d'en-tête encore obsolète) | Trivial | 1 |
 | M2 | ✅ Résolu | Code mort (menu console, historique, `web_folder_global`) | Trivial | 1 |
 | M3 | 🟡 Mineur | `except:` nus, f-strings vides | Trivial | 1 |
@@ -477,4 +491,4 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | D3 | 🟡 Partiellement résolu | Docs obsolètes, `sv_ttk` absent de la commande d'installation, `version=` commenté (installation et README corrigés ; restent CONTRIBUTING, VirusTotal, `version=`) | Faible | 1 |
 | D4 | 🟡 Partiellement résolu | Version dupliquée quatre fois (modèle du pied PDF via `GEMINI_MODEL` ; version toujours dupliquée) | Faible | 3 |
 | D5 | 🟡 Partiellement résolu | Archives et PDF lourds dans le dépôt ou à la racine (archives retirées ; PDF toujours versionné) | Trivial | 1 |
-| D6 | 🟡 Partiellement résolu | Aucun test (pytest installé, premier test sur l'import) | Faible | 2 |
+| D6 | ✅ Résolu | Aucun test (pytest installé, tests de l'import et des fonctions pures) | Faible | 2 |
