@@ -58,6 +58,11 @@ GEMINI_MODEL = "gemini-3.8-flash"
 # Niveau de réflexion Gemini 3.x
 GEMINI_THINKING_LEVEL = types.ThinkingLevel.LOW
 
+# Dossier de l'application : celui de l'exe une fois packagé, celui du script en développement.
+# GeminiKey.txt et reports/ y sont lus et écrits, quel que soit le dossier courant.
+APP_DIR = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__))
+REPORTS_DIR = os.path.join(APP_DIR, "reports")
+
 try:
     from ctypes import windll
     windll.shcore.SetProcessDpiAwareness(1)  # DPI per monitor
@@ -129,15 +134,13 @@ def log_message(message):
 
 def find_web_folder():
     """Trouve le dossier contenant index.html (compatible PyInstaller)"""
-    import sys
-
     # Si on est dans un exécutable PyInstaller
     if hasattr(sys, '_MEIPASS'):
         base_path = sys._MEIPASS
         possible_folders = ['build_web', 'build']
     else:
         # Mode développement normal
-        base_path = '.'
+        base_path = APP_DIR
         possible_folders = ['build_web', 'build', 'dist', 'public', '.']
 
     for folder in possible_folders:
@@ -726,11 +729,11 @@ def sauvegarder_rapport(contenu_original, logs_etapes, streaming_gemini, contenu
         return None, None
 
     # Créer le dossier reports s'il n'existe pas
-    os.makedirs("reports", exist_ok=True)
+    os.makedirs(REPORTS_DIR, exist_ok=True)
 
     # Générer un nom de fichier avec timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    base_filename = f"reports/rapport_complet_{timestamp}"
+    base_filename = os.path.join(REPORTS_DIR, f"rapport_complet_{timestamp}")
 
     log_message(f"💾 SAUVEGARDE: Création du fichier PDF {base_filename}.pdf")
 
@@ -780,7 +783,7 @@ GEMINI_API_KEY_PLACEHOLDER = "YOUR_GEMINI_API_KEY_HERE"
 def lire_cle_api():
     """Lit la clé API dans GeminiKey.txt (ignore lignes vides et commentaires #)"""
     # utf-8-sig : tolère le BOM ajouté par le Bloc-notes Windows
-    with open("GeminiKey.txt", encoding="utf-8-sig") as f:
+    with open(os.path.join(APP_DIR, "GeminiKey.txt"), encoding="utf-8-sig") as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith("#"):
@@ -802,7 +805,7 @@ def init_gemini_client():
         log_message(f"🔑 INFO: Clé API chargée (...{api_key[-4:]})")
         return genai.Client(api_key=api_key)
     except FileNotFoundError:
-        log_message("❌ ÉCHEC: Fichier GeminiKey.txt introuvable")
+        log_message(f"❌ ÉCHEC: Fichier GeminiKey.txt introuvable dans {APP_DIR}")
         return None
     except Exception as e:
         log_message(f"❌ ÉCHEC: Erreur initialisation Gemini: {e}")
@@ -1088,7 +1091,7 @@ def traitement_gemini(annulation):
 
     if pdf_file:
         log_message("🎉 SUCCÈS: Rapport PDF sauvegardé !")
-        log_message("📁 Rapport PDF dans 'reports/'")
+        log_message(f"📁 Rapport PDF dans {REPORTS_DIR}")
     else:
         log_message("⚠️ ATTENTION: Sauvegarde PDF échouée")
 
@@ -1422,7 +1425,7 @@ def gui_control_panel():
     def btn_ouvrir_rapports():
         """Ouvre le dossier des rapports PDF dans l'explorateur Windows"""
         log_message("📂 Action: Ouverture du dossier reports...")
-        reports_path = os.path.abspath("reports")
+        reports_path = REPORTS_DIR
 
         # Créer le dossier s'il n'existe pas
         os.makedirs(reports_path, exist_ok=True)
@@ -1738,8 +1741,8 @@ def main():
         return
 
     # Créer le dossier reports
-    os.makedirs("reports", exist_ok=True)
-    log_message('📁 Dossier "reports" créé pour les sauvegardes automatiques')
+    os.makedirs(REPORTS_DIR, exist_ok=True)
+    log_message(f'📁 Dossier des rapports PDF : {REPORTS_DIR}')
 
     # Initialiser Eel (préparation, mais ne lance pas encore)
     eel.init(web_folder)
