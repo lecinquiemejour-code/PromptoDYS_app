@@ -163,6 +163,7 @@ uv sync --locked   # crée .venv à partir de uv.lock, sans le modifier
 # ... modifier les fichiers ...
 
 # Tester vos changements
+uv run pytest
 uv run python askGeminiPrompto.py
 
 # Si vous modifiez les dépendances :

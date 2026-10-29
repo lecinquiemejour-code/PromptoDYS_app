@@ -97,6 +97,8 @@ Les numéros de ligne sont ceux de la rédaction et ont bougé depuis.
 
 **R2. Supprimer les effets de bord à l'import (M12).** Déplacer dans `main()` la création de `PROMPTO_DOCS_DIR` ([l. 207-208](../askGeminiPrompto.py#L207-L208)) et de `CHROME_PROFILE_DIR` ([l. 226](../askGeminiPrompto.py#L226)). Sans cela, aucun test ne peut importer le module sans écrire dans `Documents/`.
 
+✅ Fait : les deux dossiers sont créés dans `main()`. L'appel Windows `SetProcessDpiAwareness`, autre effet de bord à l'import, y a aussi été déplacé (avant la création de la fenêtre Tk). pytest est installé et `tests/test_import.py` vérifie que l'import ne crée aucun dossier.
+
 **R3. Tests `pytest` sur les fonctions déjà pures (D6).**
 - `extraire_contenu_note` ([l. 829](../askGeminiPrompto.py#L829)) et `extraire_debrief_correction` ([l. 868](../askGeminiPrompto.py#L868)) : avec et sans balises, avec marqueurs `__BOLD_n__`.
 - `ajouter_note_origine` ([l. 848](../askGeminiPrompto.py#L848)) : suppression des images, séparateur final non doublé.
