@@ -218,6 +218,22 @@ CHROME_PROFILE_DIR = _get_chrome_profile_dir()
 # --- Fonctions de sauvegarde/ouverture de documents complets (texte + images) ---
 # Principe "Arduino" : le dossier porte le même nom que le fichier .md principal
 
+def preparer_chemin_sauvegarde(chemin_choisi):
+    """Renvoie (dossier, nom du document) à partir du chemin choisi dans le dialogue.
+    Nom assaini ; si l'utilisateur est entré dans le dossier du document, on remonte."""
+    save_dir = os.path.dirname(chemin_choisi)
+    doc_name = os.path.splitext(os.path.basename(chemin_choisi))[0]
+    doc_name = re.sub(r'[<>:"/\\|?*]', '_', doc_name).strip()
+
+    # Anti-récursion : si l'utilisateur a navigué à l'intérieur du dossier projet
+    # (ex: PromptoDYS/equations/equations au lieu de PromptoDYS/equations)
+    # on remonte au bon niveau pour éviter equations/equations/equations.md
+    while os.path.basename(save_dir) == doc_name:
+        log_message(f"⚠️ Anti-récursion: save_dir '{save_dir}' se termine par '{doc_name}' → on remonte")
+        save_dir = os.path.dirname(save_dir)
+    return save_dir, doc_name
+
+
 def save_document(document_name, save_directory):
     """
     💾 SAUVEGARDE COMPLÈTE: Récupère le document (texte + images) depuis l'éditeur
@@ -528,6 +544,32 @@ def preparer_contenu_rapport_complet(contenu_original, logs_etapes, streaming_ge
     return contenu_final
 
 
+def nettoyer_html_tags(text):
+    """Supprime les balises HTML problématiques pour reportlab"""
+    # Remplacer les marqueurs __BOLD_n__ par des séparateurs horizontaux MD
+    bold_count = len(re.findall(r'__BOLD_\d+__', text))
+    if bold_count > 0:
+        log_message(f"🔄 NETTOYAGE: {bold_count} marqueurs __BOLD_n__ remplacés par des séparateurs ---")
+    text = re.sub(r'__BOLD_\d+__', '---', text)
+
+    # Supprimer les balises <span> avec styles
+    text = re.sub(r'<span[^>]*>', '', text)
+    text = re.sub(r'</span>', '', text)
+
+    # Supprimer seulement les émojis problématiques pour reportlab
+    text = re.sub(r'[🎉🎯🔧📊📝📄✅❌⚙️🚀🔍✏️🧠🔢💾🎮📋💡🤖📖🔗🪟📁⏳🔄💭]', '', text)
+
+    # Nettoyer les caractères spéciaux
+    text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+    # Remettre les balises autorisées
+    text = text.replace('&lt;b&gt;', '<b>').replace('&lt;/b&gt;', '</b>')
+    text = text.replace('&lt;i&gt;', '<i>').replace('&lt;/i&gt;', '</i>')
+    text = text.replace('&lt;u&gt;', '<u>').replace('&lt;/u&gt;', '</u>')
+
+    return text
+
+
 def convertir_markdown_vers_paragraphes(contenu_md):
     """Convertit le contenu Markdown en paragraphes reportlab (VERSION CORRIGÉE PDF)"""
 
@@ -586,32 +628,6 @@ def convertir_markdown_vers_paragraphes(contenu_md):
         spaceAfter=8,
         borderPadding=10  # Plus d'espace autour du texte
     )
-
-    # Fonction pour nettoyer les balises span et autres problèmes HTML
-    def nettoyer_html_tags(text):
-        """Supprime les balises HTML problématiques pour reportlab"""
-        # Remplacer les marqueurs __BOLD_n__ par des séparateurs horizontaux MD
-        bold_count = len(re.findall(r'__BOLD_\d+__', text))
-        if bold_count > 0:
-            log_message(f"🔄 NETTOYAGE: {bold_count} marqueurs __BOLD_n__ remplacés par des séparateurs ---")
-        text = re.sub(r'__BOLD_\d+__', '---', text)
-
-        # Supprimer les balises <span> avec styles
-        text = re.sub(r'<span[^>]*>', '', text)
-        text = re.sub(r'</span>', '', text)
-
-        # Supprimer seulement les émojis problématiques pour reportlab
-        text = re.sub(r'[🎉🎯🔧📊📝📄✅❌⚙️🚀🔍✏️🧠🔢💾🎮📋💡🤖📖🔗🪟📁⏳🔄💭]', '', text)
-
-        # Nettoyer les caractères spéciaux
-        text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-
-        # Remettre les balises autorisées
-        text = text.replace('&lt;b&gt;', '<b>').replace('&lt;/b&gt;', '</b>')
-        text = text.replace('&lt;i&gt;', '<i>').replace('&lt;/i&gt;', '</i>')
-        text = text.replace('&lt;u&gt;', '<u>').replace('&lt;/u&gt;', '</u>')
-
-        return text
 
     # Parsing simple du Markdown
     paragraphes = []
@@ -1241,16 +1257,7 @@ def gui_control_panel():
             log_message("💾 Sauvegarde annulée par l'utilisateur")
             return
 
-        save_dir = os.path.dirname(selected)
-        doc_name = os.path.splitext(os.path.basename(selected))[0]
-        doc_name = re.sub(r'[<>:"/\\|?*]', '_', doc_name).strip()
-
-        # Anti-récursion : si l'utilisateur a navigué à l'intérieur du dossier projet
-        # (ex: PromptoDYS/equations/equations au lieu de PromptoDYS/equations)
-        # on remonte au bon niveau pour éviter equations/equations/equations.md
-        while os.path.basename(save_dir) == doc_name:
-            log_message(f"⚠️ Anti-récursion: save_dir '{save_dir}' se termine par '{doc_name}' → on remonte")
-            save_dir = os.path.dirname(save_dir)
+        save_dir, doc_name = preparer_chemin_sauvegarde(selected)
 
         status_label.config(text="⏳ Sauvegarde en cours...")
         root.update()
