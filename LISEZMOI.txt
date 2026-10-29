@@ -80,10 +80,6 @@ de signature numérique payante.
 Si votre antivirus bloque le fichier, c'est un faux positif connu. Voir :
 https://github.com/lecinquiemejour-code/PromptoDYS_app/blob/master/README_ANTIVIRUS.md
 
-Raccourci sur le Bureau : si vous en créez un, faites un clic droit dessus >
-Propriétés, et vérifiez que le champ « Démarrer dans » contient bien le
-dossier de PromptoDYS.exe. Sinon l'application ne trouve pas GeminiKey.txt.
-
 
 6. UTILISER PROMPTODYS
 ----------------------
@@ -106,10 +102,9 @@ et affiche les erreurs.
 7. EN CAS DE PROBLÈME
 ---------------------
 
-Message « Fichier GeminiKey.txt introuvable »
-  -> Le fichier n'est pas dans le dossier de PromptoDYS.exe, ou il s'appelle
-     GeminiKey.txt.txt (voir l'étape 4), ou l'application a été lancée par
-     un raccourci mal réglé (voir l'étape 5).
+Message « Fichier GeminiKey.txt introuvable dans ... »
+  -> Le fichier n'est pas dans le dossier indiqué par le message (celui de
+     PromptoDYS.exe), ou il s'appelle GeminiKey.txt.txt (voir l'étape 4).
 
 Message « GeminiKey.txt contient encore la valeur du template »
   -> La ligne YOUR_GEMINI_API_KEY_HERE n'a pas été remplacée par votre clé.

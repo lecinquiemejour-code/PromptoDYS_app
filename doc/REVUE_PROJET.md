@@ -91,7 +91,7 @@ En plus, [PromptoDYS.spec:13](../PromptoDYS.spec#L13) embarque `GeminiKey.txt` *
 
 **Effort.** Faible à moyen. Une constante et cinq remplacements.
 
-**Statut : 🟡 partiellement résolu.** Le prompt, renommé `prompto.dys` → `promptodys.prompt`, est désormais lu par `lire_prompto_dys()` dans `sys._MEIPASS` (copie embarquée) quand on tourne dans l'exe, et dans le dossier du script en développement. Il ne dépend plus du dossier courant, et un fichier placé à côté de l'exe est ignoré. Restent relatifs au dossier courant : `GeminiKey.txt`, `reports/` et `build_web/` en mode développement.
+**Statut : ✅ résolu.** Le prompt, renommé `prompto.dys` → `promptodys.prompt`, est lu par `lire_prompto_dys()` dans `sys._MEIPASS` (copie embarquée) quand on tourne dans l'exe, et dans le dossier du script en développement ; un fichier placé à côté de l'exe est ignoré. Pour le reste, une constante `APP_DIR` désigne le dossier de l'application : celui de l'exe une fois packagé (`sys.executable`), celui du script en développement. Le nom `APP_DIR` a été préféré à `BASE_DIR` pour ne pas le confondre avec `sys._MEIPASS`. `GeminiKey.txt` y est lu, `reports/` y est créé (constante `REPORTS_DIR`, utilisée aussi par le bouton « Ouvrir rapports »), et `find_web_folder()` y cherche `build_web/` en développement. Plus rien ne dépend du dossier courant. Le message « GeminiKey.txt introuvable » indique le dossier où la clé est attendue, et le conseil de `LISEZMOI.txt` sur le champ « Démarrer dans » des raccourcis a été retiré.
 
 ---
 
@@ -447,7 +447,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | Réf. | Gravité | Constat | Effort | Lot |
 |---|---|---|---|---|
 | C1 | ✅ Résolu | Clé API distribuée dans les zips et embarquée dans l'exe (plus embarquée, zips retirés, clé révoquée) | Faible | 0, 1 |
-| C2 | 🔴 Critique | Chemins relatifs au dossier courant ; ressources embarquées jamais lues | Faible | 1 |
+| C2 | ✅ Résolu | Chemins relatifs au dossier courant ; ressources embarquées jamais lues (`APP_DIR`, prompt embarqué) | Faible | 1 |
 | B1 | ✅ Résolu | Failsafe du bouton plante (`style=` sur `tk.Button`) (failsafe supprimé) | Trivial | 1 |
 | B2 | ✅ Résolu | Retour anticipé sans reset : bouton bloqué, faux statut « terminé » (état rendu à l'appelant) | Faible | 1 |
 | B3 | 🟡 Partiellement résolu | `NameError` dans deux messages d'erreur différés (reste celui de `lancer_eel()`) | Trivial | 1 |
