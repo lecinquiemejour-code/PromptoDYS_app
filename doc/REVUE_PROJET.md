@@ -143,7 +143,7 @@ En Python 3, la variable `e` d'un bloc `except` est **effacée à la sortie du b
 
 **Effort.** Trivial.
 
-**Statut : 🟡 partiellement résolu.** L'occurrence du traitement IA a disparu avec la réécriture de `run_traitement()` pour B6 : l'erreur est loggée et le statut « ❌ Échec du traitement IA (voir les logs) » est affiché par le thread principal. Reste celle du lancement de l'éditeur, dans `lancer_eel()`.
+**Statut : ✅ résolu.** L'occurrence du traitement IA a disparu avec la réécriture de `run_traitement()` pour B6 : l'erreur est loggée et le statut « ❌ Échec du traitement IA (voir les logs) » est affiché par le thread principal. Celle du lancement de l'éditeur, dans `lancer_eel()`, affiche maintenant un message fixe, « ❌ Échec de l'ouverture de l'éditeur (voir les logs) », sans référence à l'exception. Les erreurs des deux tentatives (lancement normal et fallback) restent dans la console.
 
 ### B4. La fenêtre de contrôle ne tient pas sur un écran de portable
 
@@ -166,10 +166,11 @@ Le public cible (collégiens) utilise majoritairement des portables. Les boutons
 **Où.** [askGeminiPrompto.py:1223](../askGeminiPrompto.py#L1223) `port=8080`, avec en plus `'--app=http://localhost:8080/index.html'` en dur dans les arguments Chrome ([ligne 1225](../askGeminiPrompto.py#L1225)), alors qu'Eel ajoute déjà son propre `--app=`.
 
 - Le port 8080 est l'un des plus utilisés au monde (serveurs de dev, proxys, certaines imprimantes). S'il est pris, `eel.start` échoue, et le fallback utilise... le même port.
+- Un échec sur le port laisse des fenêtres ouvertes sur une page d'erreur (constaté le 29/10/2026). `eel.start()` ouvre le navigateur **avant** de démarrer son serveur. Si le port est pris, Chrome affiche la réponse du programme qui occupe le port (un 404 pendant le test), puis le fallback ouvre une seconde fenêtre dans le navigateur par défaut, en 404 elle aussi. L'élève voit le message « ❌ Échec de l'ouverture de l'éditeur » mais reste avec deux fenêtres inutiles à fermer.
 - Quand l'utilisateur ferme la fenêtre Chrome, Eel sans `close_callback` appelle `sys.exit()` dans son thread. Le serveur gevent n'est pas arrêté proprement, le port peut rester occupé quelques secondes, et un second clic sur « Ouvrir l'éditeur » peut échouer.
 - Le drapeau `editeur_lance` dépend du retour de `eel.start(block=True)`, ce qui est documenté comme « plus fiable que psutil » mais reste indirect.
 
-**Piste.** `port=0` laisse Eel choisir un port libre (et il faut alors retirer le `--app=` manuel). Fournir un `close_callback` qui met `editeur_lance` à faux et arrête proprement le serveur.
+**Piste.** `port=0` laisse Eel choisir un port libre (et il faut alors retirer le `--app=` manuel). Eel réserve un port libre juste avant d'ouvrir le navigateur, ce qui supprime en pratique l'échec sur un port pris et les fenêtres ouvertes pour rien. Fournir un `close_callback` qui met `editeur_lance` à faux et arrête proprement le serveur.
 
 **Effort.** Faible, mais à tester soigneusement (ouverture, fermeture, réouverture).
 
@@ -416,7 +417,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | 2 | `askGeminiPrompto.py` | Introduire `BASE_DIR`, l'utiliser pour clé, prompt, `reports/`, `build_web/` | C2 |
 | 3 | `askGeminiPrompto.py` | Supprimer `style="Big.TButton"` ligne 1403 | B1 |
 | 4 | `askGeminiPrompto.py` | Englober `traitement_gemini()` dans un `try/finally` unique, retourner un booléen, corriger le statut ligne 1437 | B2 |
-| 5 | `askGeminiPrompto.py` | Capturer `str(e)` avant les deux lambdas (lignes 1243, 1442) | B3 |
+| 5 | `askGeminiPrompto.py` | ✅ Fait : plus de référence à `e` dans les lambdas (message fixe renvoyant aux logs) | B3 |
 | 6 | `askGeminiPrompto.py` | Hauteur de fenêtre calculée depuis l'écran, `minsize` à 650 | B4 |
 | 7 | `askGeminiPrompto.py` | 🟡 En partie fait : `--disable-web-security` retiré. Restent : `port=0`, retirer le `--app=` manuel, ajouter `close_callback` | B5, B7 |
 | 8 | `askGeminiPrompto.py` | `http_options` avec timeout, fermeture du stream à l'abandon | B6 |
@@ -450,7 +451,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | C2 | ✅ Résolu | Chemins relatifs au dossier courant ; ressources embarquées jamais lues (`APP_DIR`, prompt embarqué) | Faible | 1 |
 | B1 | ✅ Résolu | Failsafe du bouton plante (`style=` sur `tk.Button`) (failsafe supprimé) | Trivial | 1 |
 | B2 | ✅ Résolu | Retour anticipé sans reset : bouton bloqué, faux statut « terminé » (état rendu à l'appelant) | Faible | 1 |
-| B3 | 🟡 Partiellement résolu | `NameError` dans deux messages d'erreur différés (reste celui de `lancer_eel()`) | Trivial | 1 |
+| B3 | ✅ Résolu | `NameError` dans deux messages d'erreur différés (messages fixes renvoyant aux logs) | Trivial | 1 |
 | B4 | 🟠 Important | Fenêtre de 1100 px hors écran sur portable | Faible | 1 |
 | B5 | 🟠 Important | Port 8080 fixe, relance fragile, `--app` dupliqué | Faible | 1 |
 | B6 | ✅ Résolu | Pas de timeout Gemini, abandon inopérant si flux figé (abandon immédiat, sans timeout) | Faible | 1 |

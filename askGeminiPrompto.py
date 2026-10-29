@@ -1201,8 +1201,8 @@ def gui_control_panel():
                               ],
                               block=True)
                 except Exception as e2:
-                    log_message(f"❌ Erreur fallback: {e2}")
-                    root.after(0, lambda: status_label.config(text=f"❌ Erreur: {str(e)[:20]}"))
+                    log_message(f"❌ Erreur fallback lancement éditeur: {e2}")
+                    root.after(0, lambda: status_label.config(text="❌ Échec de l'ouverture de l'éditeur (voir les logs)"))
                     editeur_lance = False
                     return
 

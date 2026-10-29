@@ -83,7 +83,7 @@ Un découpage qui déplace du code défectueux déplace aussi les bugs et brouil
 |---|---|---|---|
 | B2 | [l. 900](../askGeminiPrompto.py#L900), [l. 916](../askGeminiPrompto.py#L916) | `return` avant le `try/finally` : le bouton reste sur « Abandonner » | ✅ Fait : l'appelant gère l'état, `traitement_gemini()` renvoie un booléen |
 | B1 | [l. 1359](../askGeminiPrompto.py#L1359) | `style="Big.TButton"` sur un `tk.Button` : le failsafe plante | ✅ Fait : failsafe supprimé avec B6 |
-| B3 | [l. 1199](../askGeminiPrompto.py#L1199), [l. 1398](../askGeminiPrompto.py#L1398) | Lambda qui utilise `e` après le bloc `except` | 🟡 Reste celle de `lancer_eel()` |
+| B3 | [l. 1199](../askGeminiPrompto.py#L1199), [l. 1398](../askGeminiPrompto.py#L1398) | Lambda qui utilise `e` après le bloc `except` | ✅ Fait : messages fixes renvoyant aux logs (traitement IA avec B6, puis `lancer_eel()`) |
 | C2 | [l. 779](../askGeminiPrompto.py#L779), [l. 725](../askGeminiPrompto.py#L725), [l. 1406](../askGeminiPrompto.py#L1406), [l. 1723](../askGeminiPrompto.py#L1723), [l. 142](../askGeminiPrompto.py#L142) | `GeminiKey.txt`, `reports/` et `build_web/` relatifs au dossier courant | ✅ Fait : constante `APP_DIR` (dossier de l'exe ou du script) |
 | B6 | [l. 799](../askGeminiPrompto.py#L799) | Client Gemini sans timeout | ✅ Fait autrement : pas de timeout (durée de réponse imprévisible), abandon immédiat par jeton d'annulation |
 
