@@ -63,13 +63,6 @@ GEMINI_THINKING_LEVEL = types.ThinkingLevel.LOW
 APP_DIR = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__))
 REPORTS_DIR = os.path.join(APP_DIR, "reports")
 
-try:
-    from ctypes import windll
-    windll.shcore.SetProcessDpiAwareness(1)  # DPI per monitor
-except:
-    pass  # Ignorer si non Windows
-
-
 # --- NOUVELLE VARIABLE POUR CAPTURER TOUS LES LOGS ---
 logs_complets = []
 
@@ -206,8 +199,6 @@ def _get_documents_folder():
     return os.path.expanduser("~/Documents")
 
 PROMPTO_DOCS_DIR = os.path.join(_get_documents_folder(), "PromptoDYS")
-os.makedirs(PROMPTO_DOCS_DIR, exist_ok=True)
-print(f"📁 Dossier projets PromptoDYS: {PROMPTO_DOCS_DIR}")
 
 
 # --- Profil Chrome dédié à l'éditeur ---
@@ -220,12 +211,9 @@ def _get_chrome_profile_dir():
     else:
         # Fallback Linux et autres
         base_dir = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
-    profile_dir = os.path.join(base_dir, "PromptoDYS", "ChromeProfile")
-    os.makedirs(profile_dir, exist_ok=True)
-    return profile_dir
+    return os.path.join(base_dir, "PromptoDYS", "ChromeProfile")
 
 CHROME_PROFILE_DIR = _get_chrome_profile_dir()
-print(f"🌐 Profil Chrome PromptoDYS: {CHROME_PROFILE_DIR}")
 
 # --- Fonctions de sauvegarde/ouverture de documents complets (texte + images) ---
 # Principe "Arduino" : le dossier porte le même nom que le fichier .md principal
@@ -1731,6 +1719,13 @@ def gui_control_panel():
 
 def main():
     """Lance l'application - GUI d'abord, éditeur via bouton"""
+    # Avant la création de la fenêtre Tk, sinon l'interface est floue sous Windows
+    try:
+        from ctypes import windll
+        windll.shcore.SetProcessDpiAwareness(1)  # DPI per monitor
+    except:
+        pass  # Ignorer si non Windows
+
     log_message('🚀 Lancement de PromptoDYS...')
     log_message('💾 Sauvegarde automatique : PDF uniquement avec CAPTURE COMPLÈTE des logs')
 
@@ -1743,6 +1738,12 @@ def main():
     # Créer le dossier reports
     os.makedirs(REPORTS_DIR, exist_ok=True)
     log_message(f'📁 Dossier des rapports PDF : {REPORTS_DIR}')
+
+    # Créer le dossier des documents et le profil Chrome de l'éditeur
+    os.makedirs(PROMPTO_DOCS_DIR, exist_ok=True)
+    log_message(f'📁 Dossier projets PromptoDYS : {PROMPTO_DOCS_DIR}')
+    os.makedirs(CHROME_PROFILE_DIR, exist_ok=True)
+    log_message(f'🌐 Profil Chrome PromptoDYS : {CHROME_PROFILE_DIR}')
 
     # Initialiser Eel (préparation, mais ne lance pas encore)
     eel.init(web_folder)
