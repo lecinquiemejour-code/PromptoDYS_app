@@ -14,6 +14,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pyinstaller>=6",
+    "pytest>=9.2.0",
     "ruff>=0.17.3",
 ]
 
@@ -29,3 +30,8 @@ line-length = 120
 # F : erreurs (noms non définis, imports inutilisés), E/W : pycodestyle,
 # B : bugs probables (flake8-bugbear), UP : syntaxe Python moderne, SIM : simplifications
 select = ["F", "E", "W", "B", "UP", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Rend askGeminiPrompto.py (à la racine) importable depuis tests/
+pythonpath = ["."]
