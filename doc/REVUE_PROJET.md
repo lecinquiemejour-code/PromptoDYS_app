@@ -276,6 +276,8 @@ C'est le mécanisme utilisé partout pour revenir sur le thread Tkinter. Il fonc
 
 **Mise à jour du 20/10/2026.** Le commit `b873d32` ajoute un second effet de bord du même type : `CHROME_PROFILE_DIR = _get_chrome_profile_dir()` crée le dossier du profil Chrome dédié à l'import. À déplacer dans `main()` avec le premier.
 
+**Statut : ✅ résolu.** Au niveau du module, `PROMPTO_DOCS_DIR` et `CHROME_PROFILE_DIR` ne font plus que calculer un chemin. `main()` crée les deux dossiers à côté de `reports/` et les annonce avec `log_message`. L'appel Windows `SetProcessDpiAwareness`, qui modifiait un réglage de tout le processus dès l'import, est lui aussi déplacé au début de `main()`, toujours avant la création de la fenêtre Tk. Le test `tests/test_import.py` vérifie que l'import ne crée aucun dossier PromptoDYS.
+
 ---
 
 ## 6. Dépôt, build et documentation
@@ -336,6 +338,8 @@ Déjà noté dans les docs. Ce qui rend la chose facile à démarrer : plusieurs
 - La logique anti-récursion de `btn_sauvegarder_document` (à extraire dans une fonction).
 
 Dix tests `pytest` suffiraient à protéger le cœur contre les régressions, notamment pendant le découpage M4.
+
+**Statut : 🟡 partiellement résolu.** pytest est installé (groupe `dev`, `uv run pytest`) avec un premier test, `tests/test_import.py`, qui protège la correction de M12. Les tests des fonctions pures restent à écrire (R3 de [RECOMMANDATIONS.md](RECOMMANDATIONS.md)).
 
 ---
 
@@ -467,10 +471,10 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | M9 | 🟡 Mineur | Console Tk sans purge | Trivial | 1 |
 | M10 | 🟡 Mineur | `root.after` depuis threads | Faible | si symptôme |
 | M11 | 🟡 Mineur | `os._exit`, Chrome reste ouvert | Faible | 1 |
-| M12 | 🟡 Mineur | Effets de bord à l'import (un second ajouté : dossier du profil Chrome) | Trivial | 2 |
+| M12 | ✅ Résolu | Effets de bord à l'import (un second ajouté : dossier du profil Chrome) (dossiers et réglage DPI déplacés dans `main()`) | Trivial | 2 |
 | D1 | 🟠 Important | Trois bundles React morts, `.map` dans l'exe | Trivial | 1 |
 | D2 | ✅ Résolu | `requirements.txt` en UTF-16 (remplacé par uv) | Trivial | 1 |
 | D3 | 🟡 Partiellement résolu | Docs obsolètes, `sv_ttk` absent de la commande d'installation, `version=` commenté (installation et README corrigés ; restent CONTRIBUTING, VirusTotal, `version=`) | Faible | 1 |
 | D4 | 🟡 Partiellement résolu | Version dupliquée quatre fois (modèle du pied PDF via `GEMINI_MODEL` ; version toujours dupliquée) | Faible | 3 |
 | D5 | 🟡 Partiellement résolu | Archives et PDF lourds dans le dépôt ou à la racine (archives retirées ; PDF toujours versionné) | Trivial | 1 |
-| D6 | 🟡 Mineur | Aucun test | Faible | 2 |
+| D6 | 🟡 Partiellement résolu | Aucun test (pytest installé, premier test sur l'import) | Faible | 2 |
