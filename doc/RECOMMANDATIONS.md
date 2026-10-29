@@ -107,6 +107,8 @@ Les numéros de ligne sont ceux de la rédaction et ont bougé depuis.
 
 Ces tests protègent le cœur du produit pendant tout le découpage.
 
+✅ Fait : 22 tests dans `tests/test_note.py`, `tests/test_rapport.py` et `tests/test_sauvegarde.py`. `nettoyer_html_tags` est passée au niveau du module ; l'assainissement du nom et l'anti-récursion sont extraits dans `preparer_chemin_sauvegarde()`. `tests/test_import.py` vide le registre d'Eel le temps de son réimport, sinon Eel refuse d'exposer deux fois les mêmes fonctions. Les tests ont fait apparaître le bug B8 (nom de document vide), à corriger dans une branche dédiée.
+
 **R4. `import-linter`.** Ajouter l'outil au groupe `dev` avec un contrat de dépendances : `presentation` n'importe pas `infrastructure`, `domain` n'importe aucune autre couche. À lancer en CI avec ruff, dès la création des couches. Sans outil, la règle de dépendance dérive en quelques mois.
 
 ---
