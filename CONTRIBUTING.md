@@ -189,6 +189,8 @@ uv add <paquet>
 
 `uv run` synchronise l'environnement automatiquement avant de lancer la commande : pas besoin d'activer le `.venv` (`source .venv/bin/activate`).
 
+À chaque push, sur n'importe quelle branche, le workflow [ci.yml](.github/workflows/ci.yml) relance ruff, pytest et le build de l'exécutable Windows. Le résultat s'affiche à côté du commit (✅ ou ❌) et dans l'onglet Actions, avec un résumé en haut de chaque exécution (signalements ruff par règle, tests en échec, résultat du build). Depuis le terminal : `gh run list --workflow ci.yml --branch <branche>`, et `gh run view --log-failed` pour les journaux des étapes en échec.
+
 ### 4. Commiter
 
 ```bash
@@ -212,6 +214,7 @@ Avant de soumettre votre PR, vérifiez :
 
 - [ ] Le code suit les [standards de code](#standards-de-code), et `uv run ruff check` ne signale rien de nouveau
 - [ ] `uv run pytest` passe, et une correction de bug testable est accompagnée d'un test
+- [ ] Le workflow CI est vert sur la branche (onglet Actions)
 - [ ] La documentation est mise à jour
 - [ ] Le changement est décrit dans la section `[Non publié]` de [CHANGELOG.md](CHANGELOG.md), s'il est notable pour l'utilisateur ou le contributeur
 - [ ] Les commits suivent la [structure des commits](#structure-des-commits)
