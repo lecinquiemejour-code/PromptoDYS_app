@@ -209,6 +209,8 @@ Le nom saisi dans le dialogue « Enregistrer sous » perd son extension, ses car
 
 **Effort.** Faible. À traiter dans une branche dédiée.
 
+**Statut : ✅ résolu.** `btn_sauvegarder_document` refuse un nom vide ou qui commence par un point : l'élève voit « Le nom du document est vide ou commence par un point », et le dialogue se rouvre dans le dossier choisi. La boucle anti-récursion de `preparer_chemin_sauvegarde()` s'arrête à la racine du disque, quand `dirname` ne change plus. Un nom qui commence par un point (fichier caché) est refusé : `os.path.splitext` garde `.md` comme nom, selon la convention des fichiers cachés, et sauvegardait dans un dossier `.md`. Ce refus couvre aussi `.` et `..`, qui désignaient le dossier courant ou le parent. L'assainissement retire en plus les points finaux, que Windows supprime des noms de dossier : `abc.` donnait un dossier `abc` et un fichier `abc..md`. Six tests ajoutés à `tests/test_sauvegarde.py`. pytest-timeout (délai de 10 s dans `pyproject.toml`) fait échouer un test qui boucle au lieu de figer pytest.
+
 ---
 
 ## 5. Constats mineurs : qualité du code
@@ -473,7 +475,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | B5 | 🟠 Important | Port 8080 fixe, relance fragile, `--app` dupliqué | Faible | 1 |
 | B6 | ✅ Résolu | Pas de timeout Gemini, abandon inopérant si flux figé (abandon immédiat, sans timeout) | Faible | 1 |
 | B7 | ✅ Résolu | `--disable-web-security` inutile (retiré) | Trivial | 1 |
-| B8 | 🟠 Important | Nom de document vide accepté, boucle infinie à la racine d'un disque | Faible | 1 |
+| B8 | ✅ Résolu | Nom de document vide accepté, boucle infinie à la racine d'un disque (nom vide refusé, boucle bornée) | Faible | 1 |
 | M1 | 🟡 Partiellement résolu | Imports et dépendances inutilisés (retirés ; docstring d'en-tête encore obsolète) | Trivial | 1 |
 | M2 | ✅ Résolu | Code mort (menu console, historique, `web_folder_global`) | Trivial | 1 |
 | M3 | 🟡 Mineur | `except:` nus, f-strings vides | Trivial | 1 |
