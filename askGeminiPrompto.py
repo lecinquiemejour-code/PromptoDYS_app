@@ -1465,15 +1465,14 @@ def gui_control_panel():
 
     # --- Création de la fenêtre principale ---
     root = tk.Tk()
+    root.withdraw()  # Cachée jusqu'au calcul de sa taille (fin de la construction)
     root_global = root  # Référence globale pour les callbacks Eel
     root.title("PromptoDYS - Panneau de Contrôle")
-    root.geometry("688x1100")  # Largeur 688px, hauteur 1100px
     root.configure(bg="#F3F3F3")  # Fond gris
     root.resizable(True, True)  # Fenêtre redimensionnable
 
     # Intercepter la fermeture de la fenêtre (X rouge)
     root.protocol("WM_DELETE_WINDOW", on_closing)
-    root.minsize(550, 1000)  # Taille minimale ajustée
 
     # --- Icône de la fenêtre ---
     try:
@@ -1491,9 +1490,45 @@ def gui_control_panel():
     style = ttk.Style()
     style.configure("Gray.TFrame", background="#F3F3F3")
 
-    # --- Frame principal avec padding ---
-    main_frame = ttk.Frame(root, padding=(20, 20, 20, 0), style="Gray.TFrame")  # Fond gris, pas de padding en bas
-    main_frame.pack(fill="both", expand=True)
+    # sv_ttk applique sa palette (tk_setPalette) au prochain tour de boucle, sur tous les widgets tk,
+    # après set_theme() et après chaque style.configure(). Sans cet update, les couleurs choisies
+    # plus bas (bordure sombre des boutons, fonds) seraient écrasées par le gris clair du thème.
+    # Aucun style ne doit être configuré après cette ligne. La fenêtre est encore cachée.
+    root.update()
+
+    # --- Zone défilante (si la fenêtre est plus petite que son contenu) ---
+    canvas = tk.Canvas(root, bg="#F3F3F3", highlightthickness=0, bd=0, yscrollincrement=20)  # Unité de défilement : 20px
+    canvas_scrollbar = ttk.Scrollbar(root, orient="vertical", command=canvas.yview)
+    canvas.configure(yscrollcommand=canvas_scrollbar.set)
+    canvas.pack(side="left", fill="both", expand=True)
+    # La barre n'est packée que si le contenu dépasse (voir maj_defilement)
+
+    # --- Frame principal avec padding (placé dans le canvas) ---
+    main_frame = ttk.Frame(canvas, padding=(20, 20, 20, 20), style="Gray.TFrame")  # Fond gris
+    main_frame_id = canvas.create_window((0, 0), window=main_frame, anchor="nw")
+
+    def contenu_depasse():
+        """Vrai si le contenu est plus haut que la zone visible"""
+        return main_frame.winfo_reqheight() > canvas.winfo_height()
+
+    def maj_defilement(event=None):
+        """Met à jour la zone défilable et affiche la barre seulement si nécessaire"""
+        canvas.configure(scrollregion=canvas.bbox("all"))
+        # La barre ne change que la largeur du canvas, pas sa hauteur : pas d'oscillation
+        if contenu_depasse():
+            if not canvas_scrollbar.winfo_manager():  # Pas encore packée
+                canvas_scrollbar.pack(side="right", fill="y", before=canvas)
+        elif canvas_scrollbar.winfo_manager():
+            canvas_scrollbar.pack_forget()
+            canvas.yview_moveto(0)  # Revenir en haut quand tout tient
+
+    def on_canvas_configure(event):
+        """Cale la largeur du contenu sur celle du canvas"""
+        canvas.itemconfigure(main_frame_id, width=event.width)
+        maj_defilement()
+
+    main_frame.bind("<Configure>", maj_defilement)
+    canvas.bind("<Configure>", on_canvas_configure)
 
     # --- Titre avec logo ---
     title_frame = ttk.Frame(main_frame)
@@ -1527,8 +1562,7 @@ def gui_control_panel():
         btn.config(
             bg="#E3F2FD",  # Fond bleu clair
             fg="#0078D4",  # Texte bleu
-            highlightbackground="#0078D4",  # Bordure bleue
-            highlightthickness=12  # Bordure épaisse au survol
+            highlightbackground="#0078D4"  # Bordure bleue (épaisseur inchangée : la mise en page ne bouge pas)
         )
 
     def on_button_leave(event, btn):
@@ -1536,8 +1570,7 @@ def gui_control_panel():
         btn.config(
             bg="#FFFFFF",  # Fond blanc
             fg="#1F1F1F",  # Texte noir
-            highlightbackground="#333333",  # Bordure sombre
-            highlightthickness=12  # Bordure épaisse maintenue
+            highlightbackground="#333333"  # Bordure sombre
         )
 
     def on_button_press(event, btn):
@@ -1743,6 +1776,39 @@ def gui_control_panel():
     # Effets de survol spécifiques pour le bouton Quitter
     btn_quit.bind("<Enter>", lambda e: btn_quit.config(bg="#FFE6E6", fg="#CC0000", highlightbackground="#CC0000"))
     btn_quit.bind("<Leave>", lambda e: btn_quit.config(bg="#F5F5F5", fg="#666666", highlightbackground="#999999"))
+
+    # --- Molette : défilement de la fenêtre ---
+    def on_molette(event):
+        """Fait défiler la fenêtre, sauf au-dessus de la console (qui a son propre défilement)"""
+        try:
+            widget = root.winfo_containing(event.x_root, event.y_root)
+        except KeyError:
+            return  # Widget interne à Tk, inconnu de tkinter (ex. : dialogue)
+        if widget is None or widget is streaming_text or widget.winfo_toplevel() is not root:
+            return
+        if not contenu_depasse():
+            return  # Tout tient : rien à faire défiler
+        if sys.platform == "darwin":
+            unites = -event.delta  # macOS : delta petit (±1, ±2...)
+        else:
+            unites = -3 * int(event.delta / 120)  # Windows : ±120 par cran, 3 unités par cran
+            if unites == 0:
+                unites = -1 if event.delta > 0 else 1  # Pavé tactile : delta inférieur à 120
+        canvas.yview_scroll(unites, "units")
+
+    root.bind_all("<MouseWheel>", on_molette)
+
+    # --- Taille de la fenêtre calculée depuis le contenu ---
+    root.update_idletasks()  # Calculer la taille demandée par chaque widget
+    hauteur_ideale = main_frame.winfo_reqheight()  # Tout le contenu, padding et bouton Quitter compris
+    hauteur_disponible = int(root.winfo_screenheight() * 0.9)  # 90 % de l'écran
+    hauteur = min(hauteur_ideale, hauteur_disponible)
+    largeur_ideale = main_frame.winfo_reqwidth()  # Largeur sous laquelle le contenu serait écrasé
+    if hauteur_ideale > hauteur_disponible:
+        largeur_ideale += canvas_scrollbar.winfo_reqwidth()  # La barre de défilement prend sa place à droite
+    root.geometry(f"{largeur_ideale}x{hauteur}")
+    root.minsize(largeur_ideale, hauteur)  # Taille minimale : rien de caché ni d'écrasé
+    root.deiconify()  # Afficher la fenêtre à sa taille définitive
 
     # --- Lancer la boucle principale ---
     print("✅ Panneau de contrôle GUI prêt !")

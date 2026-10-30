@@ -34,7 +34,7 @@ Les cinq priorités, dans l'ordre :
 
 1. **La clé API Gemini a été distribuée en clair** dans les deux archives de distribution (`PromptoDYS_v1.1.zip` et `promptoDYS_v1.2.zip`) et elle est en plus embarquée dans l'exécutable par le fichier spec. Elle doit être révoquée et régénérée. ✅ Fait le 20/10/2026.
 2. **Le bouton "Traiter la prise de note" se bloque définitivement** quand le fichier de clé est absent : enchaînement de deux bugs (retour anticipé sans remise à zéro, puis plantage du failsafe sur une option Tkinter invalide). C'est exactement le scénario d'un nouvel utilisateur.
-3. **La fenêtre de contrôle fait 1100 px de haut** avec un minimum à 1000 px : sur un portable d'élève en 1366×768, le bas de la fenêtre (console, bouton Quitter) est hors écran.
+3. **La fenêtre de contrôle fait 1100 px de haut** avec un minimum à 1000 px : sur un portable d'élève en 1366×768, le bas de la fenêtre (console, bouton Quitter) est hors écran. ✅ Fait le 30/10/2026.
 4. **Le code lit `GeminiKey.txt`, `promptodys.prompt` et écrit `reports/` dans le dossier courant**, pas dans le dossier de l'exécutable. Lancé depuis un raccourci, l'application ne trouve plus son prompt.
 5. **Le dépôt transporte des fichiers morts** : trois anciens bundles React (environ 3,5 Mo) qui gonflent l'exécutable, un `requirements.txt` en UTF-16 illisible sur GitHub, et une documentation en partie obsolète (commande d'installation incomplète, menu console disparu).
 
@@ -160,6 +160,8 @@ Le public cible (collégiens) utilise majoritairement des portables. Les boutons
 **Piste.** Lire `root.winfo_screenheight()` au démarrage, plafonner la hauteur à 90 % de l'écran, baisser `minsize` à ~650 px, et laisser la console de logs absorber l'espace restant (`expand=True`). Réduire légèrement bordures et paddings sur petit écran.
 
 **Effort.** Faible.
+
+**Statut : ✅ résolu.** La hauteur n'est plus écrite en dur. La fenêtre est cachée pendant sa construction, puis sa hauteur est calculée depuis le contenu (`main_frame.winfo_reqheight()`, bouton Quitter compris), plafonnée à 90 % de la hauteur de l'écran. `minsize` reprend cette hauteur. La largeur minimale est aussi celle du contenu (`main_frame.winfo_reqwidth()`, plus la barre de défilement si elle est nécessaire), au lieu de 550 px : en dessous, le contenu était écrasé, faute de défilement horizontal. La fenêtre s'ouvre à cette largeur : plus aucune dimension n'est écrite en dur. Si l'écran est trop petit, toute la fenêtre défile : `main_frame` est placé dans un `Canvas`, avec une barre verticale qui n'apparaît que si le contenu dépasse. La molette fait défiler la fenêtre, sauf au-dessus de la console, qui garde son propre défilement. La console garde `expand=False`, bordures et polices sont inchangées. Le survol des boutons ne change plus l'épaisseur de leur bordure : `on_button_enter` et `on_button_leave` imposaient 12 px à tous les boutons, y compris « Sauvegarder » et « Ouvrir », créés avec 8 px. Ces deux boutons grandissaient au premier survol, sans jamais revenir à leur taille, et faisaient apparaître la barre de défilement dans une fenêtre ajustée à son contenu. La bordure sombre des boutons n'apparaissait qu'après un survol : `sv_ttk.set_theme()` applique sa palette (`tk_setPalette`) au premier tour de boucle, sur tous les widgets tk, et remplaçait la couleur de bordure et les fonds choisis par le gris clair du thème. Un `root.update()` juste après `set_theme()`, fenêtre encore cachée, applique la palette avant la création des widgets, qui gardent leurs couleurs.
 
 ### B5. Port 8080 fixe et relance de l'éditeur fragile
 
@@ -437,7 +439,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | 3 | `askGeminiPrompto.py` | Supprimer `style="Big.TButton"` ligne 1403 | B1 |
 | 4 | `askGeminiPrompto.py` | Englober `traitement_gemini()` dans un `try/finally` unique, retourner un booléen, corriger le statut ligne 1437 | B2 |
 | 5 | `askGeminiPrompto.py` | ✅ Fait : plus de référence à `e` dans les lambdas (message fixe renvoyant aux logs) | B3 |
-| 6 | `askGeminiPrompto.py` | Hauteur de fenêtre calculée depuis l'écran, `minsize` à 650 | B4 |
+| 6 | `askGeminiPrompto.py` | ✅ Fait : taille calculée depuis le contenu (hauteur plafonnée à 90 % de l'écran), défilement vertical | B4 |
 | 7 | `askGeminiPrompto.py` | 🟡 En partie fait : `--disable-web-security` retiré. Restent : `port=0`, retirer le `--app=` manuel, ajouter `close_callback` | B5, B7 |
 | 8 | `askGeminiPrompto.py` | `http_options` avec timeout, fermeture du stream à l'abandon | B6 |
 | 9 | `askGeminiPrompto.py` | 🟡 En partie fait : imports morts, `menu_console` et compagnie, `historique_llm` retirés. Restent : `ruff --fix` ; `basename` sur le nom d'image ; log de clé sans extrait | M1, M2, M3, M5, M6, M7 |
@@ -471,7 +473,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | B1 | ✅ Résolu | Failsafe du bouton plante (`style=` sur `tk.Button`) (failsafe supprimé) | Trivial | 1 |
 | B2 | ✅ Résolu | Retour anticipé sans reset : bouton bloqué, faux statut « terminé » (état rendu à l'appelant) | Faible | 1 |
 | B3 | ✅ Résolu | `NameError` dans deux messages d'erreur différés (messages fixes renvoyant aux logs) | Trivial | 1 |
-| B4 | 🟠 Important | Fenêtre de 1100 px hors écran sur portable | Faible | 1 |
+| B4 | ✅ Résolu | Fenêtre de 1100 px hors écran sur portable (taille calculée depuis le contenu, défilement si l'écran est trop petit) | Faible | 1 |
 | B5 | 🟠 Important | Port 8080 fixe, relance fragile, `--app` dupliqué | Faible | 1 |
 | B6 | ✅ Résolu | Pas de timeout Gemini, abandon inopérant si flux figé (abandon immédiat, sans timeout) | Faible | 1 |
 | B7 | ✅ Résolu | `--disable-web-security` inutile (retiré) | Trivial | 1 |
