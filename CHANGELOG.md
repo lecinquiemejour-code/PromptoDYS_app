@@ -10,8 +10,27 @@ et la numérotation suit le sens du [Semantic Versioning](https://semver.org/lan
 
 ## [Non publié]
 
+### Ajouté
+- Tests automatisés avec pytest (`uv run pytest`) : import du module sans effet de bord, extraction de la note et du débrief, ajout de la note d'origine, nettoyage HTML pour le rapport PDF, chemins de sauvegarde. pytest-timeout fait échouer au bout de 10 s un test qui boucle
+- Lint avec ruff (`uv run ruff check`), installé dans le groupe `dev` et configuré dans `pyproject.toml` : règles `F`, `E`, `W`, `B`, `UP` et `SIM`, lignes de 120 caractères au plus. Le code a été mis en conformité (corrections automatiques sûres, ordre des imports, lignes trop longues) ; quelques signalements restent à traiter, dont les `except:` nus
+
+### Modifié
+- L'abandon du traitement IA est immédiat, même si Gemini ne répond plus : l'interface est libérée sans attendre la fin de l'appel, et un traitement abandonné s'arrête avant l'injection dans l'éditeur et le rapport PDF
+- Le statut affiché en fin de traitement IA indique « terminé », « annulé » ou « échec » selon le résultat
+- La fenêtre de contrôle prend la taille de son contenu au lieu de 688 × 1100 px en dur. Sa hauteur est plafonnée à 90 % de l'écran ; si l'écran est trop petit, la fenêtre défile
+- Les dossiers de l'application (documents, profil Chrome) sont créés au démarrage et non plus à l'import du module
+
+### Corrigé
+- Le bouton « Traiter la prise de note » restait bloqué sur « Abandonner » après un échec avant le streaming (clé API absente par exemple), avec un faux statut « terminé ». Le failsafe censé le débloquer plantait lui-même sur une option Tkinter invalide
+- Un échec de l'ouverture de l'éditeur provoquait un `NameError` au lieu d'afficher le message d'erreur
+- `GeminiKey.txt`, `reports/` et `build_web/` étaient cherchés dans le dossier courant : lancée depuis un raccourci ou un autre dossier, l'application ne les trouvait plus. Ils sont désormais cherchés dans le dossier de l'application
+- Un nom de document vide ou commençant par un point était accepté à la sauvegarde, et figeait l'application à la racine d'un disque Windows. Il est refusé avec un message, et le dialogue se rouvre
+- La fenêtre de contrôle dépassait de l'écran sur un portable 1366 × 768 : la console et le bouton Quitter étaient inaccessibles
+- Les boutons « Sauvegarder » et « Ouvrir » grandissaient au premier survol
+- La bordure sombre des boutons n'apparaissait qu'après un survol : le thème Sun Valley la repeignait en gris clair au lancement
+
 ### Prévu
-- Tests unitaires et d'intégration
+- Tests d'intégration
 - Support export DOCX
 - Mode offline avec cache local
 - Tableau de bord statistiques élèves
