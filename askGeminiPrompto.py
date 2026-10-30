@@ -220,17 +220,26 @@ CHROME_PROFILE_DIR = _get_chrome_profile_dir()
 
 def preparer_chemin_sauvegarde(chemin_choisi):
     """Renvoie (dossier, nom du document) à partir du chemin choisi dans le dialogue.
-    Nom assaini ; si l'utilisateur est entré dans le dossier du document, on remonte."""
+    Nom assaini, vide si rien n'en reste ou s'il commence par un point (à refuser par l'appelant) ;
+    si l'utilisateur est entré dans le dossier du document, on remonte."""
     save_dir = os.path.dirname(chemin_choisi)
     doc_name = os.path.splitext(os.path.basename(chemin_choisi))[0]
     doc_name = re.sub(r'[<>:"/\\|?*]', '_', doc_name).strip()
+    # Nom de fichier caché ('.md', '.foo', '..') : refusé comme un nom vide
+    if doc_name.startswith("."):
+        doc_name = ""
+    # Points et espaces finaux retirés : Windows les supprime des noms de dossier
+    doc_name = doc_name.rstrip(" .")
 
     # Anti-récursion : si l'utilisateur a navigué à l'intérieur du dossier projet
     # (ex: PromptoDYS/equations/equations au lieu de PromptoDYS/equations)
     # on remonte au bon niveau pour éviter equations/equations/equations.md
     while os.path.basename(save_dir) == doc_name:
+        parent = os.path.dirname(save_dir)
+        if parent == save_dir:  # racine du disque : on ne peut plus remonter
+            break
         log_message(f"⚠️ Anti-récursion: save_dir '{save_dir}' se termine par '{doc_name}' → on remonte")
-        save_dir = os.path.dirname(save_dir)
+        save_dir = parent
     return save_dir, doc_name
 
 
@@ -1246,18 +1255,34 @@ def gui_control_panel():
         initial_dir = os.path.dirname(current_document_path) if current_document_path else PROMPTO_DOCS_DIR
         initial_name = os.path.basename(current_document_path) if current_document_path else "nouveau_document"
 
-        selected = filedialog.asksaveasfilename(
-            title="Enregistrer le document PromptoDYS...",
-            initialdir=initial_dir,
-            initialfile=initial_name,
-            defaultextension="",
-            filetypes=[("Tous les fichiers", "*.*")]
-        )
-        if not selected:
-            log_message("💾 Sauvegarde annulée par l'utilisateur")
-            return
+        # Le dialogue se rouvre tant que le nom saisi est vide après assainissement
+        while True:
+            selected = filedialog.asksaveasfilename(
+                title="Enregistrer le document PromptoDYS...",
+                initialdir=initial_dir,
+                initialfile=initial_name,
+                defaultextension="",
+                filetypes=[("Tous les fichiers", "*.*")]
+            )
+            if not selected:
+                log_message("💾 Sauvegarde annulée par l'utilisateur")
+                return
 
-        save_dir, doc_name = preparer_chemin_sauvegarde(selected)
+            save_dir, doc_name = preparer_chemin_sauvegarde(selected)
+            if doc_name:
+                break
+
+            log_message(f"⚠️ Nom de document invalide: '{os.path.basename(selected)}'")
+            messagebox.showwarning(
+                "PromptoDYS - Nom invalide",
+                "Le nom du document est vide\n"
+                "ou commence par un point.\n\n"
+                "Veuillez saisir un nom\n"
+                "(lettres ou chiffres).",
+                icon='warning'
+            )
+            initial_dir = os.path.dirname(selected)
+            initial_name = "nouveau_document"
 
         status_label.config(text="⏳ Sauvegarde en cours...")
         root.update()
