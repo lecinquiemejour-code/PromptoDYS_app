@@ -213,6 +213,17 @@ Le nom saisi dans le dialogue « Enregistrer sous » perd son extension, ses car
 
 **Statut : ✅ résolu.** `btn_sauvegarder_document` refuse un nom vide ou qui commence par un point : l'élève voit « Le nom du document est vide ou commence par un point », et le dialogue se rouvre dans le dossier choisi. La boucle anti-récursion de `preparer_chemin_sauvegarde()` s'arrête à la racine du disque, quand `dirname` ne change plus. Un nom qui commence par un point (fichier caché) est refusé : `os.path.splitext` garde `.md` comme nom, selon la convention des fichiers cachés, et sauvegardait dans un dossier `.md`. Ce refus couvre aussi `.` et `..`, qui désignaient le dossier courant ou le parent. L'assainissement retire en plus les points finaux, que Windows supprime des noms de dossier : `abc.` donnait un dossier `abc` et un fichier `abc..md`. Six tests ajoutés à `tests/test_sauvegarde.py`. pytest-timeout (délai de 10 s dans `pyproject.toml`) fait échouer un test qui boucle au lieu de figer pytest.
 
+### B9. L'éditeur ne signale jamais son ouverture à Python
+
+**Où.** [askGeminiPrompto.py:510](../askGeminiPrompto.py#L510), `on_editor_open()` et `on_editor_close()`. Trouvé en corrigeant B5, le 30/10/2026.
+
+Python expose `on_editor_open()` et `on_editor_close()` pour que l'éditeur React signale son ouverture et sa fermeture, et ARCHITECTURE.md décrit ce signal. Mais ni le bundle de `build_web/`, ni les sources de `promptoDYS_editor`, ni son historique git ne les appellent : React expose quatre fonctions à Python et ne l'appelle jamais.
+
+- Ouvrir un document avec le bouton « Ouvrir » quand l'éditeur est fermé lance l'éditeur, puis attend ce signal ([l. 1386](../askGeminiPrompto.py#L1386)) : l'attente dure toujours 30 s et se termine par « ❌ Éditeur non prêt (timeout) », sans charger le document.
+- `editeur_lance` n'était levé que par `lancer_eel()`, juste avant d'ouvrir Chrome, et « ✅ Éditeur ouvert » s'affichait au bout de 2 s quoi qu'il arrive.
+
+**Statut : ✅ résolu.** Dans `promptoDYS_editor` (`src/hooks/useEelBridge.js`), un effet appelle `eel.on_editor_open()` au montage de l'éditeur, après l'exposition des fonctions à Python, et `eel.on_editor_close()` à la fermeture de la page (`beforeunload`, au mieux : la connexion peut se fermer avant l'envoi). Le bundle de `build_web/` a été recompilé avec cette modification. Côté Python, « ✅ Éditeur ouvert » et `editeur_lance` ne dépendent plus que de ce signal (voir B5).
+
 ---
 
 ## 5. Constats mineurs : qualité du code
@@ -310,6 +321,8 @@ C'est le mécanisme utilisé partout pour revenir sur le thread Tkinter. Il fonc
 | Confusion | Deux des vieux bundles n'exposent pas `readDocumentData`. En cas de régression d'`index.html`, le diagnostic serait pénible. |
 
 **Piste.** Dans la procédure de copie (section 6 d'ARCHITECTURE.md), vider `build_web/static/` avant de copier. Exclure les `.map` du spec, ils ne servent qu'au débogage dans le navigateur.
+
+**Statut : 🟡 partiellement résolu.** Les trois vieux bundles et leurs fichiers associés ont été supprimés lors de la recompilation de l'éditeur pour B9 : `build_web/static/` a été vidé avant la copie du nouveau build, et la procédure d'ARCHITECTURE.md le demande désormais. Reste à exclure les `.map` du spec.
 
 ### D2. `requirements.txt` est en UTF-16
 
