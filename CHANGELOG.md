@@ -13,6 +13,7 @@ et la numérotation suit le sens du [Semantic Versioning](https://semver.org/lan
 ### Ajouté
 - Tests automatisés avec pytest (`uv run pytest`) : import du module sans effet de bord, extraction de la note et du débrief, ajout de la note d'origine, nettoyage HTML pour le rapport PDF, chemins de sauvegarde. pytest-timeout fait échouer au bout de 10 s un test qui boucle
 - Lint avec ruff (`uv run ruff check`), installé dans le groupe `dev` et configuré dans `pyproject.toml` : règles `F`, `E`, `W`, `B`, `UP` et `SIM`, lignes de 120 caractères au plus. Le code a été mis en conformité (corrections automatiques sûres, ordre des imports, lignes trop longues) ; quelques signalements restent à traiter, dont les `except:` nus
+- Workflow GitHub Actions d'intégration continue (`.github/workflows/ci.yml`) : à chaque push, sur toutes les branches, lint ruff, tests pytest et build de l'exécutable Windows, avec un résumé en haut de chaque exécution (signalements ruff par règle, tests en échec, résultat du build). Badge d'état de `master` dans le README
 
 ### Modifié
 - L'abandon du traitement IA est immédiat, même si Gemini ne répond plus : l'interface est libérée sans attendre la fin de l'appel, et un traitement abandonné s'arrête avant l'injection dans l'éditeur et le rapport PDF

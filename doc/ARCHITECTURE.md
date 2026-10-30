@@ -290,7 +290,7 @@ flowchart LR
 
 ### Procédure pour produire l'exécutable
 
-**Voie recommandée : l'intégration continue.** Le workflow [release-windows.yml](../.github/workflows/release-windows.yml) builde l'exe sur un runner Windows GitHub, quel que soit le système du développeur. Un tag `v*` publie la Release (voir [CONTRIBUTING.md](../CONTRIBUTING.md#publier-une-version)), un lancement manuel produit un artefact de test.
+**Voie recommandée : l'intégration continue.** Le workflow [release-windows.yml](../.github/workflows/release-windows.yml) builde l'exe sur un runner Windows GitHub, quel que soit le système du développeur. Un tag `v*` publie la Release (voir [CONTRIBUTING.md](../CONTRIBUTING.md#publier-une-version)), un lancement manuel produit un artefact de test. Le workflow [ci.yml](../.github/workflows/ci.yml) relance ruff, pytest et le build à chaque push, sur toutes les branches, sans rien publier.
 
 **Build en local**, qui ne donne un `.exe` que sur Windows (PyInstaller produit un exécutable pour le système qui le lance) :
 

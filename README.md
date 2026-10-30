@@ -6,6 +6,7 @@
 ![Python](https://img.shields.io/badge/python-3.14-green)
 ![License](https://img.shields.io/badge/license-GPL--3.0-orange)
 ![Status](https://img.shields.io/badge/status-stable-brightgreen)
+[![CI](https://github.com/lecinquiemejour-code/PromptoDYS_app/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/lecinquiemejour-code/PromptoDYS_app/actions/workflows/ci.yml)
 
 PromptoDYS est une application desktop qui combine un éditeur Markdown avec l'intelligence artificielle Google Gemini pour corriger et améliorer automatiquement les prises de notes d'élèves souffrant de troubles DYS (Dyslexie, Dysorthographie, Dysgraphie, Dyspraxie).
 
@@ -152,6 +153,8 @@ Quel que soit votre système (Windows, macOS ou Linux), utilisez de préférence
 Le workflow GitHub Actions [release-windows.yml](.github/workflows/release-windows.yml) construit l'exécutable sur un runner Windows :
 - **Release** : pousser un tag de version (`git tag v1.3.0b1` puis `git push origin v1.3.0b1`). Le zip `PromptoDYS-v1.3.0b1.zip` (exe, `GeminiKey.txt.template` et `LISEZMOI.txt`) est publié dans les Releases GitHub, marqué « Pre-release » pour une beta ou une rc. Voir [CONTRIBUTING.md](CONTRIBUTING.md#publier-une-version).
 - **Build de test** : onglet Actions › Release Windows › Run workflow, puis télécharger l'artefact en bas de la page du run. Le zip contient directement `PromptoDYS.exe`, `GeminiKey.txt.template` et `LISEZMOI.txt`, et aucune Release n'est publiée.
+
+Un second workflow, [ci.yml](.github/workflows/ci.yml), vérifie chaque push sur toutes les branches : lint ruff (runner Linux), tests pytest puis build de l'exécutable (runner Windows), sans rien publier. Le résultat s'affiche à côté de chaque commit, et le badge « CI » en haut de ce fichier donne l'état de `master`.
 
 ### 🛠️ Build en local
 

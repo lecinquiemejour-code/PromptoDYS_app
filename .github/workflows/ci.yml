@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']      # toutes les branches ; les tags sont couverts par release-windows.yml
+  pull_request:
+  workflow_dispatch:
+
+# Lecture seule : ce workflow ne publie rien
+permissions:
+  contents: read
+
+# Un nouveau push sur la même branche annule la vérification en cours du précédent
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Lint : job séparé, pour qu'un échec n'empêche pas de voir les tests et le build
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false   # ne pas laisser le jeton dans .git/config
+      - uses: astral-sh/setup-uv@v6
+
+      # --locked : exactement les versions de uv.lock
+      - run: uv sync --locked
+
+      # Format github : chaque signalement devient une annotation sur la ligne concernée
+      - name: Ruff
+        run: uv run ruff check --output-format=github
+
+      # Résumé en haut de la page de l'exécution, même si ruff a échoué
+      - name: Résumé
+        if: always()
+        run: |
+          {
+            echo "## Lint (ruff)"
+            if stats=$(uv run ruff check --statistics 2>&1); then
+              echo "✅ Aucun signalement"
+            else
+              echo "❌ Signalements par règle :"
+              echo '```'
+              echo "$stats"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Tests et build sur la plateforme cible, dans le même job : un seul uv sync sous Windows
+  tests-build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash       # bash -eo pipefail : une commande en échec dans un pipe fait échouer l'étape
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+
+      - run: uv sync --locked
+
+      # -rfE : liste les tests en échec ou en erreur à la fin de la sortie, repris dans le résumé.
+      # COLUMNS : sans terminal, pytest coupe ces lignes à 80 caractères, message d'erreur compris
+      - name: Tests
+        id: tests
+        env:
+          COLUMNS: 200
+        run: uv run pytest -rfE 2>&1 | tee pytest.log
+
+      # Lancé seulement si les tests passent
+      - name: Build
+        id: build
+        run: uv run pyinstaller --clean PromptoDYS.spec
+
+      - name: Résumé
+        if: always()
+        env:
+          TESTS: ${{ steps.tests.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+        run: |
+          {
+            echo "## Tests (pytest)"
+            if [ -f pytest.log ]; then
+              [ "$TESTS" = success ] && echo -n "✅ " || echo -n "❌ "
+              tail -n 1 pytest.log | sed 's/=//g; s/^ *//; s/ *$//'
+              echo
+              if grep -qE '^(FAILED|ERROR) ' pytest.log; then
+                echo "Tests en échec :"
+                echo '```'
+                grep -E '^(FAILED|ERROR) ' pytest.log
+                echo '```'
+              fi
+            else
+              echo "❌ Tests non lancés"
+            fi
+
+            echo "## Build (PyInstaller)"
+            case "$BUILD" in
+              success) echo "✅ \`PromptoDYS.exe\` construit, $(du -m dist/PromptoDYS.exe | cut -f1) Mo" ;;
+              skipped) echo "⏭️ Build non lancé (étape précédente en échec)" ;;
+              *)       echo "❌ Échec du build (voir le journal de l'étape Build)" ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"
