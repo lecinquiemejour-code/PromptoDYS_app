@@ -284,7 +284,7 @@ flowchart LR
 ### Procédure quand l'éditeur change
 
 1. Dans `CascadeProjects/editor` : modifier les sources, puis `npm run build`.
-2. Copier le contenu de `build/` dans `PythonProjects/PromptoDYS/build_web/`.
+2. Vider `build_web/static/`, puis copier le contenu de `build/` dans `PythonProjects/PromptoDYS/build_web/`. Sans ce nettoyage, les anciens bundles s'accumulent : ils partent dans l'exécutable et Eel les parcourt au démarrage.
 3. Vérifier que `build_web/index.html` référence bien le nouveau bundle `main.<hash>.js`.
 4. Commiter dans **les deux** dépôts.
 

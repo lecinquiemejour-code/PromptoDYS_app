@@ -28,6 +28,7 @@ import os
 import sys
 import threading
 import time
+import socket
 from datetime import datetime
 import re
 import base64
@@ -62,6 +63,10 @@ GEMINI_THINKING_LEVEL = types.ThinkingLevel.LOW
 # GeminiKey.txt et reports/ y sont lus et écrits, quel que soit le dossier courant.
 APP_DIR = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__))
 REPORTS_DIR = os.path.join(APP_DIR, "reports")
+
+# Port du serveur Eel. Il reste fixe : le localStorage et l'IndexedDB de Chrome
+# (thème, brouillon, images) sont rattachés à l'origine http://localhost:<port>
+EEL_PORT = 8080
 
 # --- NOUVELLE VARIABLE POUR CAPTURER TOUS LES LOGS ---
 logs_complets = []
@@ -214,6 +219,38 @@ def _get_chrome_profile_dir():
     return os.path.join(base_dir, "PromptoDYS", "ChromeProfile")
 
 CHROME_PROFILE_DIR = _get_chrome_profile_dir()
+
+
+# --- Disponibilité du port de l'éditeur ---
+def port_libre(port):
+    """Vrai si aucun programme n'écoute sur le port et qu'on peut s'y attacher"""
+    # Un programme qui répond déjà sur le port : Chrome afficherait sa page à lui
+    try:
+        with socket.create_connection(("localhost", port), timeout=0.5):
+            return False
+    except OSError:
+        pass
+    # Le serveur Eel doit pouvoir s'attacher au port
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        if sys.platform != "win32":
+            # Comme le serveur gevent : ignorer les connexions en TIME_WAIT
+            # (sous Windows, SO_REUSEADDR permettrait de voler un port occupé)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("localhost", port))
+        except OSError:
+            return False
+    return True
+
+
+def attendre_port_libre(port, delai=5.0):
+    """Attend que le port se libère, au plus delai secondes (serveur Eel précédent pas encore arrêté)"""
+    fin = time.monotonic() + delai
+    while not port_libre(port):
+        if time.monotonic() >= fin:
+            return False
+        time.sleep(0.5)
+    return True
 
 # --- Fonctions de sauvegarde/ouverture de documents complets (texte + images) ---
 # Principe "Arduino" : le dossier porte le même nom que le fichier .md principal
@@ -472,8 +509,9 @@ def update_streaming_text(text, clear=False):
 @eel.expose
 def on_editor_open():
     """Appelé par React quand l'éditeur est monté"""
-    global editeur_lance, root_global, status_label_global, last_editor_activity
+    global editeur_lance, lancement_editeur_en_cours, root_global, status_label_global, last_editor_activity
     editeur_lance = True
+    lancement_editeur_en_cours = False  # Le lancement est terminé : l'éditeur est prêt
     last_editor_activity = time.time()  # Marquer l'activité
     print(f"✅ Éditeur ouvert (notifié par React) - Timestamp: {last_editor_activity}")
     # Mettre à jour la GUI si disponible
@@ -1115,6 +1153,8 @@ def traitement_gemini(annulation):
 # --- GUI Tkinter avec thème Sun Valley ---
 # --- Variable globale pour tracker si l'éditeur est lancé ---
 editeur_lance = False
+# Lancement demandé, en attente du signal de React (on_editor_open) : évite un second lancement
+lancement_editeur_en_cours = False
 
 
 def on_closing():
@@ -1153,9 +1193,10 @@ def on_closing():
 
 
 # --- État de l'éditeur géré exclusivement par les callbacks React ---
-# on_editor_open()  → editeur_lance = True  (React notifie l'ouverture)
+# on_editor_open()  → editeur_lance = True  (React notifie l'ouverture), fin du lancement
 # on_editor_close() → editeur_lance = False (React notifie la fermeture)
 # lancer_eel()      → editeur_lance = False (eel.start() retourne/lève si crash)
+# lancement_editeur_en_cours : du clic sur « Ouvrir l'éditeur » au signal de React (ou à l'échec)
 
 
 
@@ -1170,27 +1211,53 @@ def gui_control_panel():
     # --- Fonctions des boutons ---
     def btn_ouvrir_editeur():
         """Lance l'éditeur Eel dans un thread séparé"""
-        global editeur_lance
+        global editeur_lance, lancement_editeur_en_cours
 
         if editeur_lance:
             log_message("📝 L'éditeur est déjà ouvert")
             status_label.config(text="✅ L'éditeur est déjà ouvert")
             return
 
+        if lancement_editeur_en_cours:
+            log_message("📝 L'éditeur est déjà en cours d'ouverture")
+            status_label.config(text="⏳ Ouverture de l'éditeur en cours, veuillez patienter")
+            return
+
+        # Levé dès le clic : un second clic pendant l'attente du port ou de Chrome ne relance rien
+        lancement_editeur_en_cours = True
         log_message("📝 Action: Lancement de l'éditeur...")
-        status_label.config(text="⏳ Ouverture de l'éditeur...")
+        status_label.config(text="⏳ Ouverture de l'éditeur en cours, veuillez patienter")
         root.update()
 
+        def echec_ouverture(statut, message):
+            """Échec du lancement : statut et popup, affichés par le thread de l'interface"""
+            def _afficher():
+                status_label.config(text=statut)
+                messagebox.showerror("PromptoDYS - Éditeur non ouvert", message)
+            root.after(0, _afficher)
+
         def lancer_eel():
-            global editeur_lance
+            global editeur_lance, lancement_editeur_en_cours
+            # Vérifier le port avant d'ouvrir Chrome : s'il est pris, Chrome afficherait
+            # la page de l'autre programme. On n'ouvre alors aucune fenêtre.
+            if not attendre_port_libre(EEL_PORT):
+                log_message(f"❌ Le port {EEL_PORT} est utilisé par un autre programme : éditeur non ouvert")
+                lancement_editeur_en_cours = False
+                echec_ouverture(
+                    f"❌ Port {EEL_PORT} déjà utilisé par un autre programme",
+                    f"Un autre programme utilise le port {EEL_PORT},\n"
+                    "nécessaire à l'éditeur.\n\n"
+                    "Fermez les autres programmes ouverts,\n"
+                    "ou redémarrez l'ordinateur, puis réessayez."
+                )
+                return
             try:
-                editeur_lance = True
                 eel.start('index.html',
                           mode='chrome',
                           size=(1200, 800),
-                          port=8080,
+                          port=EEL_PORT,
                           cmdline_args=[
-                              '--app=http://localhost:8080/index.html',
+                              f'--app=http://localhost:{EEL_PORT}/index.html',
                               f'--user-data-dir={CHROME_PROFILE_DIR}',
                               '--disable-features=VizDisplayCompositor',
                               '--no-first-run',
@@ -1206,7 +1273,7 @@ def gui_control_panel():
                 log_message(f"❌ Erreur lancement éditeur: {e}")
                 # Fallback
                 try:
-                    eel.start('index.html', mode='chrome-app', size=(1200, 800), port=8080,
+                    eel.start('index.html', mode='chrome-app', size=(1200, 800), port=EEL_PORT,
                               cmdline_args=[
                                   f'--user-data-dir={CHROME_PROFILE_DIR}',
                                   '--no-first-run',
@@ -1215,20 +1282,26 @@ def gui_control_panel():
                               block=True)
                 except Exception as e2:
                     log_message(f"❌ Erreur fallback lancement éditeur: {e2}")
-                    root.after(0, lambda: status_label.config(text="❌ Échec de l'ouverture de l'éditeur (voir les logs)"))
                     editeur_lance = False
+                    lancement_editeur_en_cours = False
+                    echec_ouverture(
+                        "❌ Échec de l'ouverture de l'éditeur (voir les logs)",
+                        "L'éditeur n'a pas pu s'ouvrir.\n\n"
+                        "Vérifiez que Google Chrome est installé,\n"
+                        "puis réessayez.\n\n"
+                        "Le détail de l'erreur est dans la console."
+                    )
                     return
 
             # Quand l'éditeur se ferme, on met à jour le statut
             root.after(0, lambda: status_label.config(text="🔴 Éditeur fermé"))
             editeur_lance = False
+            lancement_editeur_en_cours = False  # Si React n'a jamais signalé l'ouverture
 
         # Lancer dans un thread pour ne pas bloquer la GUI
         thread = threading.Thread(target=lancer_eel, daemon=True)
         thread.start()
-
-        # Mettre à jour le statut après un court délai
-        root.after(2000, lambda: status_label.config(text="✅ Éditeur ouvert") if editeur_lance else None)
+        # « ✅ Éditeur ouvert » est affiché par on_editor_open(), quand React signale que l'éditeur est prêt
 
     def btn_sauvegarder_document():
         """Sauvegarde le document — toujours en mode "Enregistrer sous" (dialogue à chaque fois).
@@ -1333,8 +1406,7 @@ def gui_control_panel():
         # 3. Attendre que l'éditeur soit prêt, puis charger le document
         def run_load():
             if need_wait:
-                # Attendre le VRAI signal de React (on_editor_open → last_editor_activity)
-                # et non editeur_lance qui est mis à True trop tôt par lancer_eel()
+                # Attendre le signal de React (on_editor_open → last_editor_activity)
                 timeout = 30
                 waited = 0
                 log_message("⏳ Attente du signal React on_editor_open()...")
