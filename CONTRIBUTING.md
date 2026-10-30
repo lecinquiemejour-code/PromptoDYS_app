@@ -162,8 +162,9 @@ uv sync --locked   # crée .venv à partir de uv.lock, sans le modifier
 # Développer votre feature
 # ... modifier les fichiers ...
 
-# Tester vos changements
-uv run pytest
+# Vérifier et tester vos changements
+uv run ruff check   # lint (voir Standards de code)
+uv run pytest       # tests automatisés (voir Tests)
 uv run python askGeminiPrompto.py
 
 # Si vous modifiez les dépendances :
@@ -179,6 +180,8 @@ uv add <paquet>
 | Je modifie les dépendances | `uv add <paquet>` / `uv remove <paquet>`, ou `uv sync` après avoir édité `pyproject.toml` |
 | Je mets à jour une dépendance | `uv lock --upgrade-package <paquet>` puis `uv sync` |
 | Je lance l'application | `uv run python askGeminiPrompto.py` |
+| Je vérifie le code (lint) | `uv run ruff check` |
+| Je lance les tests | `uv run pytest` |
 | Je build l'exécutable (pour le système courant) | `uv sync --locked` puis `uv run pyinstaller --clean PromptoDYS.spec` |
 | Je change la version du projet | `uv version 1.3.0b1` (met à jour `pyproject.toml` et `uv.lock` ensemble) |
 
@@ -207,9 +210,10 @@ git push origin feature/ma-super-feature
 
 Avant de soumettre votre PR, vérifiez :
 
-- [ ] Le code suit les [standards de code](#standards-de-code)
-- [ ] Les tests passent (si applicable)
+- [ ] Le code suit les [standards de code](#standards-de-code), et `uv run ruff check` ne signale rien de nouveau
+- [ ] `uv run pytest` passe, et une correction de bug testable est accompagnée d'un test
 - [ ] La documentation est mise à jour
+- [ ] Le changement est décrit dans la section `[Non publié]` de [CHANGELOG.md](CHANGELOG.md), s'il est notable pour l'utilisateur ou le contributeur
 - [ ] Les commits suivent la [structure des commits](#structure-des-commits)
 - [ ] Pas de fichiers sensibles (clés API, etc.)
 - [ ] Le code est commenté pour les parties complexes
@@ -294,10 +298,29 @@ def TraitementGemini():
     if not client:return
 ```
 
+### Lint avec ruff
+
+[Ruff](https://docs.astral.sh/ruff/) vérifie le code sans l'exécuter. Il est installé avec les dépendances de dev (`uv sync --locked`) et configuré dans `pyproject.toml` (sections `[tool.ruff]`), pour que tout le monde obtienne le même résultat :
+
+| Règles | Ce qu'elles détectent |
+|---|---|
+| `F` | Erreurs : noms non définis, imports inutilisés |
+| `E`, `W` | Style PEP 8 (pycodestyle) |
+| `B` | Bugs probables (flake8-bugbear) |
+| `UP` | Syntaxe Python à moderniser |
+| `SIM` | Code simplifiable |
+
+```bash
+uv run ruff check         # signale les problèmes
+uv run ruff check --fix   # corrige automatiquement ceux qui sont sûrs
+```
+
+Quelques signalements anciens restent à traiter (`except:` nus, espaces sur des lignes vides) : n'en ajoutez pas de nouveaux. Faites les corrections de lint dans un commit à part, jamais dans le même commit qu'une correction de bug.
+
 ### Règles générales
 
 1. **Indentation** : 4 espaces (pas de tabs)
-2. **Longueur de ligne** : Maximum 100 caractères
+2. **Longueur de ligne** : Maximum 120 caractères (vérifié par ruff)
 3. **Noms de variables** : `snake_case` pour Python, `camelCase` pour JavaScript
 4. **Noms de fonctions** : Descriptifs et en français (cohérence avec le projet)
 5. **Commentaires** : Expliquer le "pourquoi", pas le "quoi"
@@ -365,12 +388,26 @@ Voir migration guide dans docs/MIGRATION.md"
 
 ---
 
-## 🧪 Tests (à venir)
+## 🧪 Tests
 
-Pour l'instant, le projet n'a pas de suite de tests automatisés. C'est une excellente opportunité de contribution !
+Les tests automatisés utilisent [pytest](https://docs.pytest.org/), installé avec les dépendances de dev. Ils sont dans le dossier `tests/` et se lancent sans réseau ni interface graphique :
+
+```bash
+uv run pytest
+```
+
+| Fichier | Ce qu'il couvre |
+|---|---|
+| `test_import.py` | Importer le module ne crée aucun dossier |
+| `test_note.py` | Extraction de la note corrigée et du débrief, ajout de la note d'origine |
+| `test_rapport.py` | Nettoyage HTML du contenu pour le rapport PDF |
+| `test_sauvegarde.py` | Préparation du chemin de sauvegarde (assainissement du nom, anti-récursion) |
+
+`pyproject.toml` (section `[tool.pytest.ini_options]`) rend `askGeminiPrompto.py` importable depuis `tests/`, et pytest-timeout fait échouer au bout de 10 s un test qui boucle, au lieu de figer pytest.
+
+Pour être testable, une fonction doit pouvoir être appelée sans interface, sans réseau et sans écrire sur le disque : extrayez la logique dans une fonction pure, comme `preparer_chemin_sauvegarde()`.
 
 **Tests à implémenter :**
-- [ ] Tests unitaires pour les fonctions de parsing Markdown
 - [ ] Tests d'intégration pour le pipeline IA
 - [ ] Tests end-to-end pour l'interface Eel
 - [ ] Tests de génération PDF
@@ -393,4 +430,4 @@ Votre contribution, quelle que soit sa taille, fait progresser le projet et aide
 
 ---
 
-**Dernière mise à jour :** 08/01/2026
+**Dernière mise à jour :** 30/10/2026
