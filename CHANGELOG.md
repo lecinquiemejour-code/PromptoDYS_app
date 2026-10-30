@@ -20,6 +20,7 @@ et la numérotation suit le sens du [Semantic Versioning](https://semver.org/lan
 - Le statut affiché en fin de traitement IA indique « terminé », « annulé » ou « échec » selon le résultat
 - La fenêtre de contrôle prend la taille de son contenu au lieu de 688 × 1100 px en dur. Sa hauteur est plafonnée à 90 % de l'écran ; si l'écran est trop petit, la fenêtre défile
 - Les dossiers de l'application (documents, profil Chrome) sont créés au démarrage et non plus à l'import du module
+- Pendant l'ouverture de l'éditeur, le statut indique « Ouverture de l'éditeur en cours, veuillez patienter », et « Éditeur ouvert » ne s'affiche que lorsque l'éditeur est réellement prêt. Un second clic pendant l'ouverture ne lance plus un second éditeur
 
 ### Corrigé
 - Le bouton « Traiter la prise de note » restait bloqué sur « Abandonner » après un échec avant le streaming (clé API absente par exemple), avec un faux statut « terminé ». Le failsafe censé le débloquer plantait lui-même sur une option Tkinter invalide
@@ -29,6 +30,10 @@ et la numérotation suit le sens du [Semantic Versioning](https://semver.org/lan
 - La fenêtre de contrôle dépassait de l'écran sur un portable 1366 × 768 : la console et le bouton Quitter étaient inaccessibles
 - Les boutons « Sauvegarder » et « Ouvrir » grandissaient au premier survol
 - La bordure sombre des boutons n'apparaissait qu'après un survol : le thème Sun Valley la repeignait en gris clair au lancement
+- Si le port 8080 était déjà utilisé par un autre programme, l'éditeur s'ouvrait sur la page de ce programme, puis une seconde fenêtre s'ouvrait en erreur. Le port est maintenant vérifié avant d'ouvrir Chrome : s'il reste occupé, aucune fenêtre ne s'ouvre et une popup explique quoi faire. Une popup s'affiche aussi si Chrome ne démarre pas
+- Ouvrir un document avec le bouton « Ouvrir » quand l'éditeur était fermé échouait toujours après 30 s d'attente : l'éditeur ne signalait jamais son ouverture à l'application
+- Après la fermeture de l'éditeur, le panneau de contrôle continuait de le considérer comme ouvert : il était impossible de le rouvrir. L'éditeur signale maintenant sa fermeture, le panneau affiche « Éditeur fermé » et l'éditeur peut être rouvert
+- Trois anciennes versions de l'éditeur, inutilisées, étaient embarquées dans l'exécutable
 
 ### Prévu
 - Tests d'intégration

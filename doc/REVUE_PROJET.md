@@ -176,7 +176,7 @@ Le public cible (collégiens) utilise majoritairement des portables. Les boutons
 
 **Effort.** Faible, mais à tester soigneusement (ouverture, fermeture, réouverture).
 
-**Statut : 🟡 partiellement résolu.** Le port reste fixe, à 8080 (constante `EEL_PORT`) : `port=0` aurait changé l'origine `http://localhost:<port>` à chaque lancement, et le localStorage et l'IndexedDB de Chrome (thème, brouillon, mode développeur, images) auraient été perdus. Avant d'ouvrir Chrome, `lancer_eel()` vérifie que le port est libre : aucun programme n'y répond, et le serveur peut s'y attacher. S'il est pris, elle réessaie pendant 5 secondes, le temps que le serveur Eel de la session précédente se libère, puis abandonne sans ouvrir de fenêtre. Plus de fenêtres ouvertes sur une page d'erreur. Le `--app=` manuel est gardé, construit depuis `EEL_PORT`, pour rester explicite. Un drapeau `lancement_editeur_en_cours` couvre le temps entre le clic et le signal de React (`on_editor_open`) : la barre de statut affiche « ⏳ Ouverture de l'éditeur en cours, veuillez patienter », un second clic ne lance pas un second éditeur, et « ✅ Éditeur ouvert » n'apparaît qu'au signal de React. Il remplace le message « Éditeur ouvert » affiché d'office au bout de 2 secondes, même quand l'ouverture échouait. Un échec d'ouverture (port pris, ou Chrome qui ne démarre pas) affiche en plus une popup qui dit à l'élève quoi faire, comme les autres situations bloquantes. Trois tests ajoutés dans `tests/test_port.py`. Le `close_callback` n'a pas été ajouté : avec lui, Eel n'appelle plus `sys.exit()` à la fermeture de la fenêtre, et `eel.start(block=True)` ne rend plus la main, donc `lancer_eel()` ne remettrait jamais `editeur_lance` à faux. Restent ouverts : l'arrêt propre du serveur, le drapeau `editeur_lance` indirect, et le fallback en mode `chrome-app`, que Eel 0.18 ne connaît pas : il ouvre le navigateur par défaut et ignore les options Chrome.
+**Statut : ✅ résolu.** Le port reste fixe, à 8080 (constante `EEL_PORT`) : `port=0` aurait changé l'origine `http://localhost:<port>` à chaque lancement, et le localStorage et l'IndexedDB de Chrome (thème, brouillon, mode développeur, images) auraient été perdus. Avant d'ouvrir Chrome, `lancer_eel()` vérifie que le port est libre : aucun programme n'y répond, et le serveur peut s'y attacher. S'il est pris, elle réessaie pendant 5 secondes, le temps que le serveur Eel de la session précédente se libère, puis abandonne sans ouvrir de fenêtre. Plus de fenêtres ouvertes sur une page d'erreur. Le `--app=` manuel est gardé, construit depuis `EEL_PORT`, pour rester explicite. Un drapeau `lancement_editeur_en_cours` couvre le temps entre le clic et le signal de React (`on_editor_open`) : la barre de statut affiche « ⏳ Ouverture de l'éditeur en cours, veuillez patienter », un second clic ne lance pas un second éditeur, et « ✅ Éditeur ouvert » n'apparaît qu'au signal de React. Il remplace le message « Éditeur ouvert » affiché d'office au bout de 2 secondes, même quand l'ouverture échouait. Un échec d'ouverture (port pris, ou Chrome qui ne démarre pas) affiche en plus une popup qui dit à l'élève quoi faire, comme les autres situations bloquantes. Trois tests ajoutés dans `tests/test_port.py`. Le `close_callback` n'a pas été ajouté : avec lui, Eel n'appelle plus `sys.exit()` à la fermeture de la fenêtre, et `eel.start(block=True)` ne rend plus la main, donc `lancer_eel()` ne remettrait jamais `editeur_lance` à faux. Il n'est plus nécessaire : `editeur_lance` suit maintenant les signaux d'ouverture et de fermeture envoyés par l'éditeur (B9), et l'attente du port couvre le serveur précédent qui tarde à se libérer. Choix assumés : le `--app=` manuel double celui qu'Eel ajoute, avec la même URL, sans effet ; le fallback en mode `chrome-app`, que Eel 0.18 ne connaît pas, ouvre le navigateur par défaut sans les options Chrome, ce qui sert de secours quand Chrome ne démarre pas.
 
 ### B6. Aucun délai maximum sur l'appel Gemini, abandon inopérant si le flux se fige
 
@@ -455,10 +455,10 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | 4 | `askGeminiPrompto.py` | Englober `traitement_gemini()` dans un `try/finally` unique, retourner un booléen, corriger le statut ligne 1437 | B2 |
 | 5 | `askGeminiPrompto.py` | ✅ Fait : plus de référence à `e` dans les lambdas (message fixe renvoyant aux logs) | B3 |
 | 6 | `askGeminiPrompto.py` | ✅ Fait : taille calculée depuis le contenu (hauteur plafonnée à 90 % de l'écran), défilement vertical | B4 |
-| 7 | `askGeminiPrompto.py` | 🟡 En partie fait : `--disable-web-security` retiré. Restent : `port=0`, retirer le `--app=` manuel, ajouter `close_callback` | B5, B7 |
+| 7 | `askGeminiPrompto.py` | ✅ Fait : `--disable-web-security` retiré ; port 8080 gardé (stockage de Chrome) mais vérifié avant d'ouvrir Chrome, popup si l'ouverture échoue, état de l'éditeur suivi par les signaux de React | B5, B7 |
 | 8 | `askGeminiPrompto.py` | `http_options` avec timeout, fermeture du stream à l'abandon | B6 |
 | 9 | `askGeminiPrompto.py` | 🟡 En partie fait : imports morts, `menu_console` et compagnie, `historique_llm` retirés. Restent : `ruff --fix` ; `basename` sur le nom d'image ; log de clé sans extrait | M1, M2, M3, M5, M6, M7 |
-| 10 | `build_web/static/` | Supprimer les trois vieux bundles et leurs `.map` | D1 |
+| 10 | `build_web/static/` | 🟡 En partie fait : trois vieux bundles supprimés. Reste : exclure les `.map` du spec | D1 |
 | 11 | `requirements.txt` | ✅ Fait : remplacé par `pyproject.toml` + `uv.lock` | D2 |
 | 12 | `README.md`, `CONTRIBUTING.md`, `BUILD_STATUS.md`, `GeminiKey.txt.template`, `promptodys.prompt` | 🟡 En partie fait : corrections listées en D3, voir la colonne Statut | D3 |
 | 13 | Build | `pyinstaller --clean`, test sur machine sans clé, avec clé, depuis un raccourci | Validation |
@@ -489,10 +489,11 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | B2 | ✅ Résolu | Retour anticipé sans reset : bouton bloqué, faux statut « terminé » (état rendu à l'appelant) | Faible | 1 |
 | B3 | ✅ Résolu | `NameError` dans deux messages d'erreur différés (messages fixes renvoyant aux logs) | Trivial | 1 |
 | B4 | ✅ Résolu | Fenêtre de 1100 px hors écran sur portable (taille calculée depuis le contenu, défilement si l'écran est trop petit) | Faible | 1 |
-| B5 | 🟠 Important | Port 8080 fixe, relance fragile, `--app` dupliqué | Faible | 1 |
+| B5 | ✅ Résolu | Port 8080 fixe, relance fragile, `--app` dupliqué (port vérifié avant d'ouvrir Chrome, popup en cas d'échec, état suivi par les signaux de React) | Faible | 1 |
 | B6 | ✅ Résolu | Pas de timeout Gemini, abandon inopérant si flux figé (abandon immédiat, sans timeout) | Faible | 1 |
 | B7 | ✅ Résolu | `--disable-web-security` inutile (retiré) | Trivial | 1 |
 | B8 | ✅ Résolu | Nom de document vide accepté, boucle infinie à la racine d'un disque (nom vide refusé, boucle bornée) | Faible | 1 |
+| B9 | ✅ Résolu | L'éditeur ne signalait jamais son ouverture : « Ouvrir » avec l'éditeur fermé échouait après 30 s (signal ajouté dans l'éditeur React) | Faible | 1 |
 | M1 | 🟡 Partiellement résolu | Imports et dépendances inutilisés (retirés ; docstring d'en-tête encore obsolète) | Trivial | 1 |
 | M2 | ✅ Résolu | Code mort (menu console, historique, `web_folder_global`) | Trivial | 1 |
 | M3 | 🟡 Mineur | `except:` nus, f-strings vides | Trivial | 1 |
@@ -505,7 +506,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | M10 | 🟡 Mineur | `root.after` depuis threads | Faible | si symptôme |
 | M11 | 🟡 Mineur | `os._exit`, Chrome reste ouvert | Faible | 1 |
 | M12 | ✅ Résolu | Effets de bord à l'import (un second ajouté : dossier du profil Chrome) (dossiers et réglage DPI déplacés dans `main()`) | Trivial | 2 |
-| D1 | 🟠 Important | Trois bundles React morts, `.map` dans l'exe | Trivial | 1 |
+| D1 | 🟡 Partiellement résolu | Trois bundles React morts, `.map` dans l'exe (bundles supprimés ; `.map` toujours dans l'exe) | Trivial | 1 |
 | D2 | ✅ Résolu | `requirements.txt` en UTF-16 (remplacé par uv) | Trivial | 1 |
 | D3 | 🟡 Partiellement résolu | Docs obsolètes, `sv_ttk` absent de la commande d'installation, `version=` commenté (installation et README corrigés ; restent CONTRIBUTING, VirusTotal, `version=`) | Faible | 1 |
 | D4 | 🟡 Partiellement résolu | Version dupliquée quatre fois (modèle du pied PDF via `GEMINI_MODEL` ; version toujours dupliquée) | Faible | 3 |
