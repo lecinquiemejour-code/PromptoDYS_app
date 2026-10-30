@@ -1803,8 +1803,11 @@ def gui_control_panel():
     hauteur_ideale = main_frame.winfo_reqheight()  # Tout le contenu, padding et bouton Quitter compris
     hauteur_disponible = int(root.winfo_screenheight() * 0.9)  # 90 % de l'écran
     hauteur = min(hauteur_ideale, hauteur_disponible)
-    root.geometry(f"688x{hauteur}")  # Largeur 688px
-    root.minsize(550, hauteur)  # Taille minimale
+    largeur_ideale = main_frame.winfo_reqwidth()  # Largeur sous laquelle le contenu serait écrasé
+    if hauteur_ideale > hauteur_disponible:
+        largeur_ideale += canvas_scrollbar.winfo_reqwidth()  # La barre de défilement prend sa place à droite
+    root.geometry(f"{largeur_ideale}x{hauteur}")
+    root.minsize(largeur_ideale, hauteur)  # Taille minimale : rien de caché ni d'écrasé
     root.deiconify()  # Afficher la fenêtre à sa taille définitive
 
     # --- Lancer la boucle principale ---
