@@ -56,7 +56,7 @@ def test_ajouter_note_origine_ajoute_le_bloc():
         "Note corrigée\n\n---\n\n"
         "### <span style=\"color: #3399ff;\">Note d'origine</span>\n\n"
         "Note d'origine brute\n"
-    )
+    )  # fmt: skip
 
 
 def test_ajouter_note_origine_supprime_les_images():
@@ -64,9 +64,9 @@ def test_ajouter_note_origine_supprime_les_images():
     original = (
         "Avant\n\n"
         "![photo](./images/photo.png){width=300px id=abc}\n\n"
-        "<img src=\"./images/schema.png\" />\n\n"
+        '<img src="./images/schema.png" />\n\n'
         "Après"
-    )
+    )  # fmt: skip
     resultat = app.ajouter_note_origine("Corrigée", original)
     assert "images/" not in resultat
     assert "<img" not in resultat
@@ -87,5 +87,5 @@ def test_ajouter_note_origine_note_traitee_vide():
 
 def test_ajouter_note_origine_original_que_des_images():
     """Une note d'origine faite seulement d'images n'ajoute rien."""
-    original = "![a](./images/a.png)\n\n<img src=\"b.png\">"
+    original = '![a](./images/a.png)\n\n<img src="b.png">'
     assert app.ajouter_note_origine("Corrigée", original) == "Corrigée"

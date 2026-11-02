@@ -73,6 +73,11 @@ Ce que ruff **ne trouve pas** : B1, B2, C2, B6. Ce sont des bugs de logique, que
 3. `ruff format` (environ 600 lignes de diff) dans **un autre commit dédié**, juste avant le découpage de la priorité 3. Dans le même commit qu'une correction de bug, il la rendrait illisible.
 4. Option : ajouter `ruff check` au workflow [release-windows.yml](../.github/workflows/release-windows.yml).
 
+✅ Fait :
+- **Étapes 1 et 2** : ruff installé et configuré, `ruff check` ne signale plus rien.
+- **Étape 3** : `ruff format` appliqué dans un commit dédié, avant le découpage. Les blocs Python des fichiers Markdown sont formatés aussi, sauf `CONTRIBUTING.md`, dont l'exemple « ❌ MAUVAIS » doit rester mal formaté.
+- **Étape 4** : réalisée dans le workflow [ci.yml](../.github/workflows/ci.yml), qui vérifie `ruff check` et `ruff format --check` à chaque push.
+
 ---
 
 ## 4. Priorité 1 : corriger avant de restructurer

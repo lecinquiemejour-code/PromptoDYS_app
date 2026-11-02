@@ -32,6 +32,11 @@ jobs:
       - name: Ruff
         run: uv run ruff check --output-format=github
 
+      # Lancé même si le lint a échoué, pour voir les deux résultats en une exécution
+      - name: Formatage (ruff format)
+        if: ${{ !cancelled() }}
+        run: uv run ruff format --check
+
       # Résumé en haut de la page de l'exécution, même si ruff a échoué
       - name: Résumé
         if: always()
@@ -44,6 +49,15 @@ jobs:
               echo "❌ Signalements par règle :"
               echo '```'
               echo "$stats"
+              echo '```'
+            fi
+            echo "## Formatage (ruff format)"
+            if unformatted=$(uv run ruff format --check 2>&1); then
+              echo "✅ Tous les fichiers sont formatés"
+            else
+              echo "❌ Fichiers à formater (lancer \`uv run ruff format\`) :"
+              echo '```'
+              echo "$unformatted"
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"

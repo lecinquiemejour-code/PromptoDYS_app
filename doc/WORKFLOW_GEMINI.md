@@ -410,8 +410,8 @@ La configuration envoyée à l'étape 5 en découle :
 config = types.GenerateContentConfig(
     thinking_config=types.ThinkingConfig(
         thinking_level=GEMINI_THINKING_LEVEL,
-        include_thoughts=True
-    )
+        include_thoughts=True,
+    ),
 )
 ```
 

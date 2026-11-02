@@ -8,7 +8,7 @@ def test_nettoyer_html_tags_remplace_marqueurs_bold():
 
 def test_nettoyer_html_tags_supprime_span():
     """Les balises <span> de l'éditeur (couleurs) sont retirées, le texte reste."""
-    texte = "### <span style=\"color: #3399ff;\">Titre</span>"
+    texte = '### <span style="color: #3399ff;">Titre</span>'
     assert app.nettoyer_html_tags(texte) == "### Titre"
 
 
