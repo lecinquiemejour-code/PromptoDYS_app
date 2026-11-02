@@ -250,6 +250,8 @@ Python expose `on_editor_open()` et `on_editor_close()` pour que l'éditeur Reac
 
 Quatre `except:` nus (lignes 64, 104, 110, 117) qui attrapent aussi `KeyboardInterrupt` et `SystemExit`. Vingt f-strings sans variable (`f"..."` sans accolades), sans effet mais qui brouillent la lecture. `ruff check --fix` règle l'ensemble.
 
+**Statut : ✅ résolu.** Les f-strings vides avaient été corrigées avec `ruff --fix`. Les `except:` nus deviennent `contextlib.suppress(Exception)` dans `RedirectText` et `except (ImportError, AttributeError, OSError)` pour le réglage DPI : Ctrl+C et `sys.exit()` ne sont plus avalés. Deux docstrings (`save_document`, `load_document`) portent un `# noqa: W293` plutôt que d'être modifiées. `ruff check` ne signale plus rien.
+
 ### M4. Un fichier de 1 784 lignes, une fonction de 559 lignes, douze variables globales
 
 `gui_control_panel()` contient six fonctions imbriquées, la construction de l'interface, la redirection de stdout et la boucle principale. `traitement_gemini()` fait 221 lignes. L'état est partagé par des `global` (`editeur_lance`, `abandon_ia`, `traitement_en_cours`, `btn_ia_global`, `root_global`, `status_label_global`, `streaming_text_global`, `current_document_path`, `last_editor_activity`, `logs_complets`, `historique_llm`, `web_folder_global`).
@@ -457,7 +459,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | 6 | `askGeminiPrompto.py` | ✅ Fait : taille calculée depuis le contenu (hauteur plafonnée à 90 % de l'écran), défilement vertical | B4 |
 | 7 | `askGeminiPrompto.py` | ✅ Fait : `--disable-web-security` retiré ; port 8080 gardé (stockage de Chrome) mais vérifié avant d'ouvrir Chrome, popup si l'ouverture échoue, état de l'éditeur suivi par les signaux de React | B5, B7 |
 | 8 | `askGeminiPrompto.py` | `http_options` avec timeout, fermeture du stream à l'abandon | B6 |
-| 9 | `askGeminiPrompto.py` | 🟡 En partie fait : imports morts, `menu_console` et compagnie, `historique_llm` retirés. Restent : `ruff --fix` ; `basename` sur le nom d'image ; log de clé sans extrait | M1, M2, M3, M5, M6, M7 |
+| 9 | `askGeminiPrompto.py` | 🟡 En partie fait : imports morts, `menu_console` et compagnie, `historique_llm` retirés. `ruff` est propre (M3). Restent : `basename` sur le nom d'image ; log de clé sans extrait | M1, M2, M3, M5, M6, M7 |
 | 10 | `build_web/static/` | 🟡 En partie fait : trois vieux bundles supprimés. Reste : exclure les `.map` du spec | D1 |
 | 11 | `requirements.txt` | ✅ Fait : remplacé par `pyproject.toml` + `uv.lock` | D2 |
 | 12 | `README.md`, `CONTRIBUTING.md`, `BUILD_STATUS.md`, `GeminiKey.txt.template`, `promptodys.prompt` | 🟡 En partie fait : corrections listées en D3, voir la colonne Statut | D3 |
@@ -496,7 +498,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | B9 | ✅ Résolu | L'éditeur ne signalait jamais son ouverture : « Ouvrir » avec l'éditeur fermé échouait après 30 s (signal ajouté dans l'éditeur React) | Faible | 1 |
 | M1 | 🟡 Partiellement résolu | Imports et dépendances inutilisés (retirés ; docstring d'en-tête encore obsolète) | Trivial | 1 |
 | M2 | ✅ Résolu | Code mort (menu console, historique, `web_folder_global`) | Trivial | 1 |
-| M3 | 🟡 Mineur | `except:` nus, f-strings vides | Trivial | 1 |
+| M3 | ✅ Résolu | `except:` nus, f-strings vides (`except` ciblés, `ruff check` propre) | Trivial | 1 |
 | M4 | 🟡 Mineur | Fichier monolithique, douze globales | Moyen | 3 |
 | M5 | 🟡 Partiellement résolu | Extrait de clé dans les logs et le PDF (raccourci aux 4 derniers caractères) | Trivial | 1 |
 | M6 | 🟡 Mineur | Nom d'image non assaini | Trivial | 1 |
