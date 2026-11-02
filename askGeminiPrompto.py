@@ -25,6 +25,7 @@ Fonctionnalités:
 
 import contextlib
 import eel
+import logging
 import os
 import sys
 import threading
@@ -53,6 +54,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import sv_ttk  # Thème Sun Valley (Windows 11 look)
 import subprocess  # Pour ouvrir le dossier reports
+
+# --- Couche domaine (règles pures, voir promptodys/) ---
+from promptodys.domain import documents, note, report
 
 # Modèle Gemini utilisé (ex. "gemini-3.8-flash", "gemini-3.5-flash-lite")
 GEMINI_MODEL = "gemini-3.8-flash"
@@ -118,6 +122,24 @@ def log_message(message):
     # Les prints sont maintenant redirigés vers la GUI via stdout mais on garde l'ajout explicite aux logs complets
     # Capturer aussi dans les logs complets
     logs_complets.append(message)
+
+
+class LogMessageHandler(logging.Handler):
+    """Pont provisoire : renvoie les logs de la couche domaine vers log_message (console, GUI, rapport).
+    Sera remplacé par les vrais handlers de logging avec R7."""
+
+    def emit(self, record):
+        with contextlib.suppress(Exception):
+            log_message(self.format(record))
+
+
+def configure_logger():
+    """Envoie les logs du paquet promptodys vers log_message, message seul (sans niveau ni heure).
+    Appelée par main(), jamais à l'import : les tests gardent la configuration de logging par défaut."""
+    logger = logging.getLogger("promptodys")
+    logger.setLevel(logging.INFO)
+    logger.addHandler(LogMessageHandler())
+    logger.propagate = False  # pas de second affichage par le logger racine
 
 
 def find_web_folder():
@@ -249,31 +271,6 @@ def attendre_port_libre(port, delai=5.0):
 
 # --- Fonctions de sauvegarde/ouverture de documents complets (texte + images) ---
 # Principe "Arduino" : le dossier porte le même nom que le fichier .md principal
-
-
-def preparer_chemin_sauvegarde(chemin_choisi):
-    """Renvoie (dossier, nom du document) à partir du chemin choisi dans le dialogue.
-    Nom assaini, vide si rien n'en reste ou s'il commence par un point (à refuser par l'appelant) ;
-    si l'utilisateur est entré dans le dossier du document, on remonte."""
-    save_dir = os.path.dirname(chemin_choisi)
-    doc_name = os.path.splitext(os.path.basename(chemin_choisi))[0]
-    doc_name = re.sub(r'[<>:"/\\|?*]', "_", doc_name).strip()
-    # Nom de fichier caché ('.md', '.foo', '..') : refusé comme un nom vide
-    if doc_name.startswith("."):
-        doc_name = ""
-    # Points et espaces finaux retirés : Windows les supprime des noms de dossier
-    doc_name = doc_name.rstrip(" .")
-
-    # Anti-récursion : si l'utilisateur a navigué à l'intérieur du dossier projet
-    # (ex: PromptoDYS/equations/equations au lieu de PromptoDYS/equations)
-    # on remonte au bon niveau pour éviter equations/equations/equations.md
-    while os.path.basename(save_dir) == doc_name:
-        parent = os.path.dirname(save_dir)
-        if parent == save_dir:  # racine du disque : on ne peut plus remonter
-            break
-        log_message(f"⚠️ Anti-récursion: save_dir '{save_dir}' se termine par '{doc_name}' → on remonte")
-        save_dir = parent
-    return save_dir, doc_name
 
 
 def save_document(document_name, save_directory):
@@ -533,74 +530,12 @@ def on_editor_close():
         root_global.after(0, lambda: status_label_global.config(text="🔴 Éditeur fermé"))
 
 
-def preparer_contenu_rapport_complet(
-    contenu_original, logs_etapes, streaming_gemini, contenu_traite, debrief_correction, stats_tokens=None
-):
-    """Prépare le contenu COMPLET du rapport avec TOUS les logs - VERSION LISIBLE"""
-
-    contenu_final = "# Rapport PromptoDYS - Session Complète\n\n"
-    contenu_final += f"**Date de génération :** {datetime.now().strftime('%d/%m/%Y à %H:%M:%S')}\n\n"
-
-    # SECTION 1: Métadonnées
-    contenu_final += "## 📊 Métadonnées de la Session\n\n"
-    if stats_tokens:
-        contenu_final += f"- **Input tokens :** {stats_tokens.get('input', 'N/A')}\n"
-        contenu_final += f"- **Output tokens :** {stats_tokens.get('output', 'N/A')}\n"
-        contenu_final += f"- **Thinking tokens :** {stats_tokens.get('thinking', 'N/A')}\n"
-        contenu_final += f"- **Total tokens :** {stats_tokens.get('total', 'N/A')}\n\n"
-
-    contenu_final += "---\n\n"
-
-    # SECTION 2: Contenu Original
-    contenu_final += "## 📄 Contenu Original de l'Éditeur\n\n"
-    contenu_final += "**CONTENU ORIGINAL :**\n\n"
-    for ligne in (contenu_original if contenu_original else "(Aucun contenu)").split("\n"):
-        contenu_final += f"    {ligne}\n"
-    contenu_final += "\n---\n\n"
-
-    # SECTION 3: Log des Étapes de Traitement
-    contenu_final += "## 🔧 Log Complet du Traitement IA\n\n"
-    contenu_final += "**ÉTAPES DE TRAITEMENT :**\n\n"
-    for log in logs_etapes:
-        contenu_final += f"    {log}\n"
-    contenu_final += "\n---\n\n"
-
-    # SECTION 4: Streaming Gemini Complet
-    contenu_final += "## 🤖 Streaming Gemini Complet\n\n"
-    contenu_final += "**THINKING + RÉPONSE EN TEMPS RÉEL :**\n\n"
-    for ligne in (streaming_gemini if streaming_gemini else "(Aucun streaming capturé)").split("\n"):
-        contenu_final += f"    {ligne}\n"
-    contenu_final += "\n---\n\n"
-
-    # SECTION 5: Contenu Traité Final
-    contenu_final += "## ✅ Contenu Traité Final (Résultat)\n\n"
-    contenu_final += contenu_traite if contenu_traite else "(Aucun contenu traité)"
-    contenu_final += "\n\n"
-    contenu_final += "---\n\n"
-
-    # SECTION 6: Débrief de Correction
-    contenu_final += "## 📝 Débrief de la Correction par l'IA\n\n"
-    contenu_final += debrief_correction if debrief_correction else "(Aucun débrief disponible)"
-    contenu_final += "\n\n"
-    contenu_final += "---\n\n"
-
-    # SECTION 7: Footer
-    contenu_final += "## 📋 Informations de Session\n\n"
-    contenu_final += "- **Script :** PromptoDYS avec capture complète des logs\n"
-    contenu_final += f"- **Modèle IA :** {GEMINI_MODEL}\n"
-    contenu_final += f"- **Thinking Level :** {GEMINI_THINKING_LEVEL.value.capitalize()}\n"
-    contenu_final += "- **Sauvegarde :** Automatique PDF uniquement\n\n"
-
-    return contenu_final
-
-
 def nettoyer_html_tags(text):
     """Supprime les balises HTML problématiques pour reportlab"""
     # Remplacer les marqueurs __BOLD_n__ par des séparateurs horizontaux MD
-    bold_count = len(re.findall(r"__BOLD_\d+__", text))
+    text, bold_count = note.replace_bold_markers(text)
     if bold_count > 0:
         log_message(f"🔄 NETTOYAGE: {bold_count} marqueurs __BOLD_n__ remplacés par des séparateurs ---")
-    text = re.sub(r"__BOLD_\d+__", "---", text)
 
     # Supprimer les balises <span> avec styles
     text = re.sub(r"<span[^>]*>", "", text)
@@ -794,13 +729,16 @@ def sauvegarder_rapport(
 
     # ÉTAPE 1: Préparer le contenu complet avec TOUS les logs
     log_message("🔧 ÉTAPE: Préparation du rapport complet...")
-    contenu_final = preparer_contenu_rapport_complet(
-        contenu_original=contenu_original,
-        logs_etapes=logs_etapes,
-        streaming_gemini=streaming_gemini,
-        contenu_traite=contenu_traite,
-        debrief_correction=debrief_correction,
-        stats_tokens=stats_tokens,
+    contenu_final = report.build_report_markdown(
+        original_note=contenu_original,
+        step_logs=logs_etapes,
+        ai_stream=streaming_gemini,
+        processed_note=contenu_traite,
+        correction_debrief=debrief_correction,
+        token_stats=stats_tokens,
+        model=GEMINI_MODEL,
+        thinking_level=GEMINI_THINKING_LEVEL.value,
+        generated_at=datetime.now(),
     )
     log_message("✅ SUCCÈS: Rapport complet préparé")
 
@@ -888,52 +826,6 @@ def lire_prompto_dys():
         return None
 
 
-def extraire_contenu_note(reponse_complete):
-    """Extrait le contenu entre <NOTE> et </NOTE>"""
-    if "<NOTE>" in reponse_complete and "</NOTE>" in reponse_complete:
-        debut = reponse_complete.find("<NOTE>") + len("<NOTE>")
-        fin = reponse_complete.find("</NOTE>")
-        contenu = reponse_complete[debut:fin].strip()
-        # Remplacer les marqueurs __BOLD_n__ par des séparateurs horizontaux MD
-        bold_count = len(re.findall(r"__BOLD_\d+__", contenu))
-        if bold_count > 0:
-            log_message(f"🔄 NOTE: {bold_count} marqueurs __BOLD_n__ remplacés par des séparateurs ---")
-        contenu = re.sub(r"__BOLD_\d+__", "---", contenu)
-        return contenu
-    else:
-        log_message("⚠️ ATTENTION: Balises <NOTE> absentes, utilisation complète")
-        # Remplacer les marqueurs même en cas de réponse complète
-        reponse_nettoyee = re.sub(r"__BOLD_\d+__", "---", reponse_complete)
-        return reponse_nettoyee
-
-
-def ajouter_note_origine(contenu_traite, contenu_original):
-    """Ajoute la note d'origine (sans les images) à la fin de la note corrigée.
-    Générée côté Python plutôt que par Gemini : copie exacte et tokens de sortie économisés."""
-    if not contenu_traite.strip():
-        return contenu_traite
-    # Images Markdown de l'éditeur, ex. ![photo](./images/photo.png){width=300px id=...}, ou balises <img>
-    note_sans_images = re.sub(r"!\[[^\]]*\]\([^)]*\)(\{[^}]*\})?|<img[^>]*>", "", contenu_original)
-    note_sans_images = re.sub(r"\n{3,}", "\n\n", note_sans_images).strip()  # Lignes vides laissées par les images
-    if not note_sans_images:
-        return contenu_traite
-    # Retirer un éventuel séparateur final pour ne pas le doubler
-    contenu_traite = re.sub(r"(\s*\n)?-{3,}\s*$", "", contenu_traite.rstrip())
-    log_message(f"📎 NOTE: Note d'origine ajoutée ({len(note_sans_images)} caractères)")
-    return (
-        f'{contenu_traite}\n\n---\n\n### <span style="color: #3399ff;">Note d\'origine</span>\n\n{note_sans_images}\n'
-    )
-
-
-def extraire_debrief_correction(reponse_complete):
-    """Extrait le débrief après </NOTE>"""
-    if "</NOTE>" in reponse_complete:
-        debut = reponse_complete.find("</NOTE>") + len("</NOTE>")
-        return reponse_complete[debut:].strip()
-    else:
-        return ""
-
-
 def traitement_gemini(annulation):
     """Traitement IA Gemini : lecture → prompt → stream → injection + CAPTURE COMPLÈTE
 
@@ -981,11 +873,8 @@ def traitement_gemini(annulation):
     # 4. Substituer [TEXTE] et [DATE] par le contenu éditeur et la date du jour
     log_message("\n🔗 ÉTAPE 4: Préparation du prompt final...")
 
-    # Générer la date du jour au format JJ/MM/AAAA
-    date_du_jour = datetime.now().strftime("%d/%m/%Y")
-
-    # Injecter texte + date dans le prompt
-    prompt_final = prompt_template.replace("[TEXTE]", contenu_editeur).replace("[DATE]", date_du_jour)
+    # Injecter texte + date du jour dans le prompt
+    prompt_final = note.build_prompt(prompt_template, contenu_editeur, datetime.now().date())
 
     log_message("✅ SUCCÈS: Prompt préparé (substitution [TEXTE] et [DATE] effectuée)")
 
@@ -1075,19 +964,18 @@ def traitement_gemini(annulation):
 
     # 7. Extraire le contenu entre balises NOTE
     log_message("\n🔍 ÉTAPE 7: Extraction du contenu traité...")
-    contenu_traite = extraire_contenu_note(full_answer)
+    # Sans balises <NOTE>, extract_note_content le signale elle-même
+    contenu_traite = note.extract_note_content(full_answer)
 
-    if "<NOTE>" in full_answer and "</NOTE>" in full_answer:
+    if note.has_note_tags(full_answer):
         log_message("✅ SUCCÈS: Balises <NOTE> détectées et contenu extrait")
         log_message(f"📏 Taille du contenu traité: {len(contenu_traite)} caractères")
-    else:
-        log_message("⚠️ ATTENTION: Balises <NOTE> absentes, utilisation complète")
 
     # Section « Note d'origine » ajoutée côté Python (n'est plus générée par Gemini)
-    contenu_traite = ajouter_note_origine(contenu_traite, contenu_original)
+    contenu_traite = note.append_original_note(contenu_traite, contenu_original)
 
     # Extraire aussi le débrief
-    debrief_correction = extraire_debrief_correction(full_answer)
+    debrief_correction = note.extract_correction_debrief(full_answer)
 
     # Afficher le contenu qui va être injecté
     afficher_contenu_editeur(contenu_traite, "📄 CONTENU À INJECTER DANS L'ÉDITEUR")
@@ -1383,7 +1271,7 @@ def gui_control_panel():
                 log_message("💾 Sauvegarde annulée par l'utilisateur")
                 return
 
-            save_dir, doc_name = preparer_chemin_sauvegarde(selected)
+            save_dir, doc_name = documents.prepare_save_path(selected)
             if doc_name:
                 break
 
@@ -1934,6 +1822,7 @@ def main():
     except ImportError, AttributeError, OSError:
         pass  # Ignorer si non Windows
 
+    configure_logger()
     log_message("🚀 Lancement de PromptoDYS...")
     log_message("💾 Sauvegarde automatique : PDF uniquement avec CAPTURE COMPLÈTE des logs")
 

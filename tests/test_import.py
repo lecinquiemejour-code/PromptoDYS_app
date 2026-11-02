@@ -18,3 +18,16 @@ def test_import_ne_cree_aucun_dossier(monkeypatch):
 
     # Seuls nos dossiers comptent : une bibliothèque tierce peut créer les siens à l'import
     assert [chemin for chemin in dossiers_crees if "PromptoDYS" in str(chemin)] == []
+
+
+def test_domain_import_creates_no_folder(monkeypatch):
+    """Importer la couche domaine ne doit rien écrire sur le disque."""
+    dossiers_crees = []
+    monkeypatch.setattr(os, "makedirs", lambda chemin, *args, **kwargs: dossiers_crees.append(chemin))
+    for nom in [nom for nom in sys.modules if nom.startswith("promptodys")]:
+        monkeypatch.delitem(sys.modules, nom)
+
+    for module in ("note", "report", "documents"):
+        importlib.import_module(f"promptodys.domain.{module}")
+
+    assert dossiers_crees == []
