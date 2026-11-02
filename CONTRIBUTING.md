@@ -165,6 +165,7 @@ uv sync --locked   # crée .venv à partir de uv.lock, sans le modifier
 # Vérifier et tester vos changements
 uv run ruff check --fix  # lint, corrige ce qui est sûr (voir Standards de code)
 uv run ruff format       # formatage, après le lint (voir Standards de code)
+uv run lint-imports      # dépendances entre couches (voir Standards de code)
 uv run pytest            # tests automatisés (voir Tests)
 uv run python askGeminiPrompto.py
 
@@ -183,6 +184,7 @@ uv add <paquet>
 | Je lance l'application | `uv run python askGeminiPrompto.py` |
 | Je vérifie le code (lint) | `uv run ruff check` |
 | Je formate le code (après le lint) | `uv run ruff format` |
+| Je vérifie les dépendances entre couches | `uv run lint-imports` |
 | Je lance les tests | `uv run pytest` |
 | Je build l'exécutable (pour le système courant) | `uv sync --locked` puis `uv run pyinstaller --clean PromptoDYS.spec` |
 | Je change la version du projet | `uv version 1.3.0b1` (met à jour `pyproject.toml` et `uv.lock` ensemble) |
@@ -191,7 +193,7 @@ uv add <paquet>
 
 `uv run` synchronise l'environnement automatiquement avant de lancer la commande : pas besoin d'activer le `.venv` (`source .venv/bin/activate`).
 
-À chaque push, sur n'importe quelle branche, le workflow [ci.yml](.github/workflows/ci.yml) relance ruff (lint et formatage), pytest et le build de l'exécutable Windows. Le résultat s'affiche à côté du commit (✅ ou ❌) et dans l'onglet Actions, avec un résumé en haut de chaque exécution (signalements ruff par règle, tests en échec, résultat du build). Depuis le terminal : `gh run list --workflow ci.yml --branch <branche>`, et `gh run view --log-failed` pour les journaux des étapes en échec.
+À chaque push, sur n'importe quelle branche, le workflow [ci.yml](.github/workflows/ci.yml) relance ruff (lint et formatage), import-linter, pytest et le build de l'exécutable Windows. Le résultat s'affiche à côté du commit (✅ ou ❌) et dans l'onglet Actions, avec un résumé en haut de chaque exécution (signalements ruff par règle, tests en échec, résultat du build). Depuis le terminal : `gh run list --workflow ci.yml --branch <branche>`, et `gh run view --log-failed` pour les journaux des étapes en échec.
 
 ### 4. Commiter
 
@@ -215,6 +217,7 @@ git push origin feature/ma-super-feature
 Avant de soumettre votre PR, vérifiez :
 
 - [ ] Le code suit les [standards de code](#standards-de-code) : `uv run ruff check --fix` puis `uv run ruff format` ont été lancés, et `uv run ruff check` ne signale rien de nouveau
+- [ ] `uv run lint-imports` respecte tous les contrats
 - [ ] `uv run pytest` passe, et une correction de bug testable est accompagnée d'un test
 - [ ] Le workflow CI est vert sur la branche (onglet Actions)
 - [ ] La documentation est mise à jour
@@ -336,12 +339,24 @@ La CI échoue si un fichier n'est pas formaté.
 
 Quelques signalements anciens restent à traiter (`except:` nus, espaces sur des lignes vides) : n'en ajoutez pas de nouveaux. Faites les corrections de lint dans un commit à part, jamais dans le même commit qu'une correction de bug.
 
+### Dépendances entre couches avec import-linter
+
+Le paquet `promptodys/` est découpé en trois couches : `domain` (règles métier et cas d'usage), `infrastructure` (Gemini, Eel, disque, PDF) et `presentation` (panneau Tkinter). La règle de dépendance est `presentation → domain ← infrastructure` : le domaine n'importe ni les autres couches, ni Tk, Eel, Gemini ou reportlab, et la présentation n'importe pas l'infrastructure. Seul le point d'entrée assemble les couches.
+
+[import-linter](https://import-linter.readthedocs.io/) vérifie cette règle à partir des contrats de la section `[tool.importlinter]` de `pyproject.toml` :
+
+```bash
+uv run lint-imports   # signale chaque import qui rompt un contrat
+```
+
+La CI échoue si un contrat est rompu. Si vous en rencontrez un, déplacez le code dans la bonne couche ou passez par un port (`Protocol`) du domaine, plutôt que de modifier le contrat.
+
 ### Règles générales
 
 1. **Indentation** : 4 espaces (pas de tabs)
 2. **Longueur de ligne** : Maximum 120 caractères (vérifié par ruff)
 3. **Noms de variables** : `snake_case` pour Python, `camelCase` pour JavaScript
-4. **Noms de fonctions** : Descriptifs et en français (cohérence avec le projet)
+4. **Noms de fonctions** : Descriptifs ; en anglais dans le paquet `promptodys/` (modules, classes, fonctions), messages, docstrings et commentaires en français. Le code encore dans `askGeminiPrompto.py` garde ses noms français jusqu'à son déplacement
 5. **Commentaires** : Expliquer le "pourquoi", pas le "quoi"
 6. **Logs** : Utiliser `log_message()` avec emojis pour la lisibilité
 

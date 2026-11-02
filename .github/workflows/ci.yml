@@ -37,6 +37,11 @@ jobs:
         if: ${{ !cancelled() }}
         run: uv run ruff format --check
 
+      # Règle de dépendance entre couches (contrats dans pyproject.toml)
+      - name: Dépendances entre couches (import-linter)
+        if: ${{ !cancelled() }}
+        run: uv run lint-imports
+
       # Résumé en haut de la page de l'exécution, même si ruff a échoué
       - name: Résumé
         if: always()
@@ -58,6 +63,15 @@ jobs:
               echo "❌ Fichiers à formater (lancer \`uv run ruff format\`) :"
               echo '```'
               echo "$unformatted"
+              echo '```'
+            fi
+            echo "## Dépendances entre couches (import-linter)"
+            if contracts=$(uv run lint-imports 2>&1); then
+              echo "✅ Tous les contrats sont respectés"
+            else
+              echo "❌ Contrats rompus (lancer \`uv run lint-imports\`) :"
+              echo '```'
+              echo "$contracts"
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
