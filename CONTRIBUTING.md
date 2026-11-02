@@ -163,8 +163,9 @@ uv sync --locked   # crée .venv à partir de uv.lock, sans le modifier
 # ... modifier les fichiers ...
 
 # Vérifier et tester vos changements
-uv run ruff check   # lint (voir Standards de code)
-uv run pytest       # tests automatisés (voir Tests)
+uv run ruff check --fix  # lint, corrige ce qui est sûr (voir Standards de code)
+uv run ruff format       # formatage, après le lint (voir Standards de code)
+uv run pytest            # tests automatisés (voir Tests)
 uv run python askGeminiPrompto.py
 
 # Si vous modifiez les dépendances :
@@ -181,6 +182,7 @@ uv add <paquet>
 | Je mets à jour une dépendance | `uv lock --upgrade-package <paquet>` puis `uv sync` |
 | Je lance l'application | `uv run python askGeminiPrompto.py` |
 | Je vérifie le code (lint) | `uv run ruff check` |
+| Je formate le code (après le lint) | `uv run ruff format` |
 | Je lance les tests | `uv run pytest` |
 | Je build l'exécutable (pour le système courant) | `uv sync --locked` puis `uv run pyinstaller --clean PromptoDYS.spec` |
 | Je change la version du projet | `uv version 1.3.0b1` (met à jour `pyproject.toml` et `uv.lock` ensemble) |
@@ -189,7 +191,7 @@ uv add <paquet>
 
 `uv run` synchronise l'environnement automatiquement avant de lancer la commande : pas besoin d'activer le `.venv` (`source .venv/bin/activate`).
 
-À chaque push, sur n'importe quelle branche, le workflow [ci.yml](.github/workflows/ci.yml) relance ruff, pytest et le build de l'exécutable Windows. Le résultat s'affiche à côté du commit (✅ ou ❌) et dans l'onglet Actions, avec un résumé en haut de chaque exécution (signalements ruff par règle, tests en échec, résultat du build). Depuis le terminal : `gh run list --workflow ci.yml --branch <branche>`, et `gh run view --log-failed` pour les journaux des étapes en échec.
+À chaque push, sur n'importe quelle branche, le workflow [ci.yml](.github/workflows/ci.yml) relance ruff (lint et formatage), pytest et le build de l'exécutable Windows. Le résultat s'affiche à côté du commit (✅ ou ❌) et dans l'onglet Actions, avec un résumé en haut de chaque exécution (signalements ruff par règle, tests en échec, résultat du build). Depuis le terminal : `gh run list --workflow ci.yml --branch <branche>`, et `gh run view --log-failed` pour les journaux des étapes en échec.
 
 ### 4. Commiter
 
@@ -212,7 +214,7 @@ git push origin feature/ma-super-feature
 
 Avant de soumettre votre PR, vérifiez :
 
-- [ ] Le code suit les [standards de code](#standards-de-code), et `uv run ruff check` ne signale rien de nouveau
+- [ ] Le code suit les [standards de code](#standards-de-code) : `uv run ruff check --fix` puis `uv run ruff format` ont été lancés, et `uv run ruff check` ne signale rien de nouveau
 - [ ] `uv run pytest` passe, et une correction de bug testable est accompagnée d'un test
 - [ ] Le workflow CI est vert sur la branche (onglet Actions)
 - [ ] La documentation est mise à jour
@@ -292,8 +294,9 @@ def traitement_gemini():
     if not client:
         log_message("❌ ÉCHEC: Impossible d'initialiser Gemini")
         return
-    
+
     # ... reste du code ...
+
 
 # ❌ MAUVAIS
 def TraitementGemini():
@@ -317,6 +320,19 @@ def TraitementGemini():
 uv run ruff check         # signale les problèmes
 uv run ruff check --fix   # corrige automatiquement ceux qui sont sûrs
 ```
+
+### Formatage avec ruff
+
+`ruff format` met en forme le code (guillemets doubles, espaces, retours à la ligne, virgules finales) pour que tout le monde écrive de la même façon. Il formate aussi les blocs de code Python des fichiers Markdown, sauf ce fichier-ci : l'exemple « ❌ MAUVAIS » ci-dessus doit rester mal formaté (exclusion dans `[tool.ruff.format]`).
+
+```bash
+uv run ruff format          # formate le code, après ruff check --fix, avant de commiter
+uv run ruff format --check  # vérifie sans modifier (ce que fait la CI)
+```
+
+Lancez-le après `ruff check --fix` : les corrections automatiques du lint (import retiré, syntaxe modernisée) peuvent laisser du code à reformater.
+
+La CI échoue si un fichier n'est pas formaté.
 
 Quelques signalements anciens restent à traiter (`except:` nus, espaces sur des lignes vides) : n'en ajoutez pas de nouveaux. Faites les corrections de lint dans un commit à part, jamais dans le même commit qu'une correction de bug.
 
