@@ -27,7 +27,7 @@ def test_domain_import_creates_no_folder(monkeypatch):
     for nom in [nom for nom in sys.modules if nom.startswith("promptodys")]:
         monkeypatch.delitem(sys.modules, nom)
 
-    for module in ("note", "report", "documents"):
+    for module in ("note", "report", "documents", "ports", "processing"):
         importlib.import_module(f"promptodys.domain.{module}")
 
     assert dossiers_crees == []

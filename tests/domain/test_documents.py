@@ -1,7 +1,7 @@
 import logging
 import os
 
-from promptodys.domain.documents import prepare_save_path
+from promptodys.domain.documents import open_document, prepare_save_path, save_document
 
 DOCS = os.path.join(os.sep, "Users", "eleve", "PromptoDYS")
 
@@ -79,3 +79,40 @@ def test_prepare_save_path_logs_each_level_climbed(caplog):
     assert len(caplog.records) == 2
     assert all(record.levelno == logging.WARNING for record in caplog.records)
     assert "Anti-récursion" in caplog.messages[0]
+
+
+# --- Cas d'usage save_document et open_document ---
+
+
+def test_save_document_passes_editor_document_to_store(fake_editor, fake_store, document):
+    """Le document de l'éditeur est transmis tel quel au rangement, qui renvoie le dossier."""
+    store = fake_store(save_result="/docs/cours")
+    assert save_document(fake_editor(document=document), store, "/docs", "cours") == "/docs/cours"
+    assert store.saved == [(document, "/docs", "cours")]
+
+
+def test_save_document_empty_editor(fake_editor, fake_store):
+    """Sans document de l'éditeur, rien n'est enregistré."""
+    store = fake_store()
+    assert save_document(fake_editor(document=None), store, "/docs", "cours") is None
+    assert store.saved == []
+
+
+def test_open_document_loads_store_document_into_editor(fake_editor, fake_store, document):
+    """Le document lu est chargé tel quel dans l'éditeur, et son dossier est renvoyé."""
+    editor = fake_editor()
+    assert open_document(editor, fake_store(loaded=(document, "/docs/cours")), "/docs/cours/cours.md") == "/docs/cours"
+    assert editor.loaded == [document]
+
+
+def test_open_document_store_failure(fake_editor, fake_store):
+    """Un document illisible n'est pas chargé dans l'éditeur."""
+    editor = fake_editor()
+    assert open_document(editor, fake_store(loaded=None), "/nulle/part") is None
+    assert editor.loaded == []
+
+
+def test_open_document_editor_failure(fake_editor, fake_store, document):
+    """Si l'éditeur refuse le document, l'ouverture échoue."""
+    editor = fake_editor(accepts_writes=False)
+    assert open_document(editor, fake_store(loaded=(document, "/docs/cours")), "/docs/cours") is None

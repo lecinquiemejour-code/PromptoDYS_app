@@ -6,6 +6,8 @@ import logging
 import os
 import re
 
+from promptodys.domain import ports
+
 _logger = logging.getLogger(__name__)
 
 
@@ -33,3 +35,25 @@ def prepare_save_path(chosen_path: str) -> tuple[str, str]:
         _logger.warning(f"⚠️ Anti-récursion: save_dir '{save_dir}' se termine par '{doc_name}' → on remonte")
         save_dir = parent
     return save_dir, doc_name
+
+
+def save_document(editor: ports.Editor, store: ports.DocumentStore, directory: str, name: str) -> str | None:
+    """Enregistre le document de l'éditeur dans directory/name.
+    Renvoie le dossier du document, None si l'éditeur ou le disque a échoué."""
+    document = editor.read_document()
+    if document is None:
+        _logger.error("❌ SAUVEGARDE: Aucune donnée reçue de l'éditeur")
+        return None
+    return store.save(document, directory, name)
+
+
+def open_document(editor: ports.Editor, store: ports.DocumentStore, path: str) -> str | None:
+    """Charge dans l'éditeur le document désigné par son dossier ou par son fichier .md.
+    Renvoie le dossier du document, None si le disque ou l'éditeur a échoué."""
+    loaded = store.load(path)
+    if loaded is None:
+        return None
+    document, document_dir = loaded
+    if not editor.write_document(document):
+        return None
+    return document_dir
