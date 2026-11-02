@@ -302,6 +302,8 @@ C'est le mécanisme utilisé partout pour revenir sur le thread Tkinter. Il fonc
 
 [Ligne 1183](../askGeminiPrompto.py#L1183). La fenêtre Chrome reste ouverte après la fermeture du panneau, et rien n'est flushé proprement. Un `eel`-side `close` ou un `close_callback` (voir B5) permettrait une sortie plus nette.
 
+**Statut : 🟡 partiellement résolu.** Fermer le panneau avec l'éditeur ouvert demande confirmation, puis ferme l'éditeur : Python appelle `closeEditor()`, exposée par React (`window.close()`, qui déclenche la sauvegarde locale et `on_editor_close()`), attend la confirmation au plus 3 s, puis quitte. Sous Windows, Chrome s'arrête avec sa dernière fenêtre ; sur Mac il reste lancé sans fenêtre, sans conséquence. Reste `os._exit(0)`, conservé.
+
 ### M12. Effets de bord à l'import
 
 [Lignes 207 à 209](../askGeminiPrompto.py#L207-L209) créent `Documents\PromptoDYS` et impriment, au moment où le module est importé. Cela empêche d'importer le fichier dans un test sans toucher au disque. À déplacer dans `main()`.
@@ -506,7 +508,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | M8 | 🟡 Mineur | Parseur PDF : émojis (carré noir garanti), italique vs maths, listes numérotées | Faible | 1 ou 4 |
 | M9 | 🟡 Mineur | Console Tk sans purge | Trivial | 1 |
 | M10 | 🟡 Mineur | `root.after` depuis threads | Faible | si symptôme |
-| M11 | 🟡 Mineur | `os._exit`, Chrome reste ouvert | Faible | 1 |
+| M11 | 🟡 Partiellement résolu | `os._exit`, Chrome reste ouvert (l'éditeur est fermé avec le panneau ; `os._exit` conservé) | Faible | 1 |
 | M12 | ✅ Résolu | Effets de bord à l'import (un second ajouté : dossier du profil Chrome) (dossiers et réglage DPI déplacés dans `main()`) | Trivial | 2 |
 | D1 | 🟡 Partiellement résolu | Trois bundles React morts, `.map` dans l'exe (bundles supprimés ; `.map` toujours dans l'exe) | Trivial | 1 |
 | D2 | ✅ Résolu | `requirements.txt` en UTF-16 (remplacé par uv) | Trivial | 1 |

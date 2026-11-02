@@ -1150,40 +1150,81 @@ def traitement_gemini(annulation):
 editeur_lance = False
 # Lancement demandé, en attente du signal de React (on_editor_open) : évite un second lancement
 lancement_editeur_en_cours = False
+# Fermeture de l'éditeur demandée, en attente de sa confirmation : ignore un second clic sur Quitter
+fermeture_en_cours = False
+
+# Délai maximum d'attente de la fermeture de l'éditeur avant de quitter quand même
+CLOSE_EDITOR_TIMEOUT_S = 3
+
+
+def quitter_application():
+    """Ferme le panneau de contrôle et termine le processus"""
+    log_message("👋 Fermeture de l'application...")
+    root_global.destroy()
+    os._exit(0)  # Force la fermeture complète
+
+
+def fermer_editeur_puis_quitter():
+    """
+    Demande à l'éditeur React de fermer sa fenêtre (closeEditor), attend sa confirmation
+    (on_editor_close ou retour de eel.start() remettent editeur_lance à False), puis quitte.
+    Sous Windows, Chrome s'arrête avec sa dernière fenêtre. Au-delà du délai, on quitte quand même.
+    """
+    log_message("📝 Fermeture de l'éditeur...")
+    try:
+        eel.closeEditor()
+    except Exception as e:
+        # Bundle sans closeEditor, ou connexion déjà fermée
+        log_message(f"⚠️ Impossible de demander la fermeture de l'éditeur : {e}")
+        quitter_application()
+        return
+
+    # Au-delà, on quitte sans attendre la confirmation de l'éditeur
+    close_deadline = time.time() + CLOSE_EDITOR_TIMEOUT_S
+
+    def attendre_fermeture():
+        if not editeur_lance:
+            log_message("✅ Éditeur fermé")
+            quitter_application()
+        elif time.time() >= close_deadline:
+            log_message("⚠️ L'éditeur n'a pas confirmé sa fermeture : fermeture de l'application quand même")
+            quitter_application()
+        else:
+            root_global.after(100, attendre_fermeture)
+
+    root_global.after(100, attendre_fermeture)
 
 
 def on_closing():
     """
-    Intercepte la fermeture de la fenêtre GUI.
-    Bloque la fermeture si l'éditeur est encore ouvert pour éviter la perte de données.
+    Intercepte la fermeture de la fenêtre GUI (X ou bouton Quitter).
+    Si l'éditeur est ouvert, demande confirmation puis le ferme avant de quitter.
     L'état de l'éditeur est géré exclusivement par les callbacks React (on_editor_open/on_editor_close)
     et par le retour de eel.start() — plus fiable que la détection psutil.
     """
-    global editeur_lance, root_global
+    global fermeture_en_cours
+
+    if fermeture_en_cours:
+        return  # Fermeture de l'éditeur déjà demandée, en attente de sa confirmation
 
     if editeur_lance:
-        # Bloquer la fermeture MAIS proposer le déblocage forcé
         result = messagebox.askyesno(
             "PromptoDYS - Éditeur ouvert",
-            "L'éditeur semble encore ouvert.\n\n"
-            "Voulez-vous FORCER la fermeture de l'application ?\n\n"
-            "⚠️ ATTENTION : Cela peut entraîner une perte de données non sauvegardées.\n\n"
-            "Oui = Forcer la fermeture\n"
-            "Non = Annuler et fermer d'abord l'éditeur",
+            "L'éditeur est ouvert.\n\n"
+            "Fermer l'application fermera aussi l'éditeur.\n"
+            "Pensez à sauvegarder votre document.\n\n"
+            "Voulez-vous continuer ?",
             icon='warning'
         )
-        if result:  # User choisit "Oui" = forcer la fermeture
-            log_message("🔧 Déblocage forcé : Fermeture forcée par l'utilisateur")
-            editeur_lance = False
-            # Continuer vers la fermeture
-        else:  # User choisit "Non" = annuler
-            log_message("⚠️ Fermeture annulée : veuillez fermer l'éditeur d'abord")
-            return  # Bloquer la fermeture
+        if not result:
+            log_message("⚠️ Fermeture annulée")
+            return
+        fermeture_en_cours = True
+        fermer_editeur_puis_quitter()
+        return
 
-    # Pas d'éditeur ouvert, fermeture autorisée
-    log_message("👋 Fermeture de l'application...")
-    root_global.destroy()
-    os._exit(0)  # Force la fermeture complète
+    # Pas d'éditeur ouvert, fermeture immédiate
+    quitter_application()
 
 
 

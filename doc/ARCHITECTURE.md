@@ -49,7 +49,7 @@ flowchart LR
 
     subgraph CHROME["Fenêtre Chrome en mode application"]
         REACT["Éditeur React<br/>Editor, Toolbar, StatusBar"]
-        BRIDGE["useEelBridge.js<br/>4 fonctions exposées à Python"]
+        BRIDGE["useEelBridge.js<br/>5 fonctions exposées à Python"]
         IDB["IndexedDB + localStorage<br/>images, thème, brouillon"]
     end
 
@@ -90,6 +90,7 @@ flowchart TB
         P3["eel.readDocumentData()()"]
         P4["eel.writeDocumentData(data)()"]
         P5["@eel.expose on_editor_open()<br/>@eel.expose on_editor_close()"]
+        P6["eel.closeEditor()"]
     end
 
     subgraph JS["Côté React"]
@@ -98,6 +99,7 @@ flowchart TB
         J3["readDocumentData<br/>Markdown + images en base64<br/>lues depuis le DOM via canvas"]
         J4["writeDocumentData<br/>base64 → blob URL → HTML → DOM<br/>+ copie en IndexedDB"]
         J5["Au montage / démontage<br/>signale l'état à Python"]
+        J6["closeEditor<br/>window.close()"]
     end
 
     P1 --> J1
@@ -105,6 +107,7 @@ flowchart TB
     P3 --> J3
     P4 --> J4
     J5 --> P5
+    P6 --> J6
 ```
 
 | Fonction | Sens | Usage | Format échangé |
@@ -114,6 +117,7 @@ flowchart TB
 | `readDocumentData` | Python lit l'éditeur | Sauvegarde complète | `{ markdown, images: [{filename, data, mimeType}] }` |
 | `writeDocumentData` | Python écrit dans l'éditeur | Ouverture complète | Même structure |
 | `on_editor_open` / `on_editor_close` | React signale Python | État de l'éditeur, activation des boutons | Aucun paramètre |
+| `closeEditor` | Python ferme l'éditeur | Fermeture du panneau de contrôle avec l'éditeur ouvert | Aucun paramètre |
 
 ### Règle technique importante
 

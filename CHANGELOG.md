@@ -34,6 +34,7 @@ et la numérotation suit le sens du [Semantic Versioning](https://semver.org/lan
 - Ouvrir un document avec le bouton « Ouvrir » quand l'éditeur était fermé échouait toujours après 30 s d'attente : l'éditeur ne signalait jamais son ouverture à l'application
 - Après la fermeture de l'éditeur, le panneau de contrôle continuait de le considérer comme ouvert : il était impossible de le rouvrir. L'éditeur signale maintenant sa fermeture, le panneau affiche « Éditeur fermé » et l'éditeur peut être rouvert
 - Trois anciennes versions de l'éditeur, inutilisées, étaient embarquées dans l'exécutable
+- Fermer le panneau de contrôle laissait l'éditeur ouvert, relié à une application qui n'existait plus. Après confirmation, l'éditeur est maintenant fermé lui aussi ; le texte en cours est retrouvé à sa prochaine ouverture
 - Quatre `except:` nus attrapaient aussi `KeyboardInterrupt` et `SystemExit` : un Ctrl+C reçu pendant l'écriture des logs était avalé. Ils n'attrapent plus que les exceptions ordinaires
 
 ### Prévu
