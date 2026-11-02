@@ -23,6 +23,7 @@ Fonctionnalités:
 - CAPTURE COMPLÈTE de tous les logs dans les rapports
 """
 
+import contextlib
 import eel
 import os
 import sys
@@ -99,24 +100,18 @@ class RedirectText:
     def write(self, message):
         # Écrire dans la console réelle (si disponible)
         if self.terminal:
-            try:
+            with contextlib.suppress(Exception):
                 self.terminal.write(message)
                 self.terminal.flush()
-            except:
-                pass
 
-        # Mettre à jour la GUI
-        try:
+        # Mettre à jour la GUI (éviter de planter si la GUI est fermée)
+        with contextlib.suppress(Exception):
             self.updater(message)
-        except:
-            pass # Éviter de planter si la GUI est fermée
 
     def flush(self):
         if self.terminal:
-            try:
+            with contextlib.suppress(Exception):
                 self.terminal.flush()
-            except:
-                pass
 
 
 
@@ -298,7 +293,7 @@ def save_document(document_name, save_directory):
     
     Returns:
         str|False: Chemin du dossier créé si succès, False sinon
-    """
+    """  # noqa: W293
     print(f"💾 SAUVEGARDE: Début pour '{document_name}' dans '{save_directory}'")
 
     # 1. Récupérer les données depuis l'éditeur JS (texte + images base64)
@@ -381,7 +376,7 @@ def load_document(path):
     
     Returns:
         bool: True si succès, False sinon
-    """
+    """  # noqa: W293
     print(f"📂 OUVERTURE: Chemin reçu: '{path}'")
 
     # Détection intelligente : fichier .md ou dossier ?
@@ -1569,7 +1564,7 @@ def gui_control_panel():
     root.update()
 
     # --- Zone défilante (si la fenêtre est plus petite que son contenu) ---
-    canvas = tk.Canvas(root, bg="#F3F3F3", highlightthickness=0, bd=0, yscrollincrement=20)  # Unité de défilement : 20px
+    canvas = tk.Canvas(root, bg="#F3F3F3", highlightthickness=0, bd=0, yscrollincrement=20)  # Défilement : 20px
     canvas_scrollbar = ttk.Scrollbar(root, orient="vertical", command=canvas.yview)
     canvas.configure(yscrollcommand=canvas_scrollbar.set)
     canvas.pack(side="left", fill="both", expand=True)
@@ -1893,7 +1888,7 @@ def main():
     try:
         from ctypes import windll
         windll.shcore.SetProcessDpiAwareness(1)  # DPI per monitor
-    except:
+    except (ImportError, AttributeError, OSError):
         pass  # Ignorer si non Windows
 
     log_message('🚀 Lancement de PromptoDYS...')
