@@ -83,8 +83,6 @@ last_editor_activity = None  # Timestamp de la dernière activité éditeur dét
 current_document_path = None  # Ex: "C:/.../PromptoDYS/MonDoc" → sauvegarde directe au prochain Ctrl+S
 
 
-
-
 # Classe pour rediriger stdout vers la GUI
 # Classe pour rediriger stdout/stderr vers la GUI tout en gardant la console
 class RedirectText:
@@ -114,9 +112,6 @@ class RedirectText:
                 self.terminal.flush()
 
 
-
-
-
 def log_message(message):
     """Log un message dans la console ET le capture pour les rapports"""
     print(message, flush=True)
@@ -128,16 +123,16 @@ def log_message(message):
 def find_web_folder():
     """Trouve le dossier contenant index.html (compatible PyInstaller)"""
     # Si on est dans un exécutable PyInstaller
-    if hasattr(sys, '_MEIPASS'):
+    if hasattr(sys, "_MEIPASS"):
         base_path = sys._MEIPASS
-        possible_folders = ['build_web', 'build']
+        possible_folders = ["build_web", "build"]
     else:
         # Mode développement normal
         base_path = APP_DIR
-        possible_folders = ['build_web', 'build', 'dist', 'public', '.']
+        possible_folders = ["build_web", "build", "dist", "public", "."]
 
     for folder in possible_folders:
-        index_path = os.path.join(base_path, folder, 'index.html')
+        index_path = os.path.join(base_path, folder, "index.html")
         if os.path.exists(index_path):
             print(f"✅ Dossier web trouvé: {folder}/")
             return os.path.join(base_path, folder)
@@ -145,17 +140,18 @@ def find_web_folder():
     print("⌐ Aucun index.html trouvé dans:", possible_folders)
     return None
 
+
 def get_markdown():
     """
     📖 LECTURE: Récupère le contenu Markdown actuel
     """
     try:
         content = eel.readMarkdown()()
-        print(f'✅ SUCCÈS: Contenu récupéré ({len(content)} caractères)')
+        print(f"✅ SUCCÈS: Contenu récupéré ({len(content)} caractères)")
         return content
     except Exception as e:
-        print(f'❌ ÉCHEC: Erreur lecture: {e}')
-        return ''
+        print(f"❌ ÉCHEC: Erreur lecture: {e}")
+        return ""
 
 
 def afficher_contenu_editeur(contenu, titre="📄 CONTENU DE L'ÉDITEUR"):
@@ -175,10 +171,10 @@ def set_markdown(markdown_content):
     """
     try:
         eel.writeMarkdown(markdown_content)
-        print(f'✅ SUCCÈS: Contenu injecté ({len(markdown_content)} caractères)')
+        print(f"✅ SUCCÈS: Contenu injecté ({len(markdown_content)} caractères)")
         return True
     except Exception as e:
-        print(f'❌ ÉCHEC: Erreur écriture: {e}')
+        print(f"❌ ÉCHEC: Erreur écriture: {e}")
         return False
 
 
@@ -188,6 +184,7 @@ def _get_documents_folder():
     try:
         import ctypes
         import ctypes.wintypes
+
         CSIDL_PERSONAL = 5  # "Mes documents" dans l'API Shell Windows
         buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
         ctypes.windll.shell32.SHGetFolderPathW(None, CSIDL_PERSONAL, None, 0, buf)
@@ -197,6 +194,7 @@ def _get_documents_folder():
         pass
     # Fallback si non-Windows ou erreur
     return os.path.expanduser("~/Documents")
+
 
 PROMPTO_DOCS_DIR = os.path.join(_get_documents_folder(), "PromptoDYS")
 
@@ -212,6 +210,7 @@ def _get_chrome_profile_dir():
         # Fallback Linux et autres
         base_dir = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
     return os.path.join(base_dir, "PromptoDYS", "ChromeProfile")
+
 
 CHROME_PROFILE_DIR = _get_chrome_profile_dir()
 
@@ -247,8 +246,10 @@ def attendre_port_libre(port, delai=5.0):
         time.sleep(0.5)
     return True
 
+
 # --- Fonctions de sauvegarde/ouverture de documents complets (texte + images) ---
 # Principe "Arduino" : le dossier porte le même nom que le fichier .md principal
+
 
 def preparer_chemin_sauvegarde(chemin_choisi):
     """Renvoie (dossier, nom du document) à partir du chemin choisi dans le dialogue.
@@ -256,7 +257,7 @@ def preparer_chemin_sauvegarde(chemin_choisi):
     si l'utilisateur est entré dans le dossier du document, on remonte."""
     save_dir = os.path.dirname(chemin_choisi)
     doc_name = os.path.splitext(os.path.basename(chemin_choisi))[0]
-    doc_name = re.sub(r'[<>:"/\\|?*]', '_', doc_name).strip()
+    doc_name = re.sub(r'[<>:"/\\|?*]', "_", doc_name).strip()
     # Nom de fichier caché ('.md', '.foo', '..') : refusé comme un nom vide
     if doc_name.startswith("."):
         doc_name = ""
@@ -279,21 +280,21 @@ def save_document(document_name, save_directory):
     """
     💾 SAUVEGARDE COMPLÈTE: Récupère le document (texte + images) depuis l'éditeur
     et l'écrit sur le disque dans un dossier autonome.
-    
+
     Structure créée :
         save_directory/document_name/
         ├── document_name.md
         └── images/
             ├── photo_xxx.png
             └── schema_xxx.jpg
-    
+
     Args:
         document_name: Nom du document (ex: "MonDocument")
         save_directory: Chemin du dossier parent (ex: "C:/Users/Jean/Documents")
-    
+
     Returns:
         str|False: Chemin du dossier créé si succès, False sinon
-    """  # noqa: W293
+    """
     print(f"💾 SAUVEGARDE: Début pour '{document_name}' dans '{save_directory}'")
 
     # 1. Récupérer les données depuis l'éditeur JS (texte + images base64)
@@ -306,9 +307,9 @@ def save_document(document_name, save_directory):
             print("🔍 DEBUG readDocumentData → None (la fonction JS retourne undefined ou null)")
         elif isinstance(data, dict):
             print(f"🔍 DEBUG readDocumentData → dict avec clés: {list(data.keys())}")
-            if 'markdown' in data:
+            if "markdown" in data:
                 print(f"🔍 DEBUG   markdown: {len(data['markdown'])} caractères")
-            if 'images' in data:
+            if "images" in data:
                 print(f"🔍 DEBUG   images: {len(data['images'])} image(s)")
         elif isinstance(data, str):
             print(f"🔍 DEBUG readDocumentData → string ({len(data)} car.): {repr(data)[:200]}")
@@ -319,6 +320,7 @@ def save_document(document_name, save_directory):
     except Exception as e:
         print(f"❌ SAUVEGARDE: Erreur appel readDocumentData: {type(e).__name__}: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -367,16 +369,16 @@ def save_document(document_name, save_directory):
 def load_document(path):
     """
     📂 OUVERTURE COMPLÈTE: Lit un document depuis le disque et l'injecte dans l'éditeur.
-    
+
     Accepte un chemin vers le dossier OU vers le fichier .md (principe Arduino :
     que l'utilisateur sélectionne le .md ou le dossier, ça fonctionne pareil).
-    
+
     Args:
         path: Chemin vers le dossier du document OU vers le fichier .md
-    
+
     Returns:
         bool: True si succès, False sinon
-    """  # noqa: W293
+    """
     print(f"📂 OUVERTURE: Chemin reçu: '{path}'")
 
     # Détection intelligente : fichier .md ou dossier ?
@@ -427,11 +429,13 @@ def load_document(path):
                 with open(image_path, "rb") as f:
                     image_data = base64.b64encode(f.read()).decode("utf-8")
 
-                images.append({
-                    "filename": filename,
-                    "data": image_data,
-                    "mimeType": mime_type
-                })
+                images.append(
+                    {
+                        "filename": filename,
+                        "data": image_data,
+                        "mimeType": mime_type,
+                    }
+                )
                 print(f"  🖼️ Image chargée: {filename} ({mime_type})")
             except Exception as e:
                 print(f"  ❌ Erreur lecture image '{filename}': {e}")
@@ -447,12 +451,12 @@ def load_document(path):
     # Détail des données envoyées
     data_to_send = {
         "markdown": markdown_content,
-        "images": images
+        "images": images,
     }
     print(f"🔍 DEBUG: data_to_send → clés={list(data_to_send.keys())}")
     print(f"🔍 DEBUG:   markdown: {len(data_to_send['markdown'])} car., début: {repr(data_to_send['markdown'][:100])}")
     print(f"🔍 DEBUG:   images: {len(data_to_send['images'])} élément(s)")
-    for i, img in enumerate(data_to_send['images']):
+    for i, img in enumerate(data_to_send["images"]):
         print(
             f"🔍 DEBUG:   image[{i}]: filename={img['filename']}, mimeType={img['mimeType']}, "
             f"data={len(img['data'])} car. base64"
@@ -476,6 +480,7 @@ def load_document(path):
     except Exception as e:
         print(f"❌ OUVERTURE: Erreur appel writeDocumentData: {type(e).__name__}: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -491,6 +496,7 @@ def update_streaming_text(text, clear=False):
     """Met à jour la zone de texte du streaming IA (thread-safe)"""
     global root_global, streaming_text_global
     if root_global and streaming_text_global:
+
         def _update():
             streaming_text_global.configure(state="normal")
             if clear:
@@ -498,6 +504,7 @@ def update_streaming_text(text, clear=False):
             streaming_text_global.insert("end", text)
             streaming_text_global.see("end")  # Auto-scroll
             streaming_text_global.configure(state="disabled")
+
         root_global.after(0, _update)
 
 
@@ -526,8 +533,9 @@ def on_editor_close():
         root_global.after(0, lambda: status_label_global.config(text="🔴 Éditeur fermé"))
 
 
-def preparer_contenu_rapport_complet(contenu_original, logs_etapes, streaming_gemini, contenu_traite,
-                                     debrief_correction, stats_tokens=None):
+def preparer_contenu_rapport_complet(
+    contenu_original, logs_etapes, streaming_gemini, contenu_traite, debrief_correction, stats_tokens=None
+):
     """Prépare le contenu COMPLET du rapport avec TOUS les logs - VERSION LISIBLE"""
 
     contenu_final = "# Rapport PromptoDYS - Session Complète\n\n"
@@ -546,7 +554,7 @@ def preparer_contenu_rapport_complet(contenu_original, logs_etapes, streaming_ge
     # SECTION 2: Contenu Original
     contenu_final += "## 📄 Contenu Original de l'Éditeur\n\n"
     contenu_final += "**CONTENU ORIGINAL :**\n\n"
-    for ligne in (contenu_original if contenu_original else "(Aucun contenu)").split('\n'):
+    for ligne in (contenu_original if contenu_original else "(Aucun contenu)").split("\n"):
         contenu_final += f"    {ligne}\n"
     contenu_final += "\n---\n\n"
 
@@ -560,7 +568,7 @@ def preparer_contenu_rapport_complet(contenu_original, logs_etapes, streaming_ge
     # SECTION 4: Streaming Gemini Complet
     contenu_final += "## 🤖 Streaming Gemini Complet\n\n"
     contenu_final += "**THINKING + RÉPONSE EN TEMPS RÉEL :**\n\n"
-    for ligne in (streaming_gemini if streaming_gemini else "(Aucun streaming capturé)").split('\n'):
+    for ligne in (streaming_gemini if streaming_gemini else "(Aucun streaming capturé)").split("\n"):
         contenu_final += f"    {ligne}\n"
     contenu_final += "\n---\n\n"
 
@@ -589,25 +597,25 @@ def preparer_contenu_rapport_complet(contenu_original, logs_etapes, streaming_ge
 def nettoyer_html_tags(text):
     """Supprime les balises HTML problématiques pour reportlab"""
     # Remplacer les marqueurs __BOLD_n__ par des séparateurs horizontaux MD
-    bold_count = len(re.findall(r'__BOLD_\d+__', text))
+    bold_count = len(re.findall(r"__BOLD_\d+__", text))
     if bold_count > 0:
         log_message(f"🔄 NETTOYAGE: {bold_count} marqueurs __BOLD_n__ remplacés par des séparateurs ---")
-    text = re.sub(r'__BOLD_\d+__', '---', text)
+    text = re.sub(r"__BOLD_\d+__", "---", text)
 
     # Supprimer les balises <span> avec styles
-    text = re.sub(r'<span[^>]*>', '', text)
-    text = re.sub(r'</span>', '', text)
+    text = re.sub(r"<span[^>]*>", "", text)
+    text = re.sub(r"</span>", "", text)
 
     # Supprimer seulement les émojis problématiques pour reportlab
-    text = re.sub(r'[🎉🎯🔧📊📝📄✅❌⚙️🚀🔍✏️🧠🔢💾🎮📋💡🤖📖🔗🪟📁⏳🔄💭]', '', text)
+    text = re.sub(r"[🎉🎯🔧📊📝📄✅❌⚙️🚀🔍✏️🧠🔢💾🎮📋💡🤖📖🔗🪟📁⏳🔄💭]", "", text)
 
     # Nettoyer les caractères spéciaux
-    text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     # Remettre les balises autorisées
-    text = text.replace('&lt;b&gt;', '<b>').replace('&lt;/b&gt;', '</b>')
-    text = text.replace('&lt;i&gt;', '<i>').replace('&lt;/i&gt;', '</i>')
-    text = text.replace('&lt;u&gt;', '<u>').replace('&lt;/u&gt;', '</u>')
+    text = text.replace("&lt;b&gt;", "<b>").replace("&lt;/b&gt;", "</b>")
+    text = text.replace("&lt;i&gt;", "<i>").replace("&lt;/i&gt;", "</i>")
+    text = text.replace("&lt;u&gt;", "<u>").replace("&lt;/u&gt;", "</u>")
 
     return text
 
@@ -620,47 +628,47 @@ def convertir_markdown_vers_paragraphes(contenu_md):
 
     # Styles personnalisés
     title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Title'],
+        "CustomTitle",
+        parent=styles["Title"],
         fontSize=16,
         textColor=colors.darkblue,
         spaceAfter=15,
-        alignment=1  # Centré
+        alignment=1,  # Centré
     )
 
     heading1_style = ParagraphStyle(
-        'CustomHeading1',
-        parent=styles['Heading1'],
+        "CustomHeading1",
+        parent=styles["Heading1"],
         fontSize=12,
         textColor=colors.darkblue,
         spaceBefore=12,
-        spaceAfter=8
+        spaceAfter=8,
     )
 
     heading2_style = ParagraphStyle(
-        'CustomHeading2',
-        parent=styles['Heading2'],
+        "CustomHeading2",
+        parent=styles["Heading2"],
         fontSize=10,
         textColor=colors.darkslategray,
         spaceBefore=10,
-        spaceAfter=6
+        spaceAfter=6,
     )
 
     normal_style = ParagraphStyle(
-        'CustomNormal',
-        parent=styles['Normal'],
+        "CustomNormal",
+        parent=styles["Normal"],
         fontSize=9,  # Plus gros pour meilleure lisibilité
         spaceBefore=6,
         spaceAfter=6,
         leftIndent=0,
-        rightIndent=0
+        rightIndent=0,
     )
 
     code_style = ParagraphStyle(
-        'CustomCode',
+        "CustomCode",
         parent=normal_style,
         fontSize=9,  # Plus gros pour meilleure lisibilité
-        fontName='Helvetica',  # Police normale au lieu de Courier
+        fontName="Helvetica",  # Police normale au lieu de Courier
         backgroundColor=colors.lightblue,  # Couleur plus visible
         borderWidth=2,
         borderColor=colors.darkblue,
@@ -668,12 +676,12 @@ def convertir_markdown_vers_paragraphes(contenu_md):
         rightIndent=15,
         spaceBefore=8,
         spaceAfter=8,
-        borderPadding=10  # Plus d'espace autour du texte
+        borderPadding=10,  # Plus d'espace autour du texte
     )
 
     # Parsing simple du Markdown
     paragraphes = []
-    lignes = contenu_md.split('\n')
+    lignes = contenu_md.split("\n")
     in_code_block = False
 
     for ligne in lignes:
@@ -685,7 +693,7 @@ def convertir_markdown_vers_paragraphes(contenu_md):
             continue
 
         # Gestion des blocs de code (```)
-        if ligne.startswith('```'):
+        if ligne.startswith("```"):
             in_code_block = not in_code_block
             continue
 
@@ -700,36 +708,36 @@ def convertir_markdown_vers_paragraphes(contenu_md):
         ligne_clean = nettoyer_html_tags(ligne)
 
         # Titre principal (# )
-        if ligne_clean.startswith('# '):
+        if ligne_clean.startswith("# "):
             text = ligne_clean[2:].strip()
             paragraphes.append(Paragraph(text, title_style))
 
         # Sous-titre niveau 1 (## )
-        elif ligne_clean.startswith('## '):
+        elif ligne_clean.startswith("## "):
             text = ligne_clean[3:].strip()
             paragraphes.append(Paragraph(text, heading1_style))
 
         # Sous-titre niveau 2 (### )
-        elif ligne_clean.startswith('### '):
+        elif ligne_clean.startswith("### "):
             text = ligne_clean[4:].strip()
             paragraphes.append(Paragraph(text, heading2_style))
 
         # Ligne de séparation (---)
-        elif ligne_clean.startswith('---'):
+        elif ligne_clean.startswith("---"):
             paragraphes.append(Spacer(1, 8))
 
         # Liste à puces (- ou *)
-        elif ligne_clean.startswith('- ') or ligne_clean.startswith('* '):
+        elif ligne_clean.startswith("- ") or ligne_clean.startswith("* "):
             text = ligne_clean[2:].strip()
             paragraphes.append(Paragraph(f"• {text}", normal_style))
 
         # Texte normal
         else:
             # Gérer le gras inline (**texte**)
-            ligne_final = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', ligne_clean)
+            ligne_final = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", ligne_clean)
 
             # Gérer l'italique inline (*texte*)
-            ligne_final = re.sub(r'\*([^*]+)\*', r'<i>\1</i>', ligne_final)
+            ligne_final = re.sub(r"\*([^*]+)\*", r"<i>\1</i>", ligne_final)
 
             if ligne_final.strip():  # Éviter les paragraphes vides
                 paragraphes.append(Paragraph(ligne_final, normal_style))
@@ -749,7 +757,7 @@ def generer_pdf_reportlab(contenu_final, pdf_filepath):
             rightMargin=0.5 * inch,
             leftMargin=0.5 * inch,
             topMargin=0.5 * inch,
-            bottomMargin=0.5 * inch
+            bottomMargin=0.5 * inch,
         )
 
         # Convertir le Markdown en éléments reportlab
@@ -767,8 +775,9 @@ def generer_pdf_reportlab(contenu_final, pdf_filepath):
         return None
 
 
-def sauvegarder_rapport(contenu_original, logs_etapes, streaming_gemini, contenu_traite, debrief_correction,
-                        stats_tokens=None):
+def sauvegarder_rapport(
+    contenu_original, logs_etapes, streaming_gemini, contenu_traite, debrief_correction, stats_tokens=None
+):
     """Sauvegarde le rapport COMPLET en PDF uniquement"""
     if not contenu_traite or not contenu_traite.strip():
         log_message("⚠️ ATTENTION: Aucun contenu traité à sauvegarder")
@@ -791,7 +800,7 @@ def sauvegarder_rapport(contenu_original, logs_etapes, streaming_gemini, contenu
         streaming_gemini=streaming_gemini,
         contenu_traite=contenu_traite,
         debrief_correction=debrief_correction,
-        stats_tokens=stats_tokens
+        stats_tokens=stats_tokens,
     )
     log_message("✅ SUCCÈS: Rapport complet préparé")
 
@@ -861,7 +870,7 @@ def init_gemini_client():
 def lire_prompto_dys():
     """Lit promptodys.prompt : la copie embarquée dans l'exécutable PyInstaller,
     ou celle du dossier du script en mode développement"""
-    base_path = getattr(sys, '_MEIPASS', os.path.dirname(__file__))
+    base_path = getattr(sys, "_MEIPASS", os.path.dirname(__file__))
     try:
         with open(os.path.join(base_path, "promptodys.prompt"), encoding="utf-8") as f:
             contenu = f.read()
@@ -886,15 +895,15 @@ def extraire_contenu_note(reponse_complete):
         fin = reponse_complete.find("</NOTE>")
         contenu = reponse_complete[debut:fin].strip()
         # Remplacer les marqueurs __BOLD_n__ par des séparateurs horizontaux MD
-        bold_count = len(re.findall(r'__BOLD_\d+__', contenu))
+        bold_count = len(re.findall(r"__BOLD_\d+__", contenu))
         if bold_count > 0:
             log_message(f"🔄 NOTE: {bold_count} marqueurs __BOLD_n__ remplacés par des séparateurs ---")
-        contenu = re.sub(r'__BOLD_\d+__', '---', contenu)
+        contenu = re.sub(r"__BOLD_\d+__", "---", contenu)
         return contenu
     else:
         log_message("⚠️ ATTENTION: Balises <NOTE> absentes, utilisation complète")
         # Remplacer les marqueurs même en cas de réponse complète
-        reponse_nettoyee = re.sub(r'__BOLD_\d+__', '---', reponse_complete)
+        reponse_nettoyee = re.sub(r"__BOLD_\d+__", "---", reponse_complete)
         return reponse_nettoyee
 
 
@@ -904,17 +913,15 @@ def ajouter_note_origine(contenu_traite, contenu_original):
     if not contenu_traite.strip():
         return contenu_traite
     # Images Markdown de l'éditeur, ex. ![photo](./images/photo.png){width=300px id=...}, ou balises <img>
-    note_sans_images = re.sub(r'!\[[^\]]*\]\([^)]*\)(\{[^}]*\})?|<img[^>]*>', '', contenu_original)
-    note_sans_images = re.sub(r'\n{3,}', '\n\n', note_sans_images).strip()  # Lignes vides laissées par les images
+    note_sans_images = re.sub(r"!\[[^\]]*\]\([^)]*\)(\{[^}]*\})?|<img[^>]*>", "", contenu_original)
+    note_sans_images = re.sub(r"\n{3,}", "\n\n", note_sans_images).strip()  # Lignes vides laissées par les images
     if not note_sans_images:
         return contenu_traite
     # Retirer un éventuel séparateur final pour ne pas le doubler
-    contenu_traite = re.sub(r'(\s*\n)?-{3,}\s*$', '', contenu_traite.rstrip())
+    contenu_traite = re.sub(r"(\s*\n)?-{3,}\s*$", "", contenu_traite.rstrip())
     log_message(f"📎 NOTE: Note d'origine ajoutée ({len(note_sans_images)} caractères)")
     return (
-        f"{contenu_traite}\n\n---\n\n"
-        f"### <span style=\"color: #3399ff;\">Note d'origine</span>\n\n"
-        f"{note_sans_images}\n"
+        f'{contenu_traite}\n\n---\n\n### <span style="color: #3399ff;">Note d\'origine</span>\n\n{note_sans_images}\n'
     )
 
 
@@ -978,11 +985,7 @@ def traitement_gemini(annulation):
     date_du_jour = datetime.now().strftime("%d/%m/%Y")
 
     # Injecter texte + date dans le prompt
-    prompt_final = (
-        prompt_template
-        .replace("[TEXTE]", contenu_editeur)
-        .replace("[DATE]", date_du_jour)
-    )
+    prompt_final = prompt_template.replace("[TEXTE]", contenu_editeur).replace("[DATE]", date_du_jour)
 
     log_message("✅ SUCCÈS: Prompt préparé (substitution [TEXTE] et [DATE] effectuée)")
 
@@ -991,12 +994,11 @@ def traitement_gemini(annulation):
     config = types.GenerateContentConfig(
         thinking_config=types.ThinkingConfig(
             thinking_level=GEMINI_THINKING_LEVEL,
-            include_thoughts=True
-        )
+            include_thoughts=True,
+        ),
     )
     log_message(
-        f"✅ SUCCÈS: Configuration Gemini prête "
-        f"(Modèle: {GEMINI_MODEL}, Thinking level: {GEMINI_THINKING_LEVEL.value})"
+        f"✅ SUCCÈS: Configuration Gemini prête (Modèle: {GEMINI_MODEL}, Thinking level: {GEMINI_THINKING_LEVEL.value})"
     )
 
     # CAPTURER LES LOGS DES ÉTAPES 1-5
@@ -1016,9 +1018,9 @@ def traitement_gemini(annulation):
     try:
         log_message("📡 Flux IA: Démarrage de la réception des données...")
         for chunk in client.models.generate_content_stream(
-                model=GEMINI_MODEL,
-                contents=prompt_final,
-                config=config
+            model=GEMINI_MODEL,
+            contents=prompt_final,
+            config=config,
         ):
             # VÉRIFICATION DE L'ABANDON À CHAQUE CHUNK (traité à la sortie du flux)
             if annulation.is_set():
@@ -1114,7 +1116,7 @@ def traitement_gemini(annulation):
                 "input": getattr(usage, "prompt_token_count", "N/A"),
                 "output": getattr(usage, "candidates_token_count", "N/A"),
                 "thinking": getattr(usage, "thoughts_token_count", "N/A"),
-                "total": getattr(usage, "total_token_count", "N/A")
+                "total": getattr(usage, "total_token_count", "N/A"),
             }
             log_message(f"🔢 Input tokens     : {stats_tokens['input']}")
             log_message(f"🔢 Output tokens    : {stats_tokens['output']}")
@@ -1132,7 +1134,7 @@ def traitement_gemini(annulation):
         streaming_gemini=streaming_gemini_complet,
         contenu_traite=contenu_traite,
         debrief_correction=debrief_correction,
-        stats_tokens=stats_tokens
+        stats_tokens=stats_tokens,
     )
 
     if pdf_file:
@@ -1214,7 +1216,7 @@ def on_closing():
             "Fermer l'application fermera aussi l'éditeur.\n"
             "Pensez à sauvegarder votre document.\n\n"
             "Voulez-vous continuer ?",
-            icon='warning'
+            icon="warning",
         )
         if not result:
             log_message("⚠️ Fermeture annulée")
@@ -1227,13 +1229,11 @@ def on_closing():
     quitter_application()
 
 
-
 # --- État de l'éditeur géré exclusivement par les callbacks React ---
 # on_editor_open()  → editeur_lance = True  (React notifie l'ouverture), fin du lancement
 # on_editor_close() → editeur_lance = False (React notifie la fermeture)
 # lancer_eel()      → editeur_lance = False (eel.start() retourne/lève si crash)
 # lancement_editeur_en_cours : du clic sur « Ouvrir l'éditeur » au signal de React (ou à l'échec)
-
 
 
 def gui_control_panel():
@@ -1267,9 +1267,11 @@ def gui_control_panel():
 
         def echec_ouverture(statut, message):
             """Échec du lancement : statut et popup, affichés par le thread de l'interface"""
+
             def _afficher():
                 status_label.config(text=statut)
                 messagebox.showerror("PromptoDYS - Éditeur non ouvert", message)
+
             root.after(0, _afficher)
 
         def lancer_eel():
@@ -1284,38 +1286,45 @@ def gui_control_panel():
                     f"Un autre programme utilise le port {EEL_PORT},\n"
                     "nécessaire à l'éditeur.\n\n"
                     "Fermez les autres programmes ouverts,\n"
-                    "ou redémarrez l'ordinateur, puis réessayez."
+                    "ou redémarrez l'ordinateur, puis réessayez.",
                 )
                 return
             try:
-                eel.start('index.html',
-                          mode='chrome',
-                          size=(1200, 800),
-                          port=EEL_PORT,
-                          cmdline_args=[
-                              f'--app=http://localhost:{EEL_PORT}/index.html',
-                              f'--user-data-dir={CHROME_PROFILE_DIR}',
-                              '--disable-features=VizDisplayCompositor',
-                              '--no-first-run',
-                              '--no-default-browser-check',
-                              '--disable-default-apps',
-                              '--disable-extensions',
-                              '--disable-plugins',
-                              '--window-size=1200,800',
-                              '--window-position=100,100'
-                          ],
-                          block=True)
+                eel.start(
+                    "index.html",
+                    mode="chrome",
+                    size=(1200, 800),
+                    port=EEL_PORT,
+                    cmdline_args=[
+                        f"--app=http://localhost:{EEL_PORT}/index.html",
+                        f"--user-data-dir={CHROME_PROFILE_DIR}",
+                        "--disable-features=VizDisplayCompositor",
+                        "--no-first-run",
+                        "--no-default-browser-check",
+                        "--disable-default-apps",
+                        "--disable-extensions",
+                        "--disable-plugins",
+                        "--window-size=1200,800",
+                        "--window-position=100,100",
+                    ],
+                    block=True,
+                )
             except Exception as e:
                 log_message(f"❌ Erreur lancement éditeur: {e}")
                 # Fallback
                 try:
-                    eel.start('index.html', mode='chrome-app', size=(1200, 800), port=EEL_PORT,
-                              cmdline_args=[
-                                  f'--user-data-dir={CHROME_PROFILE_DIR}',
-                                  '--no-first-run',
-                                  '--no-default-browser-check'
-                              ],
-                              block=True)
+                    eel.start(
+                        "index.html",
+                        mode="chrome-app",
+                        size=(1200, 800),
+                        port=EEL_PORT,
+                        cmdline_args=[
+                            f"--user-data-dir={CHROME_PROFILE_DIR}",
+                            "--no-first-run",
+                            "--no-default-browser-check",
+                        ],
+                        block=True,
+                    )
                 except Exception as e2:
                     log_message(f"❌ Erreur fallback lancement éditeur: {e2}")
                     editeur_lance = False
@@ -1325,7 +1334,7 @@ def gui_control_panel():
                         "L'éditeur n'a pas pu s'ouvrir.\n\n"
                         "Vérifiez que Google Chrome est installé,\n"
                         "puis réessayez.\n\n"
-                        "Le détail de l'erreur est dans la console."
+                        "Le détail de l'erreur est dans la console.",
                     )
                     return
 
@@ -1347,17 +1356,14 @@ def gui_control_panel():
         if not editeur_lance:
             messagebox.showwarning(
                 "PromptoDYS - Éditeur requis",
-                "L'éditeur n'est pas ouvert.\n\n"
-                "Veuillez d'abord ouvrir l'éditeur\n"
-                "avant de sauvegarder.",
-                icon='warning'
+                "L'éditeur n'est pas ouvert.\n\nVeuillez d'abord ouvrir l'éditeur\navant de sauvegarder.",
+                icon="warning",
             )
             status_label.config(text="⚠️ Éditeur non ouvert")
             return
 
         log_message(
-            f"🔍 DEBUG btn_sauvegarder: editeur_lance={editeur_lance}, "
-            f"current_document_path={current_document_path}"
+            f"🔍 DEBUG btn_sauvegarder: editeur_lance={editeur_lance}, current_document_path={current_document_path}"
         )
 
         # Toujours afficher le dialogue — pré-rempli si document déjà ouvert/sauvegardé
@@ -1371,7 +1377,7 @@ def gui_control_panel():
                 initialdir=initial_dir,
                 initialfile=initial_name,
                 defaultextension="",
-                filetypes=[("Tous les fichiers", "*.*")]
+                filetypes=[("Tous les fichiers", "*.*")],
             )
             if not selected:
                 log_message("💾 Sauvegarde annulée par l'utilisateur")
@@ -1388,7 +1394,7 @@ def gui_control_panel():
                 "ou commence par un point.\n\n"
                 "Veuillez saisir un nom\n"
                 "(lettres ou chiffres).",
-                icon='warning'
+                icon="warning",
             )
             initial_dir = os.path.dirname(selected)
             initial_name = "nouveau_document"
@@ -1421,8 +1427,8 @@ def gui_control_panel():
             initialdir=PROMPTO_DOCS_DIR,
             filetypes=[
                 ("Documents Markdown", "*.md"),
-                ("Tous les fichiers", "*.*")
-            ]
+                ("Tous les fichiers", "*.*"),
+            ],
         )
         if not selected_path:
             log_message("📂 Ouverture annulée par l'utilisateur")
@@ -1501,10 +1507,8 @@ def gui_control_panel():
             log_message("⚠️ L'éditeur n'est pas ouvert !")
             messagebox.showwarning(
                 "PromptoDYS - Éditeur requis",
-                "L'éditeur n'est pas ouvert.\n\n"
-                "Veuillez d'abord ouvrir l'éditeur\n"
-                "avant de lancer le traitement IA.",
-                icon='warning'
+                "L'éditeur n'est pas ouvert.\n\nVeuillez d'abord ouvrir l'éditeur\navant de lancer le traitement IA.",
+                icon="warning",
             )
             status_label.config(text="⚠️ Éditeur non ouvert")
             return
@@ -1658,11 +1662,9 @@ def gui_control_panel():
     title_label = ttk.Label(
         title_frame,
         text="PromptoDYS",
-        font=("Segoe UI", 24, "bold")  # Réduit de 32 à 24
+        font=("Segoe UI", 24, "bold"),  # Réduit de 32 à 24
     )
     title_label.pack(side="left")
-
-
 
     # --- Fonctions pour effets de survol sur boutons tk.Button ---
     def on_button_enter(event, btn):
@@ -1670,7 +1672,7 @@ def gui_control_panel():
         btn.config(
             bg="#E3F2FD",  # Fond bleu clair
             fg="#0078D4",  # Texte bleu
-            highlightbackground="#0078D4"  # Bordure bleue (épaisseur inchangée : la mise en page ne bouge pas)
+            highlightbackground="#0078D4",  # Bordure bleue (épaisseur inchangée : la mise en page ne bouge pas)
         )
 
     def on_button_leave(event, btn):
@@ -1678,7 +1680,7 @@ def gui_control_panel():
         btn.config(
             bg="#FFFFFF",  # Fond blanc
             fg="#1F1F1F",  # Texte noir
-            highlightbackground="#333333"  # Bordure sombre
+            highlightbackground="#333333",  # Bordure sombre
         )
 
     def on_button_press(event, btn):
@@ -1704,7 +1706,7 @@ def gui_control_panel():
         highlightthickness=12,  # Épaisseur bordure highlight
         padx=20,
         pady=15,
-        cursor="hand2"
+        cursor="hand2",
     )
     btn1.pack(pady=8, fill="x", padx=20)
     # Lier les événements de survol
@@ -1735,7 +1737,7 @@ def gui_control_panel():
         highlightthickness=8,
         padx=10,
         pady=10,
-        cursor="hand2"
+        cursor="hand2",
     )
     btn_save.grid(row=0, column=0, sticky="ew", padx=(0, 5), pady=5)
     btn_save.bind("<Enter>", lambda e: on_button_enter(e, btn_save))
@@ -1757,7 +1759,7 @@ def gui_control_panel():
         highlightthickness=8,
         padx=10,
         pady=10,
-        cursor="hand2"
+        cursor="hand2",
     )
     btn_open.grid(row=0, column=1, sticky="ew", padx=(5, 0), pady=5)
     btn_open.bind("<Enter>", lambda e: on_button_enter(e, btn_open))
@@ -1779,14 +1781,13 @@ def gui_control_panel():
         highlightthickness=12,
         padx=20,
         pady=15,
-        cursor="hand2"
+        cursor="hand2",
     )
     btn_ia.pack(pady=8, fill="x", padx=20)
     btn_ia.bind("<Enter>", lambda e: on_button_enter(e, btn_ia))
     btn_ia.bind("<Leave>", lambda e: on_button_leave(e, btn_ia))
     btn_ia.bind("<ButtonPress-1>", lambda e: on_button_press(e, btn_ia))
     btn_ia.bind("<ButtonRelease-1>", lambda e: on_button_release(e, btn_ia))
-
 
     # Bouton 3: Ouvrir rapports PDF
     btn3 = tk.Button(
@@ -1802,7 +1803,7 @@ def gui_control_panel():
         highlightthickness=12,
         padx=20,
         pady=15,
-        cursor="hand2"
+        cursor="hand2",
     )
     btn3.pack(pady=8, fill="x", padx=20)
     btn3.bind("<Enter>", lambda e: on_button_enter(e, btn3))
@@ -1818,7 +1819,7 @@ def gui_control_panel():
     status_label = ttk.Label(
         main_frame,
         text="🟢 Prêt",
-        font=("Segoe UI", 14)  # Réduit de 18 à 14
+        font=("Segoe UI", 14),  # Réduit de 18 à 14
     )
     status_label.pack(pady=5)  # Réduit de 10 à 5
     status_label_global = status_label  # Référence globale pour les callbacks Eel
@@ -1833,11 +1834,11 @@ def gui_control_panel():
         streaming_frame,
         height=4,  # Exactement 4 lignes complètes
         width=60,
-        font=("Consolas", 10), # Police légèrement plus petite pour logs
+        font=("Consolas", 10),  # Police légèrement plus petite pour logs
         wrap="word",
         state="disabled",  # Lecture seule
         bg="#f8f8f8",
-        fg="#333333"
+        fg="#333333",
     )
     scrollbar = ttk.Scrollbar(streaming_frame, orient="vertical", command=streaming_text.yview)
     streaming_text.configure(yscrollcommand=scrollbar.set)
@@ -1878,7 +1879,7 @@ def gui_control_panel():
         highlightthickness=8,
         padx=15,
         pady=10,
-        cursor="hand2"
+        cursor="hand2",
     )
     btn_quit.pack(pady=0)  # Aucune marge
     # Effets de survol spécifiques pour le bouton Quitter
@@ -1928,12 +1929,13 @@ def main():
     # Avant la création de la fenêtre Tk, sinon l'interface est floue sous Windows
     try:
         from ctypes import windll
+
         windll.shcore.SetProcessDpiAwareness(1)  # DPI per monitor
-    except (ImportError, AttributeError, OSError):
+    except ImportError, AttributeError, OSError:
         pass  # Ignorer si non Windows
 
-    log_message('🚀 Lancement de PromptoDYS...')
-    log_message('💾 Sauvegarde automatique : PDF uniquement avec CAPTURE COMPLÈTE des logs')
+    log_message("🚀 Lancement de PromptoDYS...")
+    log_message("💾 Sauvegarde automatique : PDF uniquement avec CAPTURE COMPLÈTE des logs")
 
     # Trouver le dossier web
     web_folder = find_web_folder()
@@ -1943,24 +1945,24 @@ def main():
 
     # Créer le dossier reports
     os.makedirs(REPORTS_DIR, exist_ok=True)
-    log_message(f'📁 Dossier des rapports PDF : {REPORTS_DIR}')
+    log_message(f"📁 Dossier des rapports PDF : {REPORTS_DIR}")
 
     # Créer le dossier des documents et le profil Chrome de l'éditeur
     os.makedirs(PROMPTO_DOCS_DIR, exist_ok=True)
-    log_message(f'📁 Dossier projets PromptoDYS : {PROMPTO_DOCS_DIR}')
+    log_message(f"📁 Dossier projets PromptoDYS : {PROMPTO_DOCS_DIR}")
     os.makedirs(CHROME_PROFILE_DIR, exist_ok=True)
-    log_message(f'🌐 Profil Chrome PromptoDYS : {CHROME_PROFILE_DIR}')
+    log_message(f"🌐 Profil Chrome PromptoDYS : {CHROME_PROFILE_DIR}")
 
     # Initialiser Eel (préparation, mais ne lance pas encore)
     eel.init(web_folder)
-    log_message('✅ Eel initialisé, prêt à lancer l\'éditeur')
+    log_message("✅ Eel initialisé, prêt à lancer l'éditeur")
 
     # Lancer la GUI de contrôle (BLOQUANT - boucle principale)
-    log_message('🖥️ Lancement du panneau de contrôle...')
+    log_message("🖥️ Lancement du panneau de contrôle...")
     gui_control_panel()
 
     log_message("🔚 Application fermée")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

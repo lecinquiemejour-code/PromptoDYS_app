@@ -27,10 +27,10 @@ data = {
     "images": [
         {
             "filename": "photo.png",
-            "data": "iVBORw0KGgoAAAANSUhEUgAA...",   # base64 pur
-            "mimeType": "image/png"
+            "data": "iVBORw0KGgoAAAANSUhEUgAA...",  # base64 pur
+            "mimeType": "image/png",
         }
-    ]
+    ],
 }
 result = eel.writeDocumentData(data)()
 ```
@@ -68,17 +68,17 @@ data = eel.readDocumentData()()
     "images": [
         {
             "filename": "photo.png",
-            "data": "iVBORw0KGgoAAAANSUhEUgAA...",   # base64 pur (PAS de préfixe data:image/...)
-            "mimeType": "image/png"
+            "data": "iVBORw0KGgoAAAANSUhEUgAA...",  # base64 pur (PAS de préfixe data:image/...)
+            "mimeType": "image/png",
         }
-    ]
+    ],
 }
 ```
 
 ### Ce qu'on reçoit
 
 ```python
-{}   # dict vide — ni markdown, ni images
+{}  # dict vide — ni markdown, ni images
 ```
 
 ---

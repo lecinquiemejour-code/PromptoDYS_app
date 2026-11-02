@@ -20,7 +20,7 @@ def test_preparer_chemin_sauvegarde_sans_extension():
 def test_preparer_chemin_sauvegarde_assainit_le_nom():
     """Les caractères interdits par Windows sont remplacés, les espaces autour retirés."""
     chemin = os.path.join(DOCS, ' cours:1*"maths"? .md')
-    assert app.preparer_chemin_sauvegarde(chemin) == (DOCS, 'cours_1__maths__')
+    assert app.preparer_chemin_sauvegarde(chemin) == (DOCS, "cours_1__maths__")
 
 
 def test_preparer_chemin_sauvegarde_remonte_du_dossier_document():

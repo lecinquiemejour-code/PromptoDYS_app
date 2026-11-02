@@ -32,6 +32,10 @@ line-length = 120
 # B : bugs probables (flake8-bugbear), UP : syntaxe Python moderne, SIM : simplifications
 select = ["F", "E", "W", "B", "UP", "SIM"]
 
+[tool.ruff.format]
+# CONTRIBUTING.md montre un exemple volontairement mal formaté (« ❌ MAUVAIS »)
+exclude = ["CONTRIBUTING.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Rend askGeminiPrompto.py (à la racine) importable depuis tests/
