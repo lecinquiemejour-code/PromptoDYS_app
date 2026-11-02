@@ -876,9 +876,11 @@ def traitement_gemini(annulation):
 
     Renvoie True si le traitement est allé jusqu'au bout, False en cas d'échec ou d'abandon.
     """
-    # RÉINITIALISER LES LOGS
+    # Nouveau traitement : logs du rapport et console vidés AVANT le premier log,
+    # sinon l'effacement (traité dans l'ordre par root.after) ferait disparaître les étapes déjà affichées
     global logs_complets
     logs_complets = []
+    update_streaming_text("", clear=True)
 
     log_message("\n🤖 DÉMARRAGE: TRAITEMENT IA GEMINI (ANNULABLE)")
     log_message("=" * 50)
@@ -904,9 +906,6 @@ def traitement_gemini(annulation):
 
     # Logs des étapes 1 et 2, complétés par ceux de la préparation (étapes 3 et 4) pour le rapport
     logs_avant_traitement = logs_complets.copy()
-
-    # Effacer la zone de texte avant de commencer
-    update_streaming_text("", clear=True)
 
     # 3 à 8. Lecture de l'éditeur, prompt, flux IA, extraction, injection, jetons
     resultat = processing.process_note(editeur_eel, modele, prompt_template, annulation, datetime.now().date())
