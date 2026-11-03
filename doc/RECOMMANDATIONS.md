@@ -116,6 +116,13 @@ Ces tests protègent le cœur du produit pendant tout le découpage.
 
 **R4. `import-linter`.** Ajouter l'outil au groupe `dev` avec un contrat de dépendances : `presentation` n'importe pas `infrastructure`, `domain` n'importe aucune autre couche. À lancer en CI avec ruff, dès la création des couches. Sans outil, la règle de dépendance dérive en quelques mois.
 
+✅ Fait : import-linter est dans le groupe `dev`, avec trois contrats `forbidden` dans `[tool.importlinter]` de `pyproject.toml` :
+- `domain` n'importe ni les autres couches, ni `tkinter`, `sv_ttk`, `eel`, `google` ou `reportlab` ;
+- `presentation` n'importe ni `infrastructure`, ni `eel`, `google` ou `reportlab` ;
+- `infrastructure` n'importe pas `presentation`.
+
+`include_external_packages` permet d'interdire les bibliothèques, `tkinter` compris : une violation volontaire de chacune est bien détectée. Les paquets `infrastructure/` et `presentation/` existent déjà, vides, pour que leurs contrats s'appliquent. La CI lance `uv run lint-imports` après ruff, à chaque push.
+
 ---
 
 ## 6. Priorité 3 : découper en couches
@@ -173,6 +180,24 @@ Un commit par couche, tests et `import-linter` relancés à chaque étape :
 
 **Points d'attention** : vérifier que [PromptoDYS.spec](../PromptoDYS.spec) détecte bien le paquet (rebuild par la CI), mettre à jour [ARCHITECTURE.md](ARCHITECTURE.md) (§2, §4, §7) et [WORKFLOW_GEMINI.md](WORKFLOW_GEMINI.md).
 
+✅ Étape 1 (`domain/`) faite. `promptodys/domain/` contient :
+- `note.py` : prompt, extraction de la note et du débrief, note d'origine, regex `__BOLD_n__` factorisée dans `replace_bold_markers()` ;
+- `report.py` : contenu Markdown du rapport ;
+- `documents.py` : chemin de sauvegarde, cas d'usage `save_document()` et `open_document()` ;
+- `processing.py` : cas d'usage `process_note()`, qui renvoie un `ProcessingResult` (`COMPLETED`, `FAILED` ou `CANCELLED`) ;
+- `ports.py` : les ports et les données qu'ils échangent.
+
+Les adaptateurs (`EelEditor`, `GeminiModel`, `DiskDocumentStore`) sont encore dans `askGeminiPrompto.py`, en attendant l'étape 2. Le rapport PDF produit après le découpage a été comparé à un rapport d'avant : structure et contenu identiques, hors numérotation des étapes.
+
+Écarts aux règles ci-dessus, décidés pendant la migration :
+- **Trois ports au lieu de deux** : `Editor`, `AIModel` et `DocumentStore`. Sans port de rangement, sauvegarder et ouvrir n'auraient pas pu devenir des cas d'usage testables.
+- **`Protocol` hérités explicitement** : `class EelEditor(ports.Editor)`. Le lien se lit dans le code. Comme les méthodes des ports ne sont pas marquées `@abstractmethod`, rien n'oblige un adaptateur à toutes les redéfinir : une méthode oubliée hérite du corps vide du Protocol (`...`) et renvoie `None` au lieu de lever une erreur. Les faux des tests n'héritent pas des ports. pyright vérifie maintenant le paquet `promptodys/` (voir R10), mais les adaptateurs restent hors de son périmètre tant qu'ils sont dans `askGeminiPrompto.py` : leur conformité aux ports sera vérifiée à l'étape 2.
+- **Journalisation du domaine avec `logging`** (`_logger = logging.getLogger(__name__)`), plutôt qu'une fonction de log injectée. Un handler provisoire, `LogMessageHandler`, renvoie ces messages vers `log_message` jusqu'à R7.
+- **Imports de modules** : `from promptodys.domain import note`, puis `note.extract_note_content(...)`.
+- **Étapes renumérotées** : 1 client et configuration, 2 modèle de prompt, 3 lecture de l'éditeur, 4 prompt, 5 flux, 6 extraction, 7 injection, 8 jetons, 9 PDF. Les étapes 1, 2 et 9 dépendent de l'infrastructure et restent dans `traitement_gemini()`.
+
+La règle des noms anglais s'applique au nouveau code. Le code encore dans `askGeminiPrompto.py` garde ses noms français jusqu'à son déplacement.
+
 ---
 
 ## 7. Priorité 4 : remplacer l'état global par des objets
@@ -200,7 +225,7 @@ Les dix `global` disparaissent au fil du découpage, mais il faut décider par q
 
 **R10. Python moderne.**
 - `pathlib.Path` à la place de `os.path`.
-- Annotations de type.
+- Annotations de type. pyright est en place (`[tool.pyright]` de `pyproject.toml`, lancé en CI) : mode strict sur `promptodys/domain/`, standard sur le reste du paquet. `askGeminiPrompto.py` et les tests restent hors périmètre jusqu'à leur découpage.
 - `dataclass` pour les données échangées avec l'éditeur et pour le résultat du traitement.
 - Imports en tête de fichier (`sys` est réimporté [l. 134](../askGeminiPrompto.py#L134), `traceback` dans deux fonctions).
 - **Portabilité** : `subprocess.Popen('explorer …')` ([l. 1413](../askGeminiPrompto.py#L1413)) ne fonctionne que sous Windows ; utiliser `os.startfile`, `open` ou `xdg-open` selon la plateforme (le développement se fait aussi sous macOS).

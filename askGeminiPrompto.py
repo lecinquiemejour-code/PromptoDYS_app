@@ -25,6 +25,7 @@ Fonctionnalités:
 
 import contextlib
 import eel
+import logging
 import os
 import sys
 import threading
@@ -53,6 +54,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import sv_ttk  # Thème Sun Valley (Windows 11 look)
 import subprocess  # Pour ouvrir le dossier reports
+
+# --- Couche domaine (règles pures, voir promptodys/) ---
+from promptodys.domain import documents, note, ports, processing, report
 
 # Modèle Gemini utilisé (ex. "gemini-3.8-flash", "gemini-3.5-flash-lite")
 GEMINI_MODEL = "gemini-3.8-flash"
@@ -118,6 +122,24 @@ def log_message(message):
     # Les prints sont maintenant redirigés vers la GUI via stdout mais on garde l'ajout explicite aux logs complets
     # Capturer aussi dans les logs complets
     logs_complets.append(message)
+
+
+class LogMessageHandler(logging.Handler):
+    """Pont provisoire : renvoie les logs de la couche domaine vers log_message (console, GUI, rapport).
+    Sera remplacé par les vrais handlers de logging avec R7."""
+
+    def emit(self, record):
+        with contextlib.suppress(Exception):
+            log_message(self.format(record))
+
+
+def configure_logger():
+    """Envoie les logs du paquet promptodys vers log_message, message seul (sans niveau ni heure).
+    Appelée par main(), jamais à l'import : les tests gardent la configuration de logging par défaut."""
+    logger = logging.getLogger("promptodys")
+    logger.setLevel(logging.INFO)
+    logger.addHandler(LogMessageHandler())
+    logger.propagate = False  # pas de second affichage par le logger racine
 
 
 def find_web_folder():
@@ -247,242 +269,259 @@ def attendre_port_libre(port, delai=5.0):
     return True
 
 
-# --- Fonctions de sauvegarde/ouverture de documents complets (texte + images) ---
-# Principe "Arduino" : le dossier porte le même nom que le fichier .md principal
+# --- Adaptateurs des ports du domaine (provisoires : iront dans promptodys/infrastructure/) ---
 
 
-def preparer_chemin_sauvegarde(chemin_choisi):
-    """Renvoie (dossier, nom du document) à partir du chemin choisi dans le dialogue.
-    Nom assaini, vide si rien n'en reste ou s'il commence par un point (à refuser par l'appelant) ;
-    si l'utilisateur est entré dans le dossier du document, on remonte."""
-    save_dir = os.path.dirname(chemin_choisi)
-    doc_name = os.path.splitext(os.path.basename(chemin_choisi))[0]
-    doc_name = re.sub(r'[<>:"/\\|?*]', "_", doc_name).strip()
-    # Nom de fichier caché ('.md', '.foo', '..') : refusé comme un nom vide
-    if doc_name.startswith("."):
-        doc_name = ""
-    # Points et espaces finaux retirés : Windows les supprime des noms de dossier
-    doc_name = doc_name.rstrip(" .")
+class EelEditor(ports.Editor):
+    """Éditeur React, joint par le pont Eel.
+    Les images voyagent en base64 côté JavaScript, en binaire côté domaine."""
 
-    # Anti-récursion : si l'utilisateur a navigué à l'intérieur du dossier projet
-    # (ex: PromptoDYS/equations/equations au lieu de PromptoDYS/equations)
-    # on remonte au bon niveau pour éviter equations/equations/equations.md
-    while os.path.basename(save_dir) == doc_name:
-        parent = os.path.dirname(save_dir)
-        if parent == save_dir:  # racine du disque : on ne peut plus remonter
-            break
-        log_message(f"⚠️ Anti-récursion: save_dir '{save_dir}' se termine par '{doc_name}' → on remonte")
-        save_dir = parent
-    return save_dir, doc_name
+    def read_markdown(self):
+        contenu = get_markdown()
+        afficher_contenu_editeur(contenu, "📄 CONTENU LU DEPUIS L'ÉDITEUR")
+        return contenu
 
+    def write_markdown(self, markdown):
+        afficher_contenu_editeur(markdown, "📄 CONTENU À INJECTER DANS L'ÉDITEUR")
+        return set_markdown(markdown)
 
-def save_document(document_name, save_directory):
-    """
-    💾 SAUVEGARDE COMPLÈTE: Récupère le document (texte + images) depuis l'éditeur
-    et l'écrit sur le disque dans un dossier autonome.
-
-    Structure créée :
-        save_directory/document_name/
-        ├── document_name.md
-        └── images/
-            ├── photo_xxx.png
-            └── schema_xxx.jpg
-
-    Args:
-        document_name: Nom du document (ex: "MonDocument")
-        save_directory: Chemin du dossier parent (ex: "C:/Users/Jean/Documents")
-
-    Returns:
-        str|False: Chemin du dossier créé si succès, False sinon
-    """
-    print(f"💾 SAUVEGARDE: Début pour '{document_name}' dans '{save_directory}'")
-
-    # 1. Récupérer les données depuis l'éditeur JS (texte + images base64)
-    print(f"🔍 DEBUG: editeur_lance={editeur_lance}, last_editor_activity={last_editor_activity}")
-    print("🔍 DEBUG: Appel eel.readDocumentData()()...")
-    try:
-        data = eel.readDocumentData()()
-        print(f"🔍 DEBUG readDocumentData retour → type={type(data).__name__}")
-        if data is None:
-            print("🔍 DEBUG readDocumentData → None (la fonction JS retourne undefined ou null)")
-        elif isinstance(data, dict):
-            print(f"🔍 DEBUG readDocumentData → dict avec clés: {list(data.keys())}")
-            if "markdown" in data:
-                print(f"🔍 DEBUG   markdown: {len(data['markdown'])} caractères")
-            if "images" in data:
-                print(f"🔍 DEBUG   images: {len(data['images'])} image(s)")
-        elif isinstance(data, str):
-            print(f"🔍 DEBUG readDocumentData → string ({len(data)} car.): {repr(data)[:200]}")
-        elif isinstance(data, bool):
-            print(f"🔍 DEBUG readDocumentData → bool: {data}")
-        else:
-            print(f"🔍 DEBUG readDocumentData → {type(data).__name__}: {repr(data)[:500]}")
-    except Exception as e:
-        print(f"❌ SAUVEGARDE: Erreur appel readDocumentData: {type(e).__name__}: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return False
-
-    if not data:
-        print(f"❌ SAUVEGARDE: Aucune donnée reçue de l'éditeur (data est falsy: {repr(data)})")
-        return False
-
-    print(f"📄 SAUVEGARDE: Markdown reçu ({len(data.get('markdown', ''))} caractères)")
-    print(f"🖼️ SAUVEGARDE: {len(data.get('images', []))} image(s) reçue(s)")
-
-    # 2. Créer la structure de dossiers
-    doc_dir = os.path.join(save_directory, document_name)
-    images_dir = os.path.join(doc_dir, "images")
-
-    # Gestion des conflits de noms (style Arduino : on écrase le contenu existant)
-    os.makedirs(images_dir, exist_ok=True)
-    print(f"📁 SAUVEGARDE: Dossier créé/existant: {doc_dir}")
-
-    # 3. Écrire le fichier Markdown
-    md_path = os.path.join(doc_dir, f"{document_name}.md")
-    try:
-        with open(md_path, "w", encoding="utf-8") as f:
-            f.write(data["markdown"])
-        print(f"✅ SAUVEGARDE: Fichier MD écrit: {md_path}")
-    except Exception as e:
-        print(f"❌ SAUVEGARDE: Erreur écriture MD: {e}")
-        return False
-
-    # 4. Écrire chaque image (décodage base64 → binaire)
-    images_saved = 0
-    for image in data.get("images", []):
-        image_path = os.path.join(images_dir, image["filename"])
+    def read_document(self):
+        """Document de l'éditeur (texte + images), None si l'éditeur n'a rien renvoyé"""
+        print(f"🔍 DEBUG: editeur_lance={editeur_lance}, last_editor_activity={last_editor_activity}")
+        print("🔍 DEBUG: Appel eel.readDocumentData()()...")
         try:
-            image_bytes = base64.b64decode(image["data"])
-            with open(image_path, "wb") as f:
-                f.write(image_bytes)
-            images_saved += 1
-            print(f"  🖼️ Image sauvée: {image['filename']} ({len(image_bytes)} octets)")
+            data = eel.readDocumentData()()
+            print(f"🔍 DEBUG readDocumentData retour → type={type(data).__name__}")
+            if data is None:
+                print("🔍 DEBUG readDocumentData → None (la fonction JS retourne undefined ou null)")
+            elif isinstance(data, dict):
+                print(f"🔍 DEBUG readDocumentData → dict avec clés: {list(data.keys())}")
+                if "markdown" in data:
+                    print(f"🔍 DEBUG   markdown: {len(data['markdown'])} caractères")
+                if "images" in data:
+                    print(f"🔍 DEBUG   images: {len(data['images'])} image(s)")
+            elif isinstance(data, str):
+                print(f"🔍 DEBUG readDocumentData → string ({len(data)} car.): {repr(data)[:200]}")
+            elif isinstance(data, bool):
+                print(f"🔍 DEBUG readDocumentData → bool: {data}")
+            else:
+                print(f"🔍 DEBUG readDocumentData → {type(data).__name__}: {repr(data)[:500]}")
         except Exception as e:
-            print(f"  ❌ Erreur image '{image['filename']}': {e}")
+            print(f"❌ SAUVEGARDE: Erreur appel readDocumentData: {type(e).__name__}: {e}")
+            import traceback
 
-    print(f"✅ SAUVEGARDE TERMINÉE: {md_path} + {images_saved} image(s)")
-    return doc_dir
+            traceback.print_exc()
+            return None
 
+        if not data or not isinstance(data, dict):
+            print(f"❌ SAUVEGARDE: Aucune donnée exploitable reçue de l'éditeur ({repr(data)[:200]})")
+            return None
 
-def load_document(path):
-    """
-    📂 OUVERTURE COMPLÈTE: Lit un document depuis le disque et l'injecte dans l'éditeur.
+        print(f"📄 SAUVEGARDE: Markdown reçu ({len(data.get('markdown', ''))} caractères)")
+        print(f"🖼️ SAUVEGARDE: {len(data.get('images', []))} image(s) reçue(s)")
 
-    Accepte un chemin vers le dossier OU vers le fichier .md (principe Arduino :
-    que l'utilisateur sélectionne le .md ou le dossier, ça fonctionne pareil).
-
-    Args:
-        path: Chemin vers le dossier du document OU vers le fichier .md
-
-    Returns:
-        bool: True si succès, False sinon
-    """
-    print(f"📂 OUVERTURE: Chemin reçu: '{path}'")
-
-    # Détection intelligente : fichier .md ou dossier ?
-    if path.endswith(".md") and os.path.isfile(path):
-        # L'utilisateur a sélectionné le fichier .md directement
-        doc_dir = os.path.dirname(path)
-        print(f"📂 OUVERTURE: Fichier .md détecté → dossier déduit: {doc_dir}")
-    elif os.path.isdir(path):
-        # L'utilisateur a sélectionné le dossier
-        doc_dir = path
-        print("📂 OUVERTURE: Dossier sélectionné directement")
-    else:
-        print(f"❌ OUVERTURE: Chemin invalide (ni dossier, ni fichier .md): {path}")
-        return False
-
-    # Déduire les chemins (convention : nom du dossier = nom du fichier .md)
-    document_name = os.path.basename(doc_dir)
-    md_path = os.path.join(doc_dir, f"{document_name}.md")
-    images_dir = os.path.join(doc_dir, "images")
-
-    # 1. Lire le fichier Markdown
-    if not os.path.exists(md_path):
-        print(f"❌ OUVERTURE: Fichier non trouvé: {md_path}")
-        return False
-
-    try:
-        with open(md_path, encoding="utf-8") as f:
-            markdown_content = f.read()
-        print(f"📄 OUVERTURE: Markdown lu ({len(markdown_content)} caractères)")
-    except Exception as e:
-        print(f"❌ OUVERTURE: Erreur lecture MD: {e}")
-        return False
-
-    # 2. Lire et encoder les images en base64
-    images = []
-    if os.path.exists(images_dir):
-        for filename in os.listdir(images_dir):
-            image_path = os.path.join(images_dir, filename)
-            if not os.path.isfile(image_path):
-                continue
-
-            mime_type, _ = mimetypes.guess_type(image_path)
-            if not mime_type or not mime_type.startswith("image/"):
-                print(f"  ⚠️ Fichier ignoré (pas une image): {filename}")
-                continue
-
+        images = []
+        for image in data.get("images", []):
             try:
-                with open(image_path, "rb") as f:
-                    image_data = base64.b64encode(f.read()).decode("utf-8")
-
+                mime_type = image.get("mimeType") or mimetypes.guess_type(image["filename"])[0] or ""
                 images.append(
-                    {
-                        "filename": filename,
-                        "data": image_data,
-                        "mimeType": mime_type,
-                    }
+                    ports.Image(
+                        filename=image["filename"], content=base64.b64decode(image["data"]), mime_type=mime_type
+                    )
                 )
-                print(f"  🖼️ Image chargée: {filename} ({mime_type})")
             except Exception as e:
-                print(f"  ❌ Erreur lecture image '{filename}': {e}")
-    else:
-        print("📁 OUVERTURE: Pas de dossier images/ (document texte seul)")
+                print(f"  ❌ Erreur image '{image.get('filename')}': {e}")
+        return ports.Document(markdown=data.get("markdown", ""), images=images)
 
-    print(f"📤 OUVERTURE: Envoi à l'éditeur ({len(markdown_content)} car. + {len(images)} image(s))...")
+    def write_document(self, document):
+        """Charge le document dans l'éditeur. Faux si l'appel Eel a échoué"""
+        data_to_send = {
+            "markdown": document.markdown,
+            "images": [
+                {
+                    "filename": image.filename,
+                    "data": base64.b64encode(image.content).decode("utf-8"),
+                    "mimeType": image.mime_type,
+                }
+                for image in document.images
+            ],
+        }
+        nb_car, nb_images = len(data_to_send["markdown"]), len(data_to_send["images"])
+        print(f"📤 OUVERTURE: Envoi à l'éditeur ({nb_car} car. + {nb_images} image(s))...")
+        print(f"🔍 DEBUG: editeur_lance={editeur_lance}, last_editor_activity={last_editor_activity}")
+        print(f"🔍 DEBUG: Appel eel.writeDocumentData() avec {nb_car} car. + {nb_images} image(s)...")
+        print(f"🔍 DEBUG: data_to_send → clés={list(data_to_send.keys())}")
+        print(f"🔍 DEBUG:   markdown: {nb_car} car., début: {repr(data_to_send['markdown'][:100])}")
+        print(f"🔍 DEBUG:   images: {nb_images} élément(s)")
+        for i, img in enumerate(data_to_send["images"]):
+            print(
+                f"🔍 DEBUG:   image[{i}]: filename={img['filename']}, mimeType={img['mimeType']}, "
+                f"data={len(img['data'])} car. base64"
+            )
 
-    # 3. Envoyer à l'éditeur JS via le pont Eel
-    print(f"🔍 DEBUG: editeur_lance={editeur_lance}, last_editor_activity={last_editor_activity}")
-    print(f"🔍 DEBUG: Appel eel.writeDocumentData() avec {len(markdown_content)} car. + {len(images)} image(s)...")
+        try:
+            result = eel.writeDocumentData(data_to_send)()
+            print(f"🔍 DEBUG writeDocumentData retour → type={type(result).__name__}, valeur={repr(result)}")
+            if result is None:
+                print("✅ OUVERTURE TERMINÉE: document chargé (retour: None/undefined — normal si JS ne retourne rien)")
+            elif result:
+                print("✅ OUVERTURE TERMINÉE: document chargé dans l'éditeur")
+            else:
+                print(
+                    f"⚠️ OUVERTURE: writeDocumentData a retourné {repr(result)} "
+                    "(le document peut quand même être chargé)"
+                )
+            return True
+        except Exception as e:
+            print(f"❌ OUVERTURE: Erreur appel writeDocumentData: {type(e).__name__}: {e}")
+            import traceback
 
-    # Détail des données envoyées
-    data_to_send = {
-        "markdown": markdown_content,
-        "images": images,
-    }
-    print(f"🔍 DEBUG: data_to_send → clés={list(data_to_send.keys())}")
-    print(f"🔍 DEBUG:   markdown: {len(data_to_send['markdown'])} car., début: {repr(data_to_send['markdown'][:100])}")
-    print(f"🔍 DEBUG:   images: {len(data_to_send['images'])} élément(s)")
-    for i, img in enumerate(data_to_send["images"]):
-        print(
-            f"🔍 DEBUG:   image[{i}]: filename={img['filename']}, mimeType={img['mimeType']}, "
-            f"data={len(img['data'])} car. base64"
+            traceback.print_exc()
+            return False
+
+
+class DiskDocumentStore(ports.DocumentStore):
+    """Documents sur le disque, « façon Arduino » :
+
+    directory/name/
+    ├── name.md
+    └── images/
+        ├── photo_xxx.png
+        └── schema_xxx.jpg
+    """
+
+    def save(self, document, directory, name):
+        """Écrit le document (style Arduino : on écrase le contenu existant).
+        Renvoie le dossier du document, None si le .md n'a pas pu être écrit"""
+        print(f"💾 SAUVEGARDE: Début pour '{name}' dans '{directory}'")
+        doc_dir = os.path.join(directory, name)
+        images_dir = os.path.join(doc_dir, "images")
+        os.makedirs(images_dir, exist_ok=True)
+        print(f"📁 SAUVEGARDE: Dossier créé/existant: {doc_dir}")
+
+        md_path = os.path.join(doc_dir, f"{name}.md")
+        try:
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write(document.markdown)
+            print(f"✅ SAUVEGARDE: Fichier MD écrit: {md_path}")
+        except Exception as e:
+            print(f"❌ SAUVEGARDE: Erreur écriture MD: {e}")
+            return None
+
+        images_saved = 0
+        for image in document.images:
+            try:
+                with open(os.path.join(images_dir, image.filename), "wb") as f:
+                    f.write(image.content)
+                images_saved += 1
+                print(f"  🖼️ Image sauvée: {image.filename} ({len(image.content)} octets)")
+            except Exception as e:
+                print(f"  ❌ Erreur image '{image.filename}': {e}")
+
+        print(f"✅ SAUVEGARDE TERMINÉE: {md_path} + {images_saved} image(s)")
+        return doc_dir
+
+    def load(self, path):
+        """Lit le document désigné par son dossier OU par son fichier .md (principe Arduino :
+        les deux fonctionnent pareil). Renvoie (document, dossier du document), None en cas d'erreur"""
+        print(f"📂 OUVERTURE: Chemin reçu: '{path}'")
+
+        if path.endswith(".md") and os.path.isfile(path):
+            doc_dir = os.path.dirname(path)
+            print(f"📂 OUVERTURE: Fichier .md détecté → dossier déduit: {doc_dir}")
+        elif os.path.isdir(path):
+            doc_dir = path
+            print("📂 OUVERTURE: Dossier sélectionné directement")
+        else:
+            print(f"❌ OUVERTURE: Chemin invalide (ni dossier, ni fichier .md): {path}")
+            return None
+
+        # Convention : nom du dossier = nom du fichier .md
+        document_name = os.path.basename(doc_dir)
+        md_path = os.path.join(doc_dir, f"{document_name}.md")
+        images_dir = os.path.join(doc_dir, "images")
+
+        if not os.path.exists(md_path):
+            print(f"❌ OUVERTURE: Fichier non trouvé: {md_path}")
+            return None
+        try:
+            with open(md_path, encoding="utf-8") as f:
+                markdown = f.read()
+            print(f"📄 OUVERTURE: Markdown lu ({len(markdown)} caractères)")
+        except Exception as e:
+            print(f"❌ OUVERTURE: Erreur lecture MD: {e}")
+            return None
+
+        images = []
+        if os.path.exists(images_dir):
+            for filename in os.listdir(images_dir):
+                image_path = os.path.join(images_dir, filename)
+                if not os.path.isfile(image_path):
+                    continue
+                mime_type, _ = mimetypes.guess_type(image_path)
+                if not mime_type or not mime_type.startswith("image/"):
+                    print(f"  ⚠️ Fichier ignoré (pas une image): {filename}")
+                    continue
+                try:
+                    with open(image_path, "rb") as f:
+                        images.append(ports.Image(filename=filename, content=f.read(), mime_type=mime_type))
+                    print(f"  🖼️ Image chargée: {filename} ({mime_type})")
+                except Exception as e:
+                    print(f"  ❌ Erreur lecture image '{filename}': {e}")
+        else:
+            print("📁 OUVERTURE: Pas de dossier images/ (document texte seul)")
+
+        return ports.Document(markdown=markdown, images=images), doc_dir
+
+
+class GeminiModel(ports.AIModel):
+    """Modèle Gemini"""
+
+    def __init__(self, client):
+        self.client = client
+        self.config = types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(
+                thinking_level=GEMINI_THINKING_LEVEL,
+                include_thoughts=True,
+            ),
         )
 
-    try:
-        result = eel.writeDocumentData(data_to_send)()
+    def stream(self, prompt):
+        """Morceaux de réflexion et de réponse, puis un dernier morceau avec les jetons consommés.
+        Les erreurs de Gemini deviennent des ports.AIModelError"""
+        last_response = None
+        try:
+            for response in self.client.models.generate_content_stream(
+                model=GEMINI_MODEL, contents=prompt, config=self.config
+            ):
+                last_response = response
+                if not response.candidates:
+                    continue
+                if not response.candidates[0].content or not response.candidates[0].content.parts:
+                    continue
+                for part in response.candidates[0].content.parts:
+                    if part.text:
+                        yield ports.AIChunk(text=part.text, thought=bool(part.thought))
+        except genai_errors.ServerError as e:
+            raise ports.AIModelError(f"Erreur serveur Gemini: {e}") from e
+        except genai_errors.APIError as e:
+            raise ports.AIModelError(f"Erreur API Gemini: {e}") from e
 
-        print(f"🔍 DEBUG writeDocumentData retour → type={type(result).__name__}, valeur={repr(result)}")
-
-        if result is None:
-            print(
-                f"✅ OUVERTURE TERMINÉE: '{document_name}' chargé "
-                "(retour: None/undefined — normal si JS ne retourne rien)"
+        usage = getattr(last_response, "usage_metadata", None)
+        if usage:
+            yield ports.AIChunk(
+                usage={
+                    "input": getattr(usage, "prompt_token_count", "N/A"),
+                    "output": getattr(usage, "candidates_token_count", "N/A"),
+                    "thinking": getattr(usage, "thoughts_token_count", "N/A"),
+                    "total": getattr(usage, "total_token_count", "N/A"),
+                }
             )
-        elif result:
-            print(f"✅ OUVERTURE TERMINÉE: '{document_name}' chargé dans l'éditeur")
-        else:
-            print(f"⚠️ OUVERTURE: writeDocumentData a retourné {repr(result)} (le document peut quand même être chargé)")
-        return True
-    except Exception as e:
-        print(f"❌ OUVERTURE: Erreur appel writeDocumentData: {type(e).__name__}: {e}")
-        import traceback
 
-        traceback.print_exc()
-        return False
+
+# Instances partagées par les boutons du panneau (aucun effet de bord à la construction)
+editeur_eel = EelEditor()
+stockage_documents = DiskDocumentStore()
 
 
 # --- Fonctions de tracking état éditeur (appelées par React) ---
@@ -533,74 +572,12 @@ def on_editor_close():
         root_global.after(0, lambda: status_label_global.config(text="🔴 Éditeur fermé"))
 
 
-def preparer_contenu_rapport_complet(
-    contenu_original, logs_etapes, streaming_gemini, contenu_traite, debrief_correction, stats_tokens=None
-):
-    """Prépare le contenu COMPLET du rapport avec TOUS les logs - VERSION LISIBLE"""
-
-    contenu_final = "# Rapport PromptoDYS - Session Complète\n\n"
-    contenu_final += f"**Date de génération :** {datetime.now().strftime('%d/%m/%Y à %H:%M:%S')}\n\n"
-
-    # SECTION 1: Métadonnées
-    contenu_final += "## 📊 Métadonnées de la Session\n\n"
-    if stats_tokens:
-        contenu_final += f"- **Input tokens :** {stats_tokens.get('input', 'N/A')}\n"
-        contenu_final += f"- **Output tokens :** {stats_tokens.get('output', 'N/A')}\n"
-        contenu_final += f"- **Thinking tokens :** {stats_tokens.get('thinking', 'N/A')}\n"
-        contenu_final += f"- **Total tokens :** {stats_tokens.get('total', 'N/A')}\n\n"
-
-    contenu_final += "---\n\n"
-
-    # SECTION 2: Contenu Original
-    contenu_final += "## 📄 Contenu Original de l'Éditeur\n\n"
-    contenu_final += "**CONTENU ORIGINAL :**\n\n"
-    for ligne in (contenu_original if contenu_original else "(Aucun contenu)").split("\n"):
-        contenu_final += f"    {ligne}\n"
-    contenu_final += "\n---\n\n"
-
-    # SECTION 3: Log des Étapes de Traitement
-    contenu_final += "## 🔧 Log Complet du Traitement IA\n\n"
-    contenu_final += "**ÉTAPES DE TRAITEMENT :**\n\n"
-    for log in logs_etapes:
-        contenu_final += f"    {log}\n"
-    contenu_final += "\n---\n\n"
-
-    # SECTION 4: Streaming Gemini Complet
-    contenu_final += "## 🤖 Streaming Gemini Complet\n\n"
-    contenu_final += "**THINKING + RÉPONSE EN TEMPS RÉEL :**\n\n"
-    for ligne in (streaming_gemini if streaming_gemini else "(Aucun streaming capturé)").split("\n"):
-        contenu_final += f"    {ligne}\n"
-    contenu_final += "\n---\n\n"
-
-    # SECTION 5: Contenu Traité Final
-    contenu_final += "## ✅ Contenu Traité Final (Résultat)\n\n"
-    contenu_final += contenu_traite if contenu_traite else "(Aucun contenu traité)"
-    contenu_final += "\n\n"
-    contenu_final += "---\n\n"
-
-    # SECTION 6: Débrief de Correction
-    contenu_final += "## 📝 Débrief de la Correction par l'IA\n\n"
-    contenu_final += debrief_correction if debrief_correction else "(Aucun débrief disponible)"
-    contenu_final += "\n\n"
-    contenu_final += "---\n\n"
-
-    # SECTION 7: Footer
-    contenu_final += "## 📋 Informations de Session\n\n"
-    contenu_final += "- **Script :** PromptoDYS avec capture complète des logs\n"
-    contenu_final += f"- **Modèle IA :** {GEMINI_MODEL}\n"
-    contenu_final += f"- **Thinking Level :** {GEMINI_THINKING_LEVEL.value.capitalize()}\n"
-    contenu_final += "- **Sauvegarde :** Automatique PDF uniquement\n\n"
-
-    return contenu_final
-
-
 def nettoyer_html_tags(text):
     """Supprime les balises HTML problématiques pour reportlab"""
     # Remplacer les marqueurs __BOLD_n__ par des séparateurs horizontaux MD
-    bold_count = len(re.findall(r"__BOLD_\d+__", text))
+    text, bold_count = note.replace_bold_markers(text)
     if bold_count > 0:
         log_message(f"🔄 NETTOYAGE: {bold_count} marqueurs __BOLD_n__ remplacés par des séparateurs ---")
-    text = re.sub(r"__BOLD_\d+__", "---", text)
 
     # Supprimer les balises <span> avec styles
     text = re.sub(r"<span[^>]*>", "", text)
@@ -794,13 +771,16 @@ def sauvegarder_rapport(
 
     # ÉTAPE 1: Préparer le contenu complet avec TOUS les logs
     log_message("🔧 ÉTAPE: Préparation du rapport complet...")
-    contenu_final = preparer_contenu_rapport_complet(
-        contenu_original=contenu_original,
-        logs_etapes=logs_etapes,
-        streaming_gemini=streaming_gemini,
-        contenu_traite=contenu_traite,
-        debrief_correction=debrief_correction,
-        stats_tokens=stats_tokens,
+    contenu_final = report.build_report_markdown(
+        original_note=contenu_original,
+        step_logs=logs_etapes,
+        ai_stream=streaming_gemini,
+        processed_note=contenu_traite,
+        correction_debrief=debrief_correction,
+        token_stats=stats_tokens,
+        model=GEMINI_MODEL,
+        thinking_level=GEMINI_THINKING_LEVEL.value,
+        generated_at=datetime.now(),
     )
     log_message("✅ SUCCÈS: Rapport complet préparé")
 
@@ -888,253 +868,59 @@ def lire_prompto_dys():
         return None
 
 
-def extraire_contenu_note(reponse_complete):
-    """Extrait le contenu entre <NOTE> et </NOTE>"""
-    if "<NOTE>" in reponse_complete and "</NOTE>" in reponse_complete:
-        debut = reponse_complete.find("<NOTE>") + len("<NOTE>")
-        fin = reponse_complete.find("</NOTE>")
-        contenu = reponse_complete[debut:fin].strip()
-        # Remplacer les marqueurs __BOLD_n__ par des séparateurs horizontaux MD
-        bold_count = len(re.findall(r"__BOLD_\d+__", contenu))
-        if bold_count > 0:
-            log_message(f"🔄 NOTE: {bold_count} marqueurs __BOLD_n__ remplacés par des séparateurs ---")
-        contenu = re.sub(r"__BOLD_\d+__", "---", contenu)
-        return contenu
-    else:
-        log_message("⚠️ ATTENTION: Balises <NOTE> absentes, utilisation complète")
-        # Remplacer les marqueurs même en cas de réponse complète
-        reponse_nettoyee = re.sub(r"__BOLD_\d+__", "---", reponse_complete)
-        return reponse_nettoyee
-
-
-def ajouter_note_origine(contenu_traite, contenu_original):
-    """Ajoute la note d'origine (sans les images) à la fin de la note corrigée.
-    Générée côté Python plutôt que par Gemini : copie exacte et tokens de sortie économisés."""
-    if not contenu_traite.strip():
-        return contenu_traite
-    # Images Markdown de l'éditeur, ex. ![photo](./images/photo.png){width=300px id=...}, ou balises <img>
-    note_sans_images = re.sub(r"!\[[^\]]*\]\([^)]*\)(\{[^}]*\})?|<img[^>]*>", "", contenu_original)
-    note_sans_images = re.sub(r"\n{3,}", "\n\n", note_sans_images).strip()  # Lignes vides laissées par les images
-    if not note_sans_images:
-        return contenu_traite
-    # Retirer un éventuel séparateur final pour ne pas le doubler
-    contenu_traite = re.sub(r"(\s*\n)?-{3,}\s*$", "", contenu_traite.rstrip())
-    log_message(f"📎 NOTE: Note d'origine ajoutée ({len(note_sans_images)} caractères)")
-    return (
-        f'{contenu_traite}\n\n---\n\n### <span style="color: #3399ff;">Note d\'origine</span>\n\n{note_sans_images}\n'
-    )
-
-
-def extraire_debrief_correction(reponse_complete):
-    """Extrait le débrief après </NOTE>"""
-    if "</NOTE>" in reponse_complete:
-        debut = reponse_complete.find("</NOTE>") + len("</NOTE>")
-        return reponse_complete[debut:].strip()
-    else:
-        return ""
-
-
 def traitement_gemini(annulation):
-    """Traitement IA Gemini : lecture → prompt → stream → injection + CAPTURE COMPLÈTE
+    """Traitement IA Gemini : client → modèle de prompt → cas d'usage processing.process_note → rapport PDF
 
     annulation : threading.Event propre à ce traitement, déclenché par le bouton « Abandonner ».
     Un traitement abandonné s'arrête à la sortie du flux, sans rien écrire dans l'éditeur ni le PDF.
 
     Renvoie True si le traitement est allé jusqu'au bout, False en cas d'échec ou d'abandon.
     """
-    # RÉINITIALISER LES LOGS
+    # Nouveau traitement : logs du rapport et console vidés AVANT le premier log,
+    # sinon l'effacement (traité dans l'ordre par root.after) ferait disparaître les étapes déjà affichées
     global logs_complets
     logs_complets = []
+    update_streaming_text("", clear=True)
 
     log_message("\n🤖 DÉMARRAGE: TRAITEMENT IA GEMINI (ANNULABLE)")
     log_message("=" * 50)
 
-    # VARIABLES POUR CAPTURER TOUT
-    contenu_original = ""
-    streaming_gemini_complet = ""
-    logs_etapes_actuelles = []
-
-    # 1. Initialiser client
+    # 1. Initialiser le client et sa configuration
     log_message("🔑 ÉTAPE 1: Initialisation du client Gemini...")
     client = init_gemini_client()
     if not client:
         log_message("❌ ÉCHEC: Impossible d'initialiser Gemini")
         return False
-    log_message("✅ SUCCÈS: Client Gemini initialisé")
+    modele = GeminiModel(client)
+    log_message(
+        f"✅ SUCCÈS: Client Gemini initialisé (Modèle: {GEMINI_MODEL}, Thinking level: {GEMINI_THINKING_LEVEL.value})"
+    )
 
-    # 2. Lire le contenu de l'éditeur
-    log_message("\n📖 ÉTAPE 2: Lecture du contenu éditeur...")
-    contenu_editeur = get_markdown()
-    contenu_original = contenu_editeur  # CAPTURER LE CONTENU ORIGINAL
-
-    # Affichage console
-    afficher_contenu_editeur(contenu_editeur, "📄 CONTENU LU DEPUIS L'ÉDITEUR")
-
-    # 3. Lire le prompt template
-    log_message("\n📋 ÉTAPE 3: Lecture du template promptodys.prompt...")
+    # 2. Lire le modèle de prompt
+    log_message("\n📋 ÉTAPE 2: Lecture du template promptodys.prompt...")
     prompt_template = lire_prompto_dys()
     if not prompt_template:
         log_message("❌ ÉCHEC: Impossible de lire promptodys.prompt")
         return False
     log_message("✅ SUCCÈS: Template promptodys.prompt chargé")
 
-    # 4. Substituer [TEXTE] et [DATE] par le contenu éditeur et la date du jour
-    log_message("\n🔗 ÉTAPE 4: Préparation du prompt final...")
+    # Logs des étapes 1 et 2, complétés par ceux de la préparation (étapes 3 et 4) pour le rapport
+    logs_avant_traitement = logs_complets.copy()
 
-    # Générer la date du jour au format JJ/MM/AAAA
-    date_du_jour = datetime.now().strftime("%d/%m/%Y")
-
-    # Injecter texte + date dans le prompt
-    prompt_final = prompt_template.replace("[TEXTE]", contenu_editeur).replace("[DATE]", date_du_jour)
-
-    log_message("✅ SUCCÈS: Prompt préparé (substitution [TEXTE] et [DATE] effectuée)")
-
-    # 5. Configuration Gemini
-    log_message("\n⚙️ ÉTAPE 5: Configuration des paramètres Gemini...")
-    config = types.GenerateContentConfig(
-        thinking_config=types.ThinkingConfig(
-            thinking_level=GEMINI_THINKING_LEVEL,
-            include_thoughts=True,
-        ),
-    )
-    log_message(
-        f"✅ SUCCÈS: Configuration Gemini prête (Modèle: {GEMINI_MODEL}, Thinking level: {GEMINI_THINKING_LEVEL.value})"
-    )
-
-    # CAPTURER LES LOGS DES ÉTAPES 1-5
-    logs_etapes_actuelles = logs_complets.copy()
-
-    # 6. Streaming avec Gemini
-    log_message("\n🚀 ÉTAPE 6: Envoi à Gemini et traitement en cours...")
-    log_message("🔄 Streaming en direct (💭 = thinking, texte normal = réponse):")
-    log_message("-" * 60)
-
-    full_answer = ""
-    last_response = None
-
-    # Effacer la zone de texte avant de commencer
-    update_streaming_text("", clear=True)
-
-    try:
-        log_message("📡 Flux IA: Démarrage de la réception des données...")
-        for chunk in client.models.generate_content_stream(
-            model=GEMINI_MODEL,
-            contents=prompt_final,
-            config=config,
-        ):
-            # VÉRIFICATION DE L'ABANDON À CHAQUE CHUNK (traité à la sortie du flux)
-            if annulation.is_set():
-                break
-
-            last_response = chunk
-            # log_message("📡 Flux IA: Chunk reçu...") # Heartbeat discret
-
-            if not chunk.candidates:
-                continue
-            if not chunk.candidates[0].content or not chunk.candidates[0].content.parts:
-                continue
-
-            for part in chunk.candidates[0].content.parts:
-                if not part.text:
-                    continue
-                if part.thought:
-                    thinking_text = f"💭 {part.text}"
-                    log_message(thinking_text)
-                    streaming_gemini_complet += thinking_text + "\n"
-                else:
-                    # Pour le streaming de la réponse, on affiche directement
-                    log_message(part.text)
-                    full_answer += part.text
-                    streaming_gemini_complet += part.text
-
-    # Après un abandon, une erreur de connexion n'est pas un échec à signaler
-    except genai_errors.ServerError as e:
-        if annulation.is_set():
-            return False
-        log_message(f"\n❌ ÉCHEC: Erreur serveur Gemini: {e}")
-        return False
-    except genai_errors.APIError as e:
-        if annulation.is_set():
-            return False
-        log_message(f"\n❌ ÉCHEC: Erreur API Gemini: {e}")
-        return False
-    except Exception as e:
-        if annulation.is_set():
-            return False
-        log_message(f"\n❌ ÉCHEC: Erreur inattendue: {e}")
+    # 3 à 8. Lecture de l'éditeur, prompt, flux IA, extraction, injection, jetons
+    resultat = processing.process_note(editeur_eel, modele, prompt_template, annulation, datetime.now().date())
+    if resultat.status is not processing.ProcessingStatus.COMPLETED:
         return False
 
-    # VÉRIFIER SI ON A QUITTÉ À CAUSE D'UN ABANDON
-    # (break dans la boucle, ou abandon pendant l'attente du dernier chunk)
-    if annulation.is_set():
-        log_message("⚠️ INFOS: Injection et sauvegarde PDF annulées.")
-        return False
-
-    log_message("\n" + "-" * 60)
-    log_message("✅ SUCCÈS: Réponse Gemini complète reçue")
-
-    # 7. Extraire le contenu entre balises NOTE
-    log_message("\n🔍 ÉTAPE 7: Extraction du contenu traité...")
-    contenu_traite = extraire_contenu_note(full_answer)
-
-    if "<NOTE>" in full_answer and "</NOTE>" in full_answer:
-        log_message("✅ SUCCÈS: Balises <NOTE> détectées et contenu extrait")
-        log_message(f"📏 Taille du contenu traité: {len(contenu_traite)} caractères")
-    else:
-        log_message("⚠️ ATTENTION: Balises <NOTE> absentes, utilisation complète")
-
-    # Section « Note d'origine » ajoutée côté Python (n'est plus générée par Gemini)
-    contenu_traite = ajouter_note_origine(contenu_traite, contenu_original)
-
-    # Extraire aussi le débrief
-    debrief_correction = extraire_debrief_correction(full_answer)
-
-    # Afficher le contenu qui va être injecté
-    afficher_contenu_editeur(contenu_traite, "📄 CONTENU À INJECTER DANS L'ÉDITEUR")
-
-    # 8. Injecter dans l'éditeur
-    log_message("\n✏️ ÉTAPE 8: Injection dans l'éditeur...")
-    if contenu_traite:
-        success = set_markdown(contenu_traite)
-        if success:
-            log_message("✅ SUCCÈS: Contenu injecté avec succès !")
-        else:
-            log_message("❌ ÉCHEC: Erreur lors de l'injection dans l'éditeur")
-    else:
-        log_message("❌ ÉCHEC: Aucun contenu à injecter")
-
-    # 9. Bilan des tokens
-    log_message("\n📊 ÉTAPE 9: Bilan final des tokens...")
-    stats_tokens = {}
-    if last_response:
-        usage = getattr(last_response, "usage_metadata", None)
-        log_message("=" * 30)
-        log_message("📊 STATISTIQUES GEMINI")
-        log_message("=" * 30)
-        if usage:
-            stats_tokens = {
-                "input": getattr(usage, "prompt_token_count", "N/A"),
-                "output": getattr(usage, "candidates_token_count", "N/A"),
-                "thinking": getattr(usage, "thoughts_token_count", "N/A"),
-                "total": getattr(usage, "total_token_count", "N/A"),
-            }
-            log_message(f"🔢 Input tokens     : {stats_tokens['input']}")
-            log_message(f"🔢 Output tokens    : {stats_tokens['output']}")
-            log_message(f"🧠 Thinking tokens  : {stats_tokens['thinking']}")
-            log_message(f"🔢 Total tokens     : {stats_tokens['total']}")
-        else:
-            log_message("⚠️ Statistiques non disponibles pour cette réponse")
-        log_message("=" * 30)
-
-    # 10. Sauvegarde automatique PDF uniquement
-    log_message("\n💾 ÉTAPE 10: Sauvegarde automatique rapport PDF...")
+    # 9. Sauvegarde automatique PDF uniquement
+    log_message("\n💾 ÉTAPE 9: Sauvegarde automatique rapport PDF...")
     md_file, pdf_file = sauvegarder_rapport(
-        contenu_original=contenu_original,
-        logs_etapes=logs_etapes_actuelles,
-        streaming_gemini=streaming_gemini_complet,
-        contenu_traite=contenu_traite,
-        debrief_correction=debrief_correction,
-        stats_tokens=stats_tokens,
+        contenu_original=resultat.original_note,
+        logs_etapes=logs_avant_traitement + resultat.step_logs,
+        streaming_gemini=resultat.ai_stream,
+        contenu_traite=resultat.processed_note,
+        debrief_correction=resultat.correction_debrief,
+        stats_tokens=resultat.token_stats,
     )
 
     if pdf_file:
@@ -1383,7 +1169,7 @@ def gui_control_panel():
                 log_message("💾 Sauvegarde annulée par l'utilisateur")
                 return
 
-            save_dir, doc_name = preparer_chemin_sauvegarde(selected)
+            save_dir, doc_name = documents.prepare_save_path(selected)
             if doc_name:
                 break
 
@@ -1405,7 +1191,7 @@ def gui_control_panel():
         def run_save():
             global current_document_path
             log_message(f"🔍 DEBUG run_save: doc_name='{doc_name}', save_dir='{save_dir}'")
-            result = save_document(doc_name, save_dir)
+            result = documents.save_document(editeur_eel, stockage_documents, save_dir, doc_name)
             if result:
                 current_document_path = result
                 root.after(0, lambda: status_label.config(text=f"✅ '{doc_name}' sauvegardé !"))
@@ -1466,14 +1252,11 @@ def gui_control_panel():
 
             log_message("✅ Éditeur prêt, chargement du document...")
 
-            result = load_document(selected_path)
+            result = documents.open_document(editeur_eel, stockage_documents, selected_path)
             if result:
                 global current_document_path
-                # Mémoriser le chemin du document ouvert (comme Arduino retient le sketch ouvert)
-                if selected_path.endswith(".md"):
-                    current_document_path = os.path.dirname(selected_path)
-                else:
-                    current_document_path = selected_path
+                # Mémoriser le dossier du document ouvert (comme Arduino retient le sketch ouvert)
+                current_document_path = result
                 doc_name = os.path.basename(current_document_path)
                 log_message(f"📌 Document courant: {current_document_path}")
                 root.after(0, lambda: status_label.config(text=f"✅ '{doc_name}' ouvert !"))
@@ -1934,6 +1717,7 @@ def main():
     except ImportError, AttributeError, OSError:
         pass  # Ignorer si non Windows
 
+    configure_logger()
     log_message("🚀 Lancement de PromptoDYS...")
     log_message("💾 Sauvegarde automatique : PDF uniquement avec CAPTURE COMPLÈTE des logs")
 

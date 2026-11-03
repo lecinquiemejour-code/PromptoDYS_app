@@ -2,7 +2,7 @@
 
 > Document de référence pour comprendre comment les deux projets (application Python et éditeur React) coopèrent, du clic de l'élève jusqu'au rapport PDF.
 >
-> Dernière mise à jour : 19/10/2026. Les schémas sont en Mermaid et se rendent directement dans GitHub, VS Code et la plupart des visionneuses Markdown.
+> Dernière mise à jour : 02/11/2026. Les schémas sont en Mermaid et se rendent directement dans GitHub, VS Code et la plupart des visionneuses Markdown.
 
 ---
 
@@ -40,7 +40,7 @@ Python et l'éditeur ne partagent pas de mémoire : ils se parlent par un tuyau 
 
 ```mermaid
 flowchart LR
-    subgraph PY["Processus Python : askGeminiPrompto.py"]
+    subgraph PY["Processus Python : askGeminiPrompto.py + paquet promptodys/"]
         TK["Panneau de contrôle Tkinter<br/>Ouvrir l'éditeur, Sauvegarder, Ouvrir,<br/>Traiter la note, Voir les rapports"]
         EEL["Serveur Eel<br/>port 8080<br/>sert build_web/ et fait le pont"]
         IA["Module Gemini<br/>prompt + streaming"]
@@ -75,6 +75,18 @@ flowchart LR
 - **Serveur Eel** : démarré par `eel.init(build_web)` puis `eel.start(...)` quand on clique sur Ouvrir l'éditeur. Il sert les fichiers statiques de l'éditeur et maintient le WebSocket.
 - **Éditeur React** : zone d'édition WYSIWYG, barre d'outils, thème DYS, lecture vocale, formules MathJax. Il fonctionne aussi seul dans un navigateur, sans Python.
 - **Stockage navigateur** : les images insérées sont copiées en IndexedDB, le brouillon et le thème en localStorage. Cela survit à un rafraîchissement de page.
+
+### Organisation du code Python
+
+Le code Python sort progressivement du fichier unique [askGeminiPrompto.py](../askGeminiPrompto.py) pour un paquet `promptodys/` en trois couches (voir [RECOMMANDATIONS.md](RECOMMANDATIONS.md), priorité 3). La règle de dépendance `presentation → domain ← infrastructure` est vérifiée par import-linter (`uv run lint-imports`, et en CI).
+
+| Couche | Contenu | État |
+|---|---|---|
+| `promptodys/domain/` | Règles métier et cas d'usage, sans Tk, Eel, Gemini ni reportlab : `note.py` (prompt, extraction de la réponse, note d'origine), `report.py` (contenu du rapport), `documents.py` (chemins de sauvegarde, cas d'usage sauvegarder et ouvrir), `processing.py` (cas d'usage du traitement IA), `ports.py` (ports `Editor`, `AIModel`, `DocumentStore` et données échangées) | Fait |
+| `promptodys/infrastructure/` | Adaptateurs des ports : `EelEditor`, `GeminiModel`, `DiskDocumentStore`, rapport PDF, configuration | Vide : les adaptateurs sont encore dans `askGeminiPrompto.py` |
+| `promptodys/presentation/` | Panneau de contrôle Tkinter | Vide : le panneau est encore dans `askGeminiPrompto.py` |
+
+Les adaptateurs héritent explicitement de leur port (`class EelEditor(ports.Editor)`), et `askGeminiPrompto.py` les passe aux cas d'usage du domaine.
 
 ---
 
@@ -174,18 +186,17 @@ sequenceDiagram
 
 ### Les étapes dans le code Python
 
-La fonction `traitement_gemini()` de [askGeminiPrompto.py](../askGeminiPrompto.py) suit dix étapes numérotées dans ses logs :
+Le traitement suit neuf étapes numérotées dans ses logs. La fonction `traitement_gemini()` de [askGeminiPrompto.py](../askGeminiPrompto.py) fait les étapes qui dépendent de l'infrastructure (1, 2 et 9). Elle confie les étapes 3 à 8 au cas d'usage `process_note()` de [promptodys/domain/processing.py](../promptodys/domain/processing.py), qui renvoie un résultat sans toucher à l'interface.
 
-1. Initialisation du client Gemini (clé lue dans `GeminiKey.txt`).
-2. Lecture du Markdown de l'éditeur.
-3. Lecture du template [promptodys.prompt](../promptodys.prompt).
+1. Initialisation du client Gemini (clé lue dans `GeminiKey.txt`) et de sa configuration : modèle `GEMINI_MODEL` (`gemini-3.8-flash`) et niveau de réflexion `GEMINI_THINKING_LEVEL` (`LOW`), deux constantes en tête de `askGeminiPrompto.py`.
+2. Lecture du template [promptodys.prompt](../promptodys.prompt).
+3. Lecture du Markdown de l'éditeur.
 4. Substitution de `[TEXTE]` et `[DATE]`.
-5. Configuration : modèle `GEMINI_MODEL` (`gemini-3.8-flash`) et niveau de réflexion `GEMINI_THINKING_LEVEL` (`LOW`), deux constantes en tête du fichier.
-6. Streaming de la réponse, avec vérification du jeton d'annulation à chaque morceau.
-7. Extraction du contenu entre `<NOTE>` et `</NOTE>`, puis ajout de la note d'origine sans les images.
-8. Injection dans l'éditeur.
-9. Bilan des tokens (entrée, sortie, réflexion).
-10. Génération du rapport PDF avec ReportLab.
+5. Streaming de la réponse, avec vérification du jeton d'annulation à chaque morceau.
+6. Extraction du contenu entre `<NOTE>` et `</NOTE>`, puis ajout de la note d'origine sans les images.
+7. Injection dans l'éditeur.
+8. Bilan des tokens (entrée, sortie, réflexion).
+9. Génération du rapport PDF avec ReportLab.
 
 ### Le rôle de promptodys.prompt
 
@@ -201,7 +212,7 @@ Si Gemini oublie les balises, Python injecte toute la réponse. C'est le cas dé
 
 ### Le rapport PDF
 
-Généré par `generer_pdf_reportlab()`. Il contient le contenu original, les logs de traitement, le flux complet de réflexion et de réponse, la note finale, le débrief et les statistiques de tokens. Un parseur Markdown maison convertit le texte en paragraphes ReportLab, en supprimant les balises `<span>` et les émojis non supportés.
+Son contenu est assemblé en Markdown par `build_report_markdown()` ([promptodys/domain/report.py](../promptodys/domain/report.py)), puis rendu par `generer_pdf_reportlab()`. Il contient le contenu original, les logs de traitement, le flux complet de réflexion et de réponse, la note finale, le débrief et les statistiques de tokens. Un parseur Markdown maison convertit le texte en paragraphes ReportLab, en supprimant les balises `<span>` et les émojis non supportés.
 
 ---
 
@@ -253,7 +264,7 @@ sequenceDiagram
 
 Le résultat sur disque est volontairement **identique** à ce que produisent les boutons de sauvegarde internes à l'éditeur en mode navigateur. Un document sauvé par l'un s'ouvre avec l'autre.
 
-Côté Python, les fonctions concernées sont `save_document()` et `load_document()` dans [askGeminiPrompto.py](../askGeminiPrompto.py). Le chemin du dernier document ouvert ou sauvé est mémorisé pour pré-remplir le dialogue suivant.
+Côté Python, les cas d'usage `save_document()` et `open_document()` de [promptodys/domain/documents.py](../promptodys/domain/documents.py) relient l'éditeur (adaptateur `EelEditor`, qui convertit les images entre base64 et binaire) et le disque (adaptateur `DiskDocumentStore`, dans [askGeminiPrompto.py](../askGeminiPrompto.py)). Le chemin du dernier document ouvert ou sauvé est mémorisé pour pré-remplir le dialogue suivant.
 
 ---
 
@@ -274,7 +285,7 @@ flowchart LR
 
     subgraph APP["Dépôt PromptoDYS_app"]
         WEB["build_web/<br/>bundle React compilé"]
-        PYS["askGeminiPrompto.py<br/>promptodys.prompt<br/>assets/prompto.png"]
+        PYS["askGeminiPrompto.py<br/>promptodys/<br/>promptodys.prompt<br/>assets/prompto.png"]
         SPEC["PromptoDYS.spec<br/>PyInstaller"]
         EXE["dist/PromptoDYS.exe<br/>tout embarqué"]
         WEB --> SPEC
@@ -294,7 +305,7 @@ flowchart LR
 
 ### Procédure pour produire l'exécutable
 
-**Voie recommandée : l'intégration continue.** Le workflow [release-windows.yml](../.github/workflows/release-windows.yml) builde l'exe sur un runner Windows GitHub, quel que soit le système du développeur. Un tag `v*` publie la Release (voir [CONTRIBUTING.md](../CONTRIBUTING.md#publier-une-version)), un lancement manuel produit un artefact de test. Le workflow [ci.yml](../.github/workflows/ci.yml) relance ruff, pytest et le build à chaque push, sur toutes les branches, sans rien publier.
+**Voie recommandée : l'intégration continue.** Le workflow [release-windows.yml](../.github/workflows/release-windows.yml) builde l'exe sur un runner Windows GitHub, quel que soit le système du développeur. Un tag `v*` publie la Release (voir [CONTRIBUTING.md](../CONTRIBUTING.md#publier-une-version)), un lancement manuel produit un artefact de test. Le workflow [ci.yml](../.github/workflows/ci.yml) relance ruff, import-linter, pytest et le build à chaque push, sur toutes les branches, sans rien publier.
 
 **Build en local**, qui ne donne un `.exe` que sur Windows (PyInstaller produit un exécutable pour le système qui le lance) :
 
@@ -313,7 +324,9 @@ Le résultat est `dist/PromptoDYS.exe`. Voir aussi [README_ANTIVIRUS.md](../READ
 
 | Fichier | Rôle |
 |---|---|
-| [askGeminiPrompto.py](../askGeminiPrompto.py) | Tout le code Python : GUI, pont Eel, Gemini, PDF, sauvegarde |
+| [askGeminiPrompto.py](../askGeminiPrompto.py) | Point d'entrée et code pas encore découpé : GUI, adaptateurs Eel, Gemini et disque, PDF |
+| [promptodys/domain/](../promptodys/domain/) | Couche domaine : règles métier, cas d'usage et ports (voir [§2](#organisation-du-code-python)) |
+| `tests/` | Tests pytest, dont `tests/domain/` pour la couche domaine (avec de faux adaptateurs) |
 | [promptodys.prompt](../promptodys.prompt) | Template du prompt envoyé à Gemini |
 | `GeminiKey.txt` | Clé API, **ignoré par git**, à créer depuis [GeminiKey.txt.template](../GeminiKey.txt.template) |
 | [LISEZMOI.txt](../LISEZMOI.txt) | Notice d'installation pour l'utilisateur final, livrée dans le zip de release |
@@ -347,4 +360,4 @@ Le résultat est `dist/PromptoDYS.exe`. Voir aussi [README_ANTIVIRUS.md](../READ
 - **Mode développeur persistant.** Il est stocké dans le localStorage de Chrome et prime sur `config.yaml`. Une fois activé, modifier le YAML ne suffit plus pour le désactiver.
 - **Images blob non persistantes.** En mode desktop, une image affichée via une URL blob ne survit pas à un redémarrage de Chrome. La sauvegarde Python compense en lisant les pixels dans le DOM.
 - **Copie manuelle du build.** Rien ne garantit automatiquement que `build_web/` est à jour des sources de l'éditeur. Comparer les empreintes des fichiers `main.<hash>.js` en cas de doute.
-- **Pas de tests automatisés** dans aucun des deux projets.
+- **Tests automatisés côté Python seulement.** L'application a des tests pytest (domaine, adaptateurs, assemblage du traitement IA), lancés en CI. L'éditeur React n'en a pas.

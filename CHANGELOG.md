@@ -14,9 +14,13 @@ et la numérotation suit le sens du [Semantic Versioning](https://semver.org/lan
 - Tests automatisés avec pytest (`uv run pytest`) : import du module sans effet de bord, extraction de la note et du débrief, ajout de la note d'origine, nettoyage HTML pour le rapport PDF, chemins de sauvegarde. pytest-timeout fait échouer au bout de 10 s un test qui boucle
 - Lint avec ruff (`uv run ruff check`), installé dans le groupe `dev` et configuré dans `pyproject.toml` : règles `F`, `E`, `W`, `B`, `UP` et `SIM`, lignes de 120 caractères au plus. Le code a été mis en conformité (corrections automatiques sûres, ordre des imports, lignes trop longues, `except:` nus). `uv run ruff check` ne signale plus rien
 - Formatage du code avec ruff (`uv run ruff format`), y compris les blocs Python de la documentation (sauf `CONTRIBUTING.md`). Le workflow CI vérifie le formatage à chaque push
+- Vérification des types avec pyright (`uv run pyright`), lancée par le workflow CI à chaque push : mode strict sur la couche domaine, mode standard sur le reste du paquet `promptodys/`
+- Vérification des dépendances entre couches avec import-linter (`uv run lint-imports`), lancée par le workflow CI à chaque push : la couche domaine ne peut importer ni Tkinter, ni Eel, ni Gemini, ni reportlab
 - Workflow GitHub Actions d'intégration continue (`.github/workflows/ci.yml`) : à chaque push, sur toutes les branches, lint ruff, tests pytest et build de l'exécutable Windows, avec un résumé en haut de chaque exécution (signalements ruff par règle, tests en échec, résultat du build). Badge d'état de `master` dans le README
 
 ### Modifié
+- Interne : les règles métier et les cas d'usage (traitement IA, sauvegarde, ouverture) sont sortis de `askGeminiPrompto.py` dans la couche `promptodys/domain/`, testée sans Tkinter, Chrome ni réseau. Le traitement IA renvoie un résultat au lieu de piloter l'interface
+- Les étapes du traitement IA sont renumérotées de 1 à 9 dans la console et le rapport PDF : 1 client et configuration Gemini, 2 modèle de prompt, 3 lecture de l'éditeur, 4 prompt, 5 flux, 6 extraction, 7 injection, 8 jetons, 9 rapport PDF
 - L'abandon du traitement IA est immédiat, même si Gemini ne répond plus : l'interface est libérée sans attendre la fin de l'appel, et un traitement abandonné s'arrête avant l'injection dans l'éditeur et le rapport PDF
 - Le statut affiché en fin de traitement IA indique « terminé », « annulé » ou « échec » selon le résultat
 - La fenêtre de contrôle prend la taille de son contenu au lieu de 688 × 1100 px en dur. Sa hauteur est plafonnée à 90 % de l'écran ; si l'écran est trop petit, la fenêtre défile
@@ -24,6 +28,7 @@ et la numérotation suit le sens du [Semantic Versioning](https://semver.org/lan
 - Pendant l'ouverture de l'éditeur, le statut indique « Ouverture de l'éditeur en cours, veuillez patienter », et « Éditeur ouvert » ne s'affiche que lorsque l'éditeur est réellement prêt. Un second clic pendant l'ouverture ne lance plus un second éditeur
 
 ### Corrigé
+- La console du panneau de contrôle effaçait le début de chaque traitement IA : les premières étapes (client Gemini, modèle de prompt) n'étaient jamais visibles. Elle est maintenant vidée avant le premier message
 - Le bouton « Traiter la prise de note » restait bloqué sur « Abandonner » après un échec avant le streaming (clé API absente par exemple), avec un faux statut « terminé ». Le failsafe censé le débloquer plantait lui-même sur une option Tkinter invalide
 - Un échec de l'ouverture de l'éditeur provoquait un `NameError` au lieu d'afficher le message d'erreur
 - `GeminiKey.txt`, `reports/` et `build_web/` étaient cherchés dans le dossier courant : lancée depuis un raccourci ou un autre dossier, l'application ne les trouvait plus. Ils sont désormais cherchés dans le dossier de l'application

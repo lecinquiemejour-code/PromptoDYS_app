@@ -13,7 +13,9 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "import-linter>=2.15",
     "pyinstaller>=6",
+    "pyright>=1.1.414",
     "pytest>=9.2.0",
     "pytest-timeout>=2.4.0",
     "ruff>=0.17.3",
@@ -35,6 +37,47 @@ select = ["F", "E", "W", "B", "UP", "SIM"]
 [tool.ruff.format]
 # CONTRIBUTING.md montre un exemple volontairement mal formaté (« ❌ MAUVAIS »)
 exclude = ["CONTRIBUTING.md"]
+
+[tool.importlinter]
+root_package = "promptodys"
+# Nécessaire pour interdire des bibliothèques (tkinter, eel, google, reportlab), pas seulement nos couches
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "domain n'importe aucune autre couche ni bibliothèque d'interface ou d'infrastructure"
+type = "forbidden"
+source_modules = ["promptodys.domain"]
+# google et non google.genai : import-linter regroupe les paquets externes sous leur nom de premier niveau
+forbidden_modules = [
+    "promptodys.infrastructure",
+    "promptodys.presentation",
+    "tkinter",
+    "sv_ttk",
+    "eel",
+    "google",
+    "reportlab",
+]
+
+[[tool.importlinter.contracts]]
+name = "presentation n'importe ni infrastructure ni les bibliothèques techniques"
+type = "forbidden"
+source_modules = ["promptodys.presentation"]
+forbidden_modules = ["promptodys.infrastructure", "eel", "google", "reportlab"]
+
+[[tool.importlinter.contracts]]
+name = "infrastructure n'importe pas presentation"
+type = "forbidden"
+source_modules = ["promptodys.infrastructure"]
+forbidden_modules = ["promptodys.presentation"]
+
+[tool.pyright]
+# Le paquet seulement : askGeminiPrompto.py et les tests ne sont pas annotés.
+# Chaque couche entre dans la vérification quand elle sort du monolithe.
+# Lancé par uv run, qui active .venv : pyright y trouve l'interpréteur et les bibliothèques.
+include = ["promptodys"]
+typeCheckingMode = "standard"
+# Le domaine est entièrement annoté et n'utilise aucune bibliothèque tierce
+strict = ["promptodys/domain"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

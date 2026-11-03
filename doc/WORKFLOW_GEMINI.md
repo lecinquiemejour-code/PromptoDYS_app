@@ -2,7 +2,7 @@
 
 > Document de référence sur le cœur de PromptoDYS : comment une note d'élève part de l'éditeur, est corrigée par Google Gemini, revient dans l'éditeur et finit archivée en PDF.
 >
-> Dernière mise à jour : 19/10/2026. Code concerné : fonction `traitement_gemini()` et ses fonctions auxiliaires dans [askGeminiPrompto.py](../askGeminiPrompto.py), template [promptodys.prompt](../promptodys.prompt). Pour la vue d'ensemble des deux projets, voir [ARCHITECTURE.md](ARCHITECTURE.md).
+> Dernière mise à jour : 02/11/2026. Code concerné : le cas d'usage `process_note()` de [promptodys/domain/processing.py](../promptodys/domain/processing.py) et les règles de [promptodys/domain/note.py](../promptodys/domain/note.py), appelés par `traitement_gemini()` dans [askGeminiPrompto.py](../askGeminiPrompto.py), et le template [promptodys.prompt](../promptodys.prompt). Pour la vue d'ensemble des deux projets, voir [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
@@ -25,7 +25,12 @@
 
 ## 1. Vue d'ensemble en un schéma
 
-Le traitement suit dix étapes numérotées, visibles telles quelles dans les logs de la console. Chaque étape écrit un message préfixé `ÉTAPE n`.
+Le traitement suit neuf étapes numérotées, visibles telles quelles dans les logs de la console. Chaque étape écrit un message préfixé `ÉTAPE n`.
+
+Le code est réparti en deux niveaux :
+
+- **`traitement_gemini()`** ([askGeminiPrompto.py](../askGeminiPrompto.py)) fait ce qui dépend de l'infrastructure : étapes 1 (client Gemini), 2 (lecture de `promptodys.prompt`) et 9 (rapport PDF).
+- **`process_note()`** ([promptodys/domain/processing.py](../promptodys/domain/processing.py)), le cas d'usage du domaine, fait les étapes 3 à 8. Il ne connaît ni Eel, ni Gemini, ni Tkinter : il reçoit l'éditeur et le modèle d'IA par leurs ports (`ports.Editor`, `ports.AIModel`), et renvoie un `ProcessingResult` dont le statut vaut `COMPLETED`, `FAILED` ou `CANCELLED`.
 
 ```mermaid
 flowchart TD
@@ -33,22 +38,21 @@ flowchart TD
     CHK -- non --> WARN["Message d'avertissement"] --> FIN0(["Fin"])
     CHK -- oui --> THREAD["Thread séparé<br/>bouton → « Abandonner »"]
 
-    THREAD --> E1["1. Client Gemini<br/>lecture GeminiKey.txt"]
+    THREAD --> E1["1. Client et config Gemini<br/>lecture GeminiKey.txt<br/>GEMINI_MODEL, GEMINI_THINKING_LEVEL"]
     E1 -- échec --> ERR(["Fin, bouton réinitialisé"])
-    E1 --> E2["2. Lecture éditeur<br/>eel.readMarkdown"]
-    E2 --> E3["3. Lecture promptodys.prompt"]
-    E3 -- échec --> ERR
+    E1 --> E2["2. Lecture promptodys.prompt"]
+    E2 -- échec --> ERR
+    E2 --> E3["3. Lecture éditeur<br/>eel.readMarkdown"]
     E3 --> E4["4. Substitution<br/>[TEXTE] et [DATE]"]
-    E4 --> E5["5. Config Gemini<br/>GEMINI_MODEL<br/>GEMINI_THINKING_LEVEL"]
-    E5 --> E6["6. Streaming"]
+    E4 --> E5["5. Streaming"]
 
-    E6 -- abandon --> ABORT["Injection et PDF annulés"] --> FINA(["Fin, bouton déjà libéré au clic"])
-    E6 -- erreur API --> ERR
-    E6 --> E7["7. Extraction entre NOTE et /NOTE<br/>+ ajout de la note d'origine"]
-    E7 --> E8["8. Injection<br/>eel.writeMarkdown"]
-    E8 --> E9["9. Bilan des tokens"]
-    E9 --> E10["10. Rapport PDF<br/>dans reports/"]
-    E10 --> FIN(["Fin, bouton réinitialisé"])
+    E5 -- abandon --> ABORT["Injection et PDF annulés"] --> FINA(["Fin, bouton déjà libéré au clic"])
+    E5 -- erreur API --> ERR
+    E5 --> E6["6. Extraction entre NOTE et /NOTE<br/>+ ajout de la note d'origine"]
+    E6 --> E7["7. Injection<br/>eel.writeMarkdown"]
+    E7 --> E8["8. Bilan des tokens"]
+    E8 --> E9["9. Rapport PDF<br/>dans reports/"]
+    E9 --> FIN(["Fin, bouton réinitialisé"])
 ```
 
 ---
@@ -143,53 +147,52 @@ Les deux réglages principaux sont des constantes en tête de [askGeminiPrompto.
 
 Les tokens de réflexion sont facturés au tarif des tokens de sortie, d'où l'intérêt de `LOW`.
 
-Le client est créé à chaque traitement par `init_gemini_client()`. La clé est lue par `lire_cle_api()` : première ligne de `GeminiKey.txt` qui n'est ni vide ni un commentaire `#`, avec tolérance du BOM ajouté par le Bloc-notes Windows. Si la clé est absente ou vaut encore la valeur du modèle `GeminiKey.txt.template`, le traitement s'arrête avec un message explicite. Seuls les 4 derniers caractères de la clé sont affichés dans les logs, car ces logs sont recopiés dans les rapports PDF.
+Le client est créé à chaque traitement par `init_gemini_client()`, puis enveloppé dans l'adaptateur `GeminiModel`, qui porte la configuration et implémente le port `ports.AIModel`. La clé est lue par `lire_cle_api()` : première ligne de `GeminiKey.txt` qui n'est ni vide ni un commentaire `#`, avec tolérance du BOM ajouté par le Bloc-notes Windows. Si la clé est absente ou vaut encore la valeur du modèle `GeminiKey.txt.template`, le traitement s'arrête avec un message explicite. Seuls les 4 derniers caractères de la clé sont affichés dans les logs, car ces logs sont recopiés dans les rapports PDF.
 
 ---
 
 ## 5. Le streaming et l'abandon
 
-Gemini renvoie sa réponse en morceaux. Chaque morceau contient une liste de parties, chacune marquée comme réflexion ou comme réponse.
+Gemini renvoie sa réponse en morceaux. Chaque morceau contient une liste de parties, chacune marquée comme réflexion ou comme réponse. L'adaptateur `GeminiModel` convertit chaque partie en `AIChunk(text, thought)`, puis ajoute un dernier `AIChunk` qui porte seulement les statistiques de jetons. `process_note()` ne voit donc jamais les objets du SDK Gemini.
 
 ```mermaid
 sequenceDiagram
-    participant TK as Thread Python
+    participant TK as process_note (thread Python)
+    participant AD as GeminiModel (adaptateur)
     participant G as Gemini
     participant GUI as Console Tkinter
     participant MAIN as Thread principal Tkinter
 
-    TK->>G: generate_content_stream(prompt)
+    TK->>AD: stream(prompt)
+    AD->>G: generate_content_stream(prompt)
     loop Pour chaque morceau reçu
-        G-->>TK: chunk
+        G-->>AD: chunk
+        AD-->>TK: un AIChunk par partie
         alt jeton d'annulation déclenché
             TK->>TK: break (sans log)
-        else jeton intact
-            TK->>TK: last_response = chunk
-            loop Pour chaque partie du morceau
-                alt partie.thought
-                    TK->>GUI: "💭 texte de réflexion"
-                    TK->>TK: ajoute au flux complet (archive)
-                else partie texte
-                    TK->>GUI: texte de réponse
-                    TK->>TK: ajoute à full_answer et au flux complet
-                end
-            end
+        else AIChunk de réflexion
+            TK->>GUI: "💭 texte de réflexion"
+            TK->>TK: ajoute au flux complet (archive)
+        else AIChunk de réponse
+            TK->>GUI: texte de réponse
+            TK->>TK: ajoute à la réponse et au flux complet
         end
     end
+    AD-->>TK: dernier AIChunk : statistiques de jetons
     alt jeton d'annulation déclenché
         TK->>GUI: "Injection et sauvegarde PDF annulées"
     else jeton intact
-        TK->>TK: étapes 7 à 10
+        TK->>TK: étapes 6 à 9
     end
     TK->>MAIN: root.after → terminer_traitement(success)
 ```
 
 Deux accumulateurs distincts sont remplis pendant le streaming :
 
-- **`full_answer`** : uniquement le texte de réponse, sans les réflexions. C'est lui qui sera analysé pour extraire la note.
-- **`streaming_gemini_complet`** : réflexions et réponse mélangées, dans l'ordre d'arrivée. C'est lui qui sera archivé dans le PDF.
+- **`answer`** : uniquement le texte de réponse, sans les réflexions. C'est lui qui sera analysé pour extraire la note.
+- **`ai_stream`** : réflexions et réponse mélangées, dans l'ordre d'arrivée. C'est lui qui sera archivé dans le PDF (champ `ai_stream` du `ProcessingResult`).
 
-**Si l'abandon est détecté**, au début d'un morceau ou à la sortie du flux (abandon pendant l'attente du dernier morceau), `traitement_gemini()` renvoie `False` sans injecter ni écrire de PDF : le contenu de l'éditeur reste inchangé. Le bouton, lui, a déjà été libéré au moment du clic (voir [§2](#2-déclenchement-et-cycle-de-vie-du-bouton)). Dans les autres cas, succès ou erreur, `terminer_traitement` remet le bouton à l'état Prêt.
+**Si l'abandon est détecté**, au début d'un morceau ou à la sortie du flux (abandon pendant l'attente du dernier morceau), `process_note()` renvoie le statut `CANCELLED` et `traitement_gemini()` renvoie `False`, sans injecter ni écrire de PDF : le contenu de l'éditeur reste inchangé. Le bouton, lui, a déjà été libéré au moment du clic (voir [§2](#2-déclenchement-et-cycle-de-vie-du-bouton)). Dans les autres cas, succès ou erreur, `terminer_traitement` remet le bouton à l'état Prêt.
 
 ---
 
@@ -236,28 +239,30 @@ flowchart TB
 
 ### Extraction
 
-`extraire_contenu_note()` cherche la première balise `<NOTE>` et la première balise `</NOTE>` dans `full_answer`, et renvoie ce qui est entre les deux.
+Les règles d'extraction sont des fonctions pures de [promptodys/domain/note.py](../promptodys/domain/note.py).
+
+`extract_note_content()` cherche la première balise `<NOTE>` et la première balise `</NOTE>` dans la réponse, et renvoie ce qui est entre les deux.
 
 **Cas dégradé :** si l'une des balises manque, toute la réponse est renvoyée, avec un avertissement dans les logs. L'élève voit alors la note corrigée et le débrief ensemble dans l'éditeur. Ce n'est pas bloquant.
 
-`extraire_debrief_correction()` renvoie tout ce qui suit `</NOTE>`, ou une chaîne vide si la balise manque.
+`extract_correction_debrief()` renvoie tout ce qui suit `</NOTE>`, ou une chaîne vide si la balise manque.
 
 ### Ajout de la note d'origine
 
-`ajouter_note_origine()` complète la note extraite avec la note de l'élève, telle qu'elle a été lue dans l'éditeur à l'étape 2 :
+`append_original_note()` complète la note extraite avec la note de l'élève, telle qu'elle a été lue dans l'éditeur à l'étape 3 :
 
 1. Les images sont retirées : liens Markdown de l'éditeur (`![photo](./images/photo.png){width=300px id=...}`) et balises `<img>`.
 2. Les suites de lignes vides sont réduites à une seule.
 3. Un éventuel séparateur `---` en fin de note corrigée est retiré, pour ne pas le doubler.
 4. La note d'origine est ajoutée après un séparateur, sous un titre `### Note d'origine` coloré en `#3399ff`.
 
-Si la note corrigée est vide, rien n'est ajouté, et l'étape 8 signale qu'il n'y a aucun contenu à injecter.
+Si la note corrigée est vide, rien n'est ajouté, et l'étape 7 signale qu'il n'y a aucun contenu à injecter.
 
 **Pourquoi côté Python :** quand Gemini recopiait lui-même la note d'origine, il payait chaque token de cette copie au tarif de sortie, le plus cher, et pouvait la modifier par erreur. L'ajout par Python donne une copie exacte et réduit les tokens de sortie d'environ 27 %, soit environ 13 % du total des tokens, sur la note de test. Le gain dépend de la longueur de la note d'origine : plus elle est longue, plus l'économie est importante.
 
 ### Nettoyage des marqueurs `__BOLD_n__`
 
-Le convertisseur Markdown de l'éditeur protège temporairement le gras avec des marqueurs `__BOLD_0__`, `__BOLD_1__`, etc. Il arrive que Gemini voie ces marqueurs dans la note d'origine et les reproduise. Côté Python, `extraire_contenu_note()` et le générateur PDF les remplacent par des séparateurs `---`. Un message de log indique combien ont été remplacés.
+Le convertisseur Markdown de l'éditeur protège temporairement le gras avec des marqueurs `__BOLD_0__`, `__BOLD_1__`, etc. Il arrive que Gemini voie ces marqueurs dans la note d'origine et les reproduise. Côté Python, `replace_bold_markers()` les remplace par des séparateurs `---`. Elle est appelée par `extract_note_content()` et par le générateur PDF (`nettoyer_html_tags()`), qui indiquent chacun dans un log combien de marqueurs ont été remplacés.
 
 ### Injection
 
@@ -267,7 +272,7 @@ sequenceDiagram
     participant JS as useEelBridge.js
     participant DOM as Éditeur
 
-    TK->>JS: eel.writeMarkdown(contenu_traite)
+    TK->>JS: eel.writeMarkdown(note corrigée)
     JS->>JS: Supprime les astérisques isolés<br/>(préserve **gras** et *italique*)
     JS->>JS: Retire le focus de l'élément actif
     alt vue Markdown active
@@ -281,13 +286,13 @@ sequenceDiagram
     JS-->>TK: true
 ```
 
-Côté Python, `set_markdown()` ne vérifie que l'absence d'exception. Un retour `None` du JavaScript est considéré comme un succès.
+Côté Python, l'adaptateur `EelEditor.write_markdown()` appelle `set_markdown()`, qui ne vérifie que l'absence d'exception. Un retour `None` du JavaScript est considéré comme un succès.
 
 ---
 
 ## 8. Statistiques de tokens
 
-Le dernier morceau reçu, `last_response`, porte les métadonnées d'usage. Quatre valeurs sont extraites et affichées :
+Le dernier morceau reçu de Gemini porte les métadonnées d'usage. L'adaptateur `GeminiModel` en extrait quatre valeurs et les transmet dans un dernier `AIChunk` (champ `usage`). `process_note()` les affiche à l'étape 8 et les renvoie dans le `ProcessingResult` :
 
 | Clé | Signification |
 |---|---|
@@ -296,7 +301,7 @@ Le dernier morceau reçu, `last_response`, porte les métadonnées d'usage. Quat
 | `thinking` | Tokens consommés par la réflexion, facturés comme des tokens de sortie. Souvent absent en `LOW` : il s'affiche alors `None`, ce qui veut dire 0 |
 | `total` | Somme des trois |
 
-Ces statistiques servent à suivre le coût d'une correction. Elles sont affichées dans la console et écrites dans le PDF.
+Ces statistiques servent à suivre le coût d'une correction. Elles sont affichées dans la console et écrites dans le PDF. Si Gemini n'en renvoie pas, l'étape 8 l'indique (« Statistiques non disponibles »).
 
 ---
 
@@ -308,13 +313,13 @@ Chaque traitement réussi produit un PDF d'archive dans le dossier `reports/`, n
 flowchart LR
     subgraph IN["Données collectées"]
         A["Contenu original"]
-        B["Logs des étapes 1 à 5"]
+        B["Logs des étapes 1 à 4"]
         C["Flux complet<br/>réflexions + réponse"]
         D["Note corrigée"]
         E["Débrief"]
         F["Statistiques tokens"]
     end
-    IN --> PREP["preparer_contenu_rapport_complet()<br/>assemble un Markdown en 7 sections"]
+    IN --> PREP["report.build_report_markdown()<br/>assemble un Markdown en 7 sections"]
     PREP --> CONV["convertir_markdown_vers_paragraphes()<br/>parseur maison → objets ReportLab"]
     CONV --> GEN["generer_pdf_reportlab()<br/>SimpleDocTemplate A4"]
     GEN --> PDF["reports/rapport_complet_*.pdf"]
@@ -324,7 +329,7 @@ flowchart LR
 
 1. Métadonnées de la session : les quatre compteurs de tokens.
 2. Contenu original de l'éditeur, en bloc indenté.
-3. Log complet du traitement : les messages des étapes 1 à 5.
+3. Log complet du traitement : les messages des étapes 1 à 4.
 4. Streaming Gemini complet : réflexions et réponse dans l'ordre d'arrivée.
 5. Contenu traité final : la note corrigée.
 6. Débrief de la correction par l'IA.
@@ -344,10 +349,10 @@ Si la génération du PDF échoue, le traitement n'est pas considéré comme rat
 |---|---|---|
 | `GeminiKey.txt` absent | `FileNotFoundError` à l'étape 1 | Arrêt, message dans les logs, éditeur inchangé |
 | Clé vide ou valeur du modèle `GeminiKey.txt.template` non remplacée | Étape 1 | Arrêt, message demandant de renseigner la clé |
-| `promptodys.prompt` absent ou sans `[TEXTE]` | Étape 3 | Arrêt, message dans les logs |
+| `promptodys.prompt` absent ou sans `[TEXTE]` | Étape 2 | Arrêt, message dans les logs |
 | Éditeur vide | Pas d'erreur | Le prompt est envoyé avec une note vide, Gemini répond quand même |
-| Erreur serveur Gemini (5xx) | `genai_errors.ServerError` | Arrêt, message, bouton réinitialisé |
-| Erreur API Gemini (clé invalide, quota, 4xx) | `genai_errors.APIError` | Arrêt, message, bouton réinitialisé |
+| Erreur serveur Gemini (5xx) | `genai_errors.ServerError`, converti en `AIModelError` par `GeminiModel` | Arrêt, message, bouton réinitialisé |
+| Erreur API Gemini (clé invalide, quota, 4xx) | `genai_errors.APIError`, converti en `AIModelError` par `GeminiModel` | Arrêt, message, bouton réinitialisé |
 | Coupure réseau pendant le streaming | `Exception` générique | Arrêt, message, bouton réinitialisé |
 | Abandon par l'utilisateur | Jeton d'annulation, vérifié à chaque morceau et à la sortie du flux | Bouton libéré au clic, injection et PDF annulés |
 | Abandon alors que Gemini ne répond plus | Jeton d'annulation | Bouton libéré au clic sans attendre le thread. S'il se réveille, il s'arrête sans rien écrire ; une erreur de connexion survenue après l'abandon n'est pas loggée |
@@ -361,21 +366,26 @@ Hors abandon, c'est `terminer_traitement`, sur le thread principal, qui remet le
 
 ## 11. Capture des logs
 
-Trois mécanismes se superposent pour que rien ne se perde.
+Plusieurs mécanismes se superposent pour que rien ne se perde. Ils sont provisoires : R7 de [RECOMMANDATIONS.md](RECOMMANDATIONS.md) les remplacera par le module `logging` et ses handlers.
 
 ```mermaid
 flowchart LR
+    DOM["Domaine : _logger.info(msg)<br/>module logging"] --> BRIDGE["LogMessageHandler<br/>pont provisoire"]
+    BRIDGE --> LM
     LM["log_message(msg)"] --> PRINT["print()"]
     LM --> LIST["logs_complets[]<br/>liste en mémoire"]
     PRINT --> REDIR["RedirectText<br/>stdout et stderr détournés"]
     REDIR --> TERM["Console système<br/>si disponible"]
     REDIR --> GUI["Zone Console / Logs<br/>du panneau Tkinter"]
-    LIST --> PDF["Section 3 du PDF<br/>copie prise après l'étape 5"]
+    LIST --> PDF["Section 3 du PDF<br/>étapes 1 et 2"]
+    DOM --> STEPS["ProcessingResult.step_logs<br/>étapes 3 et 4"] --> PDF
 ```
 
+- **Le domaine** (`promptodys/domain/`) journalise avec le module standard `logging` (`_logger = logging.getLogger(__name__)`), sans connaître la console ni le rapport.
+- **`LogMessageHandler`**, installé par `configure_logger()` au démarrage, renvoie chaque message du logger `promptodys` vers `log_message()`, message seul, sans niveau ni heure.
 - **`log_message()`** écrit dans la console et ajoute à la liste `logs_complets`.
 - **`RedirectText`** détourne `sys.stdout` et `sys.stderr` vers la zone de texte Tkinter, en gardant une copie vers la vraie console. Les exceptions non prévues apparaissent donc aussi dans l'interface.
-- **`logs_complets`** est remis à zéro au début de chaque traitement. Une copie est prise après l'étape 5 pour le PDF : la section 3 du rapport contient donc la préparation, pas le streaming, qui a sa propre section.
+- **`logs_complets`** et la console sont vidés au tout début de chaque traitement. Le PDF reçoit les logs de préparation : une copie de `logs_complets` prise après l'étape 2, puis les logs des étapes 3 et 4 renvoyés par `process_note()` dans `step_logs`. La section 3 du rapport contient donc la préparation, pas le streaming, qui a sa propre section.
 
 ---
 
@@ -394,7 +404,7 @@ flowchart LR
 
 ### Changer le modèle ou les paramètres
 
-Il suffit de modifier les deux constantes en tête de [askGeminiPrompto.py](../askGeminiPrompto.py). Elles sont utilisées par la configuration de l'étape 5, l'appel de l'étape 6, les logs et le pied du rapport PDF.
+Il suffit de modifier les deux constantes en tête de [askGeminiPrompto.py](../askGeminiPrompto.py). Elles sont utilisées par la configuration de l'adaptateur `GeminiModel` (étape 1), l'appel de l'étape 5, les logs et le pied du rapport PDF.
 
 ```python
 # Modèle Gemini utilisé (ex. "gemini-3.8-flash", "gemini-3.5-flash-lite")
@@ -404,10 +414,10 @@ GEMINI_MODEL = "gemini-3.8-flash"
 GEMINI_THINKING_LEVEL = types.ThinkingLevel.LOW
 ```
 
-La configuration envoyée à l'étape 5 en découle :
+La configuration de `GeminiModel` en découle :
 
 ```python
-config = types.GenerateContentConfig(
+self.config = types.GenerateContentConfig(
     thinking_config=types.ThinkingConfig(
         thinking_level=GEMINI_THINKING_LEVEL,
         include_thoughts=True,
@@ -424,4 +434,4 @@ Points d'attention :
 
 ### Changer le contenu du rapport PDF
 
-Modifier `preparer_contenu_rapport_complet()` pour les sections, et `convertir_markdown_vers_paragraphes()` pour le rendu. Toute nouvelle syntaxe Markdown dans le rapport doit être ajoutée au parseur, sinon elle s'affiche en texte brut.
+Modifier `build_report_markdown()` ([promptodys/domain/report.py](../promptodys/domain/report.py)) pour les sections, et `convertir_markdown_vers_paragraphes()` ([askGeminiPrompto.py](../askGeminiPrompto.py)) pour le rendu. Toute nouvelle syntaxe Markdown dans le rapport doit être ajoutée au parseur, sinon elle s'affiche en texte brut.

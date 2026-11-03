@@ -37,6 +37,16 @@ jobs:
         if: ${{ !cancelled() }}
         run: uv run ruff format --check
 
+      # Règle de dépendance entre couches (contrats dans pyproject.toml)
+      - name: Dépendances entre couches (import-linter)
+        if: ${{ !cancelled() }}
+        run: uv run lint-imports
+
+      # Types du paquet promptodys/ (configuration dans [tool.pyright] de pyproject.toml)
+      - name: Types (pyright)
+        if: ${{ !cancelled() }}
+        run: uv run pyright
+
       # Résumé en haut de la page de l'exécution, même si ruff a échoué
       - name: Résumé
         if: always()
@@ -58,6 +68,24 @@ jobs:
               echo "❌ Fichiers à formater (lancer \`uv run ruff format\`) :"
               echo '```'
               echo "$unformatted"
+              echo '```'
+            fi
+            echo "## Dépendances entre couches (import-linter)"
+            if contracts=$(uv run lint-imports 2>&1); then
+              echo "✅ Tous les contrats sont respectés"
+            else
+              echo "❌ Contrats rompus (lancer \`uv run lint-imports\`) :"
+              echo '```'
+              echo "$contracts"
+              echo '```'
+            fi
+            echo "## Types (pyright)"
+            if types=$(uv run pyright 2>&1); then
+              echo "✅ Aucune erreur de type"
+            else
+              echo "❌ Erreurs de type (lancer \`uv run pyright\`) :"
+              echo '```'
+              echo "$types"
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
