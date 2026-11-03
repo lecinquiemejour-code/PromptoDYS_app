@@ -24,17 +24,12 @@ Fonctionnalités:
 """
 
 import contextlib
-import eel
 import logging
 import os
 import sys
 import threading
 import time
-import socket
 from datetime import datetime
-import base64
-import mimetypes
-# import socket # Supprimé : Vérification internet retirée
 
 # --- Imports GUI Tkinter + sv_ttk ---
 import tkinter as tk
@@ -43,10 +38,10 @@ import sv_ttk  # Thème Sun Valley (Windows 11 look)
 import subprocess  # Pour ouvrir le dossier reports
 
 # --- Couche domaine (règles pures, voir promptodys/) ---
-from promptodys.domain import documents, ports, processing
+from promptodys.domain import documents, processing
 
 # --- Couche infrastructure (adaptateurs, configuration) ---
-from promptodys.infrastructure import config, disk_document_store, gemini_model, pdf_report
+from promptodys.infrastructure import config, disk_document_store, eel_editor, gemini_model, pdf_report
 
 # --- NOUVELLE VARIABLE POUR CAPTURER TOUS LES LOGS ---
 logs_complets = []
@@ -117,188 +112,8 @@ def configure_logger():
     logger.propagate = False  # pas de second affichage par le logger racine
 
 
-def get_markdown():
-    """
-    📖 LECTURE: Récupère le contenu Markdown actuel
-    """
-    try:
-        content = eel.readMarkdown()()
-        print(f"✅ SUCCÈS: Contenu récupéré ({len(content)} caractères)")
-        return content
-    except Exception as e:
-        print(f"❌ ÉCHEC: Erreur lecture: {e}")
-        return ""
-
-
-def afficher_contenu_editeur(contenu, titre="📄 CONTENU DE L'ÉDITEUR"):
-    """Affiche le contenu de l'éditeur de manière formatée"""
-    print(f"\n{titre}")
-    print("=" * 50)
-    if contenu.strip():
-        print(contenu)
-    else:
-        print("📝 (Éditeur vide)")
-    print("=" * 50)
-
-
-def set_markdown(markdown_content):
-    """
-    ✏️ ÉCRITURE: Injecte du contenu Markdown
-    """
-    try:
-        eel.writeMarkdown(markdown_content)
-        print(f"✅ SUCCÈS: Contenu injecté ({len(markdown_content)} caractères)")
-        return True
-    except Exception as e:
-        print(f"❌ ÉCHEC: Erreur écriture: {e}")
-        return False
-
-
-# --- Disponibilité du port de l'éditeur ---
-def port_libre(port):
-    """Vrai si aucun programme n'écoute sur le port et qu'on peut s'y attacher"""
-    # Un programme qui répond déjà sur le port : Chrome afficherait sa page à lui
-    try:
-        with socket.create_connection(("localhost", port), timeout=0.5):
-            return False
-    except OSError:
-        pass
-    # Le serveur Eel doit pouvoir s'attacher au port
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        if sys.platform != "win32":
-            # Comme le serveur gevent : ignorer les connexions en TIME_WAIT
-            # (sous Windows, SO_REUSEADDR permettrait de voler un port occupé)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            sock.bind(("localhost", port))
-        except OSError:
-            return False
-    return True
-
-
-def attendre_port_libre(port, delai=5.0):
-    """Attend que le port se libère, au plus delai secondes (serveur Eel précédent pas encore arrêté)"""
-    fin = time.monotonic() + delai
-    while not port_libre(port):
-        if time.monotonic() >= fin:
-            return False
-        time.sleep(0.5)
-    return True
-
-
-# --- Adaptateurs des ports du domaine (provisoires : iront dans promptodys/infrastructure/) ---
-
-
-class EelEditor(ports.Editor):
-    """Éditeur React, joint par le pont Eel.
-    Les images voyagent en base64 côté JavaScript, en binaire côté domaine."""
-
-    def read_markdown(self):
-        contenu = get_markdown()
-        afficher_contenu_editeur(contenu, "📄 CONTENU LU DEPUIS L'ÉDITEUR")
-        return contenu
-
-    def write_markdown(self, markdown):
-        afficher_contenu_editeur(markdown, "📄 CONTENU À INJECTER DANS L'ÉDITEUR")
-        return set_markdown(markdown)
-
-    def read_document(self):
-        """Document de l'éditeur (texte + images), None si l'éditeur n'a rien renvoyé"""
-        print(f"🔍 DEBUG: editeur_lance={editeur_lance}, last_editor_activity={last_editor_activity}")
-        print("🔍 DEBUG: Appel eel.readDocumentData()()...")
-        try:
-            data = eel.readDocumentData()()
-            print(f"🔍 DEBUG readDocumentData retour → type={type(data).__name__}")
-            if data is None:
-                print("🔍 DEBUG readDocumentData → None (la fonction JS retourne undefined ou null)")
-            elif isinstance(data, dict):
-                print(f"🔍 DEBUG readDocumentData → dict avec clés: {list(data.keys())}")
-                if "markdown" in data:
-                    print(f"🔍 DEBUG   markdown: {len(data['markdown'])} caractères")
-                if "images" in data:
-                    print(f"🔍 DEBUG   images: {len(data['images'])} image(s)")
-            elif isinstance(data, str):
-                print(f"🔍 DEBUG readDocumentData → string ({len(data)} car.): {repr(data)[:200]}")
-            elif isinstance(data, bool):
-                print(f"🔍 DEBUG readDocumentData → bool: {data}")
-            else:
-                print(f"🔍 DEBUG readDocumentData → {type(data).__name__}: {repr(data)[:500]}")
-        except Exception as e:
-            print(f"❌ SAUVEGARDE: Erreur appel readDocumentData: {type(e).__name__}: {e}")
-            import traceback
-
-            traceback.print_exc()
-            return None
-
-        if not data or not isinstance(data, dict):
-            print(f"❌ SAUVEGARDE: Aucune donnée exploitable reçue de l'éditeur ({repr(data)[:200]})")
-            return None
-
-        print(f"📄 SAUVEGARDE: Markdown reçu ({len(data.get('markdown', ''))} caractères)")
-        print(f"🖼️ SAUVEGARDE: {len(data.get('images', []))} image(s) reçue(s)")
-
-        images = []
-        for image in data.get("images", []):
-            try:
-                mime_type = image.get("mimeType") or mimetypes.guess_type(image["filename"])[0] or ""
-                images.append(
-                    ports.Image(
-                        filename=image["filename"], content=base64.b64decode(image["data"]), mime_type=mime_type
-                    )
-                )
-            except Exception as e:
-                print(f"  ❌ Erreur image '{image.get('filename')}': {e}")
-        return ports.Document(markdown=data.get("markdown", ""), images=images)
-
-    def write_document(self, document):
-        """Charge le document dans l'éditeur. Faux si l'appel Eel a échoué"""
-        data_to_send = {
-            "markdown": document.markdown,
-            "images": [
-                {
-                    "filename": image.filename,
-                    "data": base64.b64encode(image.content).decode("utf-8"),
-                    "mimeType": image.mime_type,
-                }
-                for image in document.images
-            ],
-        }
-        nb_car, nb_images = len(data_to_send["markdown"]), len(data_to_send["images"])
-        print(f"📤 OUVERTURE: Envoi à l'éditeur ({nb_car} car. + {nb_images} image(s))...")
-        print(f"🔍 DEBUG: editeur_lance={editeur_lance}, last_editor_activity={last_editor_activity}")
-        print(f"🔍 DEBUG: Appel eel.writeDocumentData() avec {nb_car} car. + {nb_images} image(s)...")
-        print(f"🔍 DEBUG: data_to_send → clés={list(data_to_send.keys())}")
-        print(f"🔍 DEBUG:   markdown: {nb_car} car., début: {repr(data_to_send['markdown'][:100])}")
-        print(f"🔍 DEBUG:   images: {nb_images} élément(s)")
-        for i, img in enumerate(data_to_send["images"]):
-            print(
-                f"🔍 DEBUG:   image[{i}]: filename={img['filename']}, mimeType={img['mimeType']}, "
-                f"data={len(img['data'])} car. base64"
-            )
-
-        try:
-            result = eel.writeDocumentData(data_to_send)()
-            print(f"🔍 DEBUG writeDocumentData retour → type={type(result).__name__}, valeur={repr(result)}")
-            if result is None:
-                print("✅ OUVERTURE TERMINÉE: document chargé (retour: None/undefined — normal si JS ne retourne rien)")
-            elif result:
-                print("✅ OUVERTURE TERMINÉE: document chargé dans l'éditeur")
-            else:
-                print(
-                    f"⚠️ OUVERTURE: writeDocumentData a retourné {repr(result)} "
-                    "(le document peut quand même être chargé)"
-                )
-            return True
-        except Exception as e:
-            print(f"❌ OUVERTURE: Erreur appel writeDocumentData: {type(e).__name__}: {e}")
-            import traceback
-
-            traceback.print_exc()
-            return False
-
-
 # Instances partagées par les boutons du panneau (aucun effet de bord à la construction)
-editeur_eel = EelEditor()
+editeur_eel = eel_editor.EelEditor()
 stockage_documents = disk_document_store.DiskDocumentStore()
 
 
@@ -325,26 +140,22 @@ def update_streaming_text(text, clear=False):
         root_global.after(0, _update)
 
 
-@eel.expose
-def on_editor_open():
-    """Appelé par React quand l'éditeur est monté"""
-    global editeur_lance, lancement_editeur_en_cours, root_global, status_label_global, last_editor_activity
+def _editeur_ouvert():
+    """React signale que l'éditeur est prêt (enregistrée par main() auprès de eel_editor)"""
+    global editeur_lance, lancement_editeur_en_cours, last_editor_activity
     editeur_lance = True
     lancement_editeur_en_cours = False  # Le lancement est terminé : l'éditeur est prêt
     last_editor_activity = time.time()  # Marquer l'activité
-    print(f"✅ Éditeur ouvert (notifié par React) - Timestamp: {last_editor_activity}")
     # Mettre à jour la GUI si disponible
     if root_global and status_label_global:
         root_global.after(0, lambda: status_label_global.config(text="✅ Éditeur ouvert"))
 
 
-@eel.expose
-def on_editor_close():
-    """Appelé par React avant la fermeture de la fenêtre"""
-    global editeur_lance, root_global, status_label_global, last_editor_activity
+def _editeur_ferme():
+    """React signale la fermeture de l'éditeur (enregistrée par main() auprès de eel_editor)"""
+    global editeur_lance, last_editor_activity
     editeur_lance = False
     last_editor_activity = None  # Réinitialiser le timestamp
-    print("🔴 Éditeur fermé (notifié par React)")
     # Mettre à jour la GUI si disponible
     if root_global and status_label_global:
         root_global.after(0, lambda: status_label_global.config(text="🔴 Éditeur fermé"))
@@ -441,12 +252,12 @@ def quitter_application():
 def fermer_editeur_puis_quitter():
     """
     Demande à l'éditeur React de fermer sa fenêtre (closeEditor), attend sa confirmation
-    (on_editor_close ou retour de eel.start() remettent editeur_lance à False), puis quitte.
+    (on_editor_close ou retour de eel_editor.start() remettent editeur_lance à False), puis quitte.
     Sous Windows, Chrome s'arrête avec sa dernière fenêtre. Au-delà du délai, on quitte quand même.
     """
     log_message("📝 Fermeture de l'éditeur...")
     try:
-        eel.closeEditor()
+        eel_editor.close()
     except Exception as e:
         # Bundle sans closeEditor, ou connexion déjà fermée
         log_message(f"⚠️ Impossible de demander la fermeture de l'éditeur : {e}")
@@ -474,7 +285,7 @@ def on_closing():
     Intercepte la fermeture de la fenêtre GUI (X ou bouton Quitter).
     Si l'éditeur est ouvert, demande confirmation puis le ferme avant de quitter.
     L'état de l'éditeur est géré exclusivement par les callbacks React (on_editor_open/on_editor_close)
-    et par le retour de eel.start() — plus fiable que la détection psutil.
+    et par le retour de eel_editor.start() — plus fiable que la détection psutil.
     """
     global fermeture_en_cours
 
@@ -502,9 +313,9 @@ def on_closing():
 
 
 # --- État de l'éditeur géré exclusivement par les callbacks React ---
-# on_editor_open()  → editeur_lance = True  (React notifie l'ouverture), fin du lancement
-# on_editor_close() → editeur_lance = False (React notifie la fermeture)
-# lancer_eel()      → editeur_lance = False (eel.start() retourne/lève si crash)
+# on_editor_open()  → _editeur_ouvert() : editeur_lance = True (React notifie l'ouverture), fin du lancement
+# on_editor_close() → _editeur_ferme()  : editeur_lance = False (React notifie la fermeture)
+# lancer_eel()      → editeur_lance = False (eel_editor.start() retourne/lève si crash)
 # lancement_editeur_en_cours : du clic sur « Ouvrir l'éditeur » au signal de React (ou à l'échec)
 
 
@@ -550,7 +361,7 @@ def gui_control_panel():
             global editeur_lance, lancement_editeur_en_cours
             # Vérifier le port avant d'ouvrir Chrome : s'il est pris, Chrome afficherait
             # la page de l'autre programme. On n'ouvre alors aucune fenêtre.
-            if not attendre_port_libre(config.EEL_PORT):
+            if not eel_editor.wait_for_free_port(config.EEL_PORT):
                 log_message(f"❌ Le port {config.EEL_PORT} est utilisé par un autre programme : éditeur non ouvert")
                 lancement_editeur_en_cours = False
                 echec_ouverture(
@@ -562,53 +373,20 @@ def gui_control_panel():
                 )
                 return
             try:
-                eel.start(
-                    "index.html",
-                    mode="chrome",
-                    size=(1200, 800),
-                    port=config.EEL_PORT,
-                    cmdline_args=[
-                        f"--app=http://localhost:{config.EEL_PORT}/index.html",
-                        f"--user-data-dir={config.CHROME_PROFILE_DIR}",
-                        "--disable-features=VizDisplayCompositor",
-                        "--no-first-run",
-                        "--no-default-browser-check",
-                        "--disable-default-apps",
-                        "--disable-extensions",
-                        "--disable-plugins",
-                        "--window-size=1200,800",
-                        "--window-position=100,100",
-                    ],
-                    block=True,
-                )
+                # Bloque jusqu'à la fermeture de l'éditeur (mode de secours compris)
+                eel_editor.start(config.EEL_PORT, config.CHROME_PROFILE_DIR)
             except Exception as e:
-                log_message(f"❌ Erreur lancement éditeur: {e}")
-                # Fallback
-                try:
-                    eel.start(
-                        "index.html",
-                        mode="chrome-app",
-                        size=(1200, 800),
-                        port=config.EEL_PORT,
-                        cmdline_args=[
-                            f"--user-data-dir={config.CHROME_PROFILE_DIR}",
-                            "--no-first-run",
-                            "--no-default-browser-check",
-                        ],
-                        block=True,
-                    )
-                except Exception as e2:
-                    log_message(f"❌ Erreur fallback lancement éditeur: {e2}")
-                    editeur_lance = False
-                    lancement_editeur_en_cours = False
-                    echec_ouverture(
-                        "❌ Échec de l'ouverture de l'éditeur (voir les logs)",
-                        "L'éditeur n'a pas pu s'ouvrir.\n\n"
-                        "Vérifiez que Google Chrome est installé,\n"
-                        "puis réessayez.\n\n"
-                        "Le détail de l'erreur est dans la console.",
-                    )
-                    return
+                log_message(f"❌ Erreur fallback lancement éditeur: {e}")
+                editeur_lance = False
+                lancement_editeur_en_cours = False
+                echec_ouverture(
+                    "❌ Échec de l'ouverture de l'éditeur (voir les logs)",
+                    "L'éditeur n'a pas pu s'ouvrir.\n\n"
+                    "Vérifiez que Google Chrome est installé,\n"
+                    "puis réessayez.\n\n"
+                    "Le détail de l'erreur est dans la console.",
+                )
+                return
 
             # Quand l'éditeur se ferme, on met à jour le statut
             root.after(0, lambda: status_label.config(text="🔴 Éditeur fermé"))
@@ -1224,7 +1002,8 @@ def main():
     log_message(f"🌐 Profil Chrome PromptoDYS : {config.CHROME_PROFILE_DIR}")
 
     # Initialiser Eel (préparation, mais ne lance pas encore)
-    eel.init(web_folder)
+    eel_editor.set_event_handlers(_editeur_ouvert, _editeur_ferme)
+    eel_editor.init(web_folder)
     log_message("✅ Eel initialisé, prêt à lancer l'éditeur")
 
     # Lancer la GUI de contrôle (BLOQUANT - boucle principale)
