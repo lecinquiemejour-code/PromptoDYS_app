@@ -28,7 +28,7 @@ class Document:
     """Document complet de l'éditeur : texte Markdown et images qu'il référence."""
 
     markdown: str
-    images: list[Image] = field(default_factory=list)
+    images: list[Image] = field(default_factory=list[Image])
 
 
 # Jetons consommés par l'IA : clés input, output, thinking, total

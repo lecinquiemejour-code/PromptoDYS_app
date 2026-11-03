@@ -5,6 +5,8 @@ Le rendu PDF (reportlab) relève de l'infrastructure : ce module ne fait qu'asse
 
 from datetime import datetime
 
+from promptodys.domain import ports
+
 
 def _indented(text: str) -> str:
     """Chaque ligne précédée de quatre espaces (bloc de code Markdown)."""
@@ -17,7 +19,7 @@ def build_report_markdown(
     ai_stream: str,
     processed_note: str,
     correction_debrief: str,
-    token_stats: dict | None,
+    token_stats: ports.AITokenStats | None,
     model: str,
     thinking_level: str,
     generated_at: datetime,

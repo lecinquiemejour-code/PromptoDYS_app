@@ -31,9 +31,9 @@ class ProcessingResult:
     correction_debrief: str = ""
     # Réflexion (préfixée par 💭) et réponse de l'IA, telles que reçues
     ai_stream: str = ""
-    token_stats: ports.AITokenStats = field(default_factory=dict)
+    token_stats: ports.AITokenStats = field(default_factory=ports.AITokenStats)
     # Logs des étapes de préparation (avant l'envoi à l'IA), repris dans le rapport
-    step_logs: list[str] = field(default_factory=list)
+    step_logs: list[str] = field(default_factory=list[str])
 
 
 def process_note(
@@ -49,9 +49,9 @@ def process_note(
     cancel : jeton d'abandon, vérifié à chaque morceau de réponse. Un traitement abandonné
     s'arrête à la sortie du flux sans rien écrire dans l'éditeur.
     """
-    step_logs = []
+    step_logs: list[str] = []
 
-    def log_step(message):
+    def log_step(message: str) -> None:
         """Log d'une étape de préparation, gardé aussi pour le rapport."""
         _logger.info(message)
         step_logs.append(message)
