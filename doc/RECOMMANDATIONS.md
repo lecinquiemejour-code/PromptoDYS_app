@@ -187,16 +187,32 @@ Un commit par couche, tests et `import-linter` relancés à chaque étape :
 - `processing.py` : cas d'usage `process_note()`, qui renvoie un `ProcessingResult` (`COMPLETED`, `FAILED` ou `CANCELLED`) ;
 - `ports.py` : les ports et les données qu'ils échangent.
 
-Les adaptateurs (`EelEditor`, `GeminiModel`, `DiskDocumentStore`) sont encore dans `askGeminiPrompto.py`, en attendant l'étape 2. Le rapport PDF produit après le découpage a été comparé à un rapport d'avant : structure et contenu identiques, hors numérotation des étapes.
+Les adaptateurs ont rejoint `infrastructure/` à l'étape 2 (voir plus bas). Le rapport PDF produit après le découpage a été comparé à un rapport d'avant : structure et contenu identiques, hors numérotation des étapes.
 
 Écarts aux règles ci-dessus, décidés pendant la migration :
 - **Trois ports au lieu de deux** : `Editor`, `AIModel` et `DocumentStore`. Sans port de rangement, sauvegarder et ouvrir n'auraient pas pu devenir des cas d'usage testables.
-- **`Protocol` hérités explicitement** : `class EelEditor(ports.Editor)`. Le lien se lit dans le code. Comme les méthodes des ports ne sont pas marquées `@abstractmethod`, rien n'oblige un adaptateur à toutes les redéfinir : une méthode oubliée hérite du corps vide du Protocol (`...`) et renvoie `None` au lieu de lever une erreur. Les faux des tests n'héritent pas des ports. pyright vérifie maintenant le paquet `promptodys/` (voir R10), mais les adaptateurs restent hors de son périmètre tant qu'ils sont dans `askGeminiPrompto.py` : leur conformité aux ports sera vérifiée à l'étape 2.
+- **`Protocol` hérités explicitement** : `class EelEditor(ports.Editor)`. Le lien se lit dans le code. Comme les méthodes des ports ne sont pas marquées `@abstractmethod`, rien n'oblige un adaptateur à toutes les redéfinir : une méthode oubliée hérite du corps vide du Protocol (`...`) et renvoie `None` au lieu de lever une erreur. Les faux des tests n'héritent pas des ports. Depuis l'étape 2, pyright vérifie les adaptateurs (voir R10) : une méthode à la signature incompatible avec son port est signalée sur la classe. Une méthode oubliée n'est signalée qu'à l'instanciation (« Cannot instantiate abstract class »), et les adaptateurs sont instanciés dans `askGeminiPrompto.py`, hors du périmètre de pyright : ce second contrôle jouera quand `main()` entrera dans le paquet, à l'étape 3.
 - **Journalisation du domaine avec `logging`** (`_logger = logging.getLogger(__name__)`), plutôt qu'une fonction de log injectée. Un handler provisoire, `LogMessageHandler`, renvoie ces messages vers `log_message` jusqu'à R7.
 - **Imports de modules** : `from promptodys.domain import note`, puis `note.extract_note_content(...)`.
 - **Étapes renumérotées** : 1 client et configuration, 2 modèle de prompt, 3 lecture de l'éditeur, 4 prompt, 5 flux, 6 extraction, 7 injection, 8 jetons, 9 PDF. Les étapes 1, 2 et 9 dépendent de l'infrastructure et restent dans `traitement_gemini()`.
 
 La règle des noms anglais s'applique au nouveau code. Le code encore dans `askGeminiPrompto.py` garde ses noms français jusqu'à son déplacement.
+
+✅ Étape 2 (`infrastructure/`) faite, un commit par module. `promptodys/infrastructure/` contient :
+- `config.py` : constantes `GEMINI_MODEL` et `GEMINI_THINKING_LEVEL` (toujours en tête de fichier), chemins (`APP_DIR`, `REPORTS_DIR`, `PROMPTO_DOCS_DIR`, `CHROME_PROFILE_DIR`, `RESOURCES_DIR`), `EEL_PORT`, lecture de la clé API et du modèle de prompt, recherche de `build_web/`. Aucun dossier n'est créé à l'import (M12) ;
+- `disk_document_store.py` : `DiskDocumentStore`, avec le correctif M6 (nom d'image réduit à son dernier composant) ;
+- `pdf_report.py` : rapport PDF ReportLab, déplacé sans refonte (celle-ci relève de R8). Les éléments ReportLab produits ont été comparés à ceux d'avant le déplacement : identiques ;
+- `gemini_model.py` : `GeminiModel` et création du client ;
+- `eel_editor.py` : `EelEditor`, ouverture et fermeture de la fenêtre de l'éditeur (`init()`, `start()`, `close()`), événements de React, disponibilité du port. `askGeminiPrompto.py` n'importe plus `eel`, `google.genai` ni `reportlab`.
+
+Écarts aux règles ci-dessus, décidés pendant la migration :
+- **Un module porte le nom de son adaptateur** (`disk_document_store.py` pour `DiskDocumentStore`, `gemini_model.py` pour `GeminiModel`) ; `config.py` et `pdf_report.py`, qui n'implémentent pas de port, portent le nom de leur rôle. Cela évite aussi un second module `documents`, déjà pris par le domaine.
+- **Tout ce qui touche à Eel est dans `eel_editor.py`**, y compris `eel.init`, `eel.start` et `closeEditor`, que l'ordre de migration ne citait pas : sans cela, `presentation` n'aurait pas pu se passer d'`eel` à l'étape 3.
+- **Événements de React par fonctions de rappel** : `on_editor_open` et `on_editor_close` gardent leur nom et restent synchrones, mais ne touchent plus l'interface. Elles appellent les fonctions enregistrées par `set_event_handlers()`, que `main()` relie à `_editeur_ouvert()` et `_editeur_ferme()`. L'objet d'état de l'éditeur (priorité 4) les remplacera.
+- **Journalisation** : les modules d'infrastructure utilisent `logging`, comme le domaine, pour les messages qui allaient dans `log_message`. Les `print()` de `EelEditor` et `DiskDocumentStore` (traces détaillées et `🔍 DEBUG`) restent des `print()` jusqu'à R7, pour ne pas les faire entrer dans le rapport PDF.
+- **La balise `[TEXTE]` est déclarée une seule fois**, dans le domaine (`note.TEXT_PLACEHOLDER`) : `build_prompt()` la remplace, `config.read_prompt_template()` vérifie sa présence.
+
+Le build PyInstaller embarque bien les modules du sous-paquet, sans modification de [PromptoDYS.spec](../PromptoDYS.spec). Pour l'étape 3 : l'icône et le logo du panneau sont cherchés avec `os.path.dirname(__file__)`, à remplacer par `config.RESOURCES_DIR` transmis par `main()`, puisque `presentation` n'importe pas `infrastructure`.
 
 ---
 
@@ -225,7 +241,7 @@ Les dix `global` disparaissent au fil du découpage, mais il faut décider par q
 
 **R10. Python moderne.**
 - `pathlib.Path` à la place de `os.path`.
-- Annotations de type. pyright est en place (`[tool.pyright]` de `pyproject.toml`, lancé en CI) : mode strict sur `promptodys/domain/`, standard sur le reste du paquet. `askGeminiPrompto.py` et les tests restent hors périmètre jusqu'à leur découpage.
+- Annotations de type. pyright est en place (`[tool.pyright]` de `pyproject.toml`, lancé en CI) : mode strict sur `promptodys/domain/`, standard sur le reste du paquet, donc sur `promptodys/infrastructure/`. `askGeminiPrompto.py` et les tests restent hors périmètre jusqu'à leur découpage.
 - `dataclass` pour les données échangées avec l'éditeur et pour le résultat du traitement.
 - Imports en tête de fichier (`sys` est réimporté [l. 134](../askGeminiPrompto.py#L134), `traceback` dans deux fonctions).
 - **Portabilité** : `subprocess.Popen('explorer …')` ([l. 1413](../askGeminiPrompto.py#L1413)) ne fonctionne que sous Windows ; utiliser `os.startfile`, `open` ou `xdg-open` selon la plateforme (le développement se fait aussi sous macOS).

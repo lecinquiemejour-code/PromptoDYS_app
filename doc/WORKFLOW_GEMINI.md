@@ -2,7 +2,7 @@
 
 > Document de référence sur le cœur de PromptoDYS : comment une note d'élève part de l'éditeur, est corrigée par Google Gemini, revient dans l'éditeur et finit archivée en PDF.
 >
-> Dernière mise à jour : 02/11/2026. Code concerné : le cas d'usage `process_note()` de [promptodys/domain/processing.py](../promptodys/domain/processing.py) et les règles de [promptodys/domain/note.py](../promptodys/domain/note.py), appelés par `traitement_gemini()` dans [askGeminiPrompto.py](../askGeminiPrompto.py), et le template [promptodys.prompt](../promptodys.prompt). Pour la vue d'ensemble des deux projets, voir [ARCHITECTURE.md](ARCHITECTURE.md).
+> Dernière mise à jour : 03/11/2026. Code concerné : le cas d'usage `process_note()` de [promptodys/domain/processing.py](../promptodys/domain/processing.py) et les règles de [promptodys/domain/note.py](../promptodys/domain/note.py), appelés par `traitement_gemini()` dans [askGeminiPrompto.py](../askGeminiPrompto.py), les adaptateurs de [promptodys/infrastructure/](../promptodys/infrastructure/), et le template [promptodys.prompt](../promptodys.prompt). Pour la vue d'ensemble des deux projets, voir [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
@@ -29,7 +29,7 @@ Le traitement suit neuf étapes numérotées, visibles telles quelles dans les l
 
 Le code est réparti en deux niveaux :
 
-- **`traitement_gemini()`** ([askGeminiPrompto.py](../askGeminiPrompto.py)) fait ce qui dépend de l'infrastructure : étapes 1 (client Gemini), 2 (lecture de `promptodys.prompt`) et 9 (rapport PDF).
+- **`traitement_gemini()`** ([askGeminiPrompto.py](../askGeminiPrompto.py)) fait ce qui dépend de l'infrastructure : étapes 1 (client Gemini, [gemini_model.py](../promptodys/infrastructure/gemini_model.py)), 2 (lecture de `promptodys.prompt`, [config.py](../promptodys/infrastructure/config.py)) et 9 (rapport PDF, [pdf_report.py](../promptodys/infrastructure/pdf_report.py)).
 - **`process_note()`** ([promptodys/domain/processing.py](../promptodys/domain/processing.py)), le cas d'usage du domaine, fait les étapes 3 à 8. Il ne connaît ni Eel, ni Gemini, ni Tkinter : il reçoit l'éditeur et le modèle d'IA par leurs ports (`ports.Editor`, `ports.AIModel`), et renvoie un `ProcessingResult` dont le statut vaut `COMPLETED`, `FAILED` ou `CANCELLED`.
 
 ```mermaid
@@ -86,7 +86,7 @@ stateDiagram-v2
 
 ## 3. Construction du prompt
 
-Le prompt envoyé à Gemini n'est pas écrit dans le code Python. Il est lu dans le fichier [promptodys.prompt](../promptodys.prompt), un fichier texte modifiable sans toucher au code. En développement, il est lu dans le dossier du script. L'exécutable lit uniquement la copie embarquée lors du build (`sys._MEIPASS`) : un fichier placé à côté de l'exe est ignoré.
+Le prompt envoyé à Gemini n'est pas écrit dans le code Python. Il est lu dans le fichier [promptodys.prompt](../promptodys.prompt), un fichier texte modifiable sans toucher au code. En développement, il est lu à la racine du dépôt. L'exécutable lit uniquement la copie embarquée lors du build (`sys._MEIPASS`) : un fichier placé à côté de l'exe est ignoré. Ce dossier est la constante `config.RESOURCES_DIR`.
 
 ```mermaid
 flowchart LR
@@ -116,13 +116,13 @@ Date de la prise de note : [DATE]
 
 ### Contrôle avant envoi
 
-La fonction `lire_prompto_dys()` vérifie que la balise `[TEXTE]` est présente. Si elle manque, le traitement s'arrête avec un message d'erreur, car la note ne pourrait pas être insérée. La balise `[DATE]` n'est pas contrôlée : si elle manque, la date n'apparaît simplement pas.
+La fonction `config.read_prompt_template()` vérifie que la balise `[TEXTE]` est présente. La balise est déclarée une seule fois, dans le domaine (`note.TEXT_PLACEHOLDER`), et sert aussi à la substitution. Si elle manque, le traitement s'arrête avec un message d'erreur, car la note ne pourrait pas être insérée. La balise `[DATE]` n'est pas contrôlée : si elle manque, la date n'apparaît simplement pas.
 
 ---
 
 ## 4. Paramètres envoyés à Gemini
 
-Les deux réglages principaux sont des constantes en tête de [askGeminiPrompto.py](../askGeminiPrompto.py) : `GEMINI_MODEL` et `GEMINI_THINKING_LEVEL`.
+Les deux réglages principaux sont des constantes en tête de [promptodys/infrastructure/config.py](../promptodys/infrastructure/config.py) : `GEMINI_MODEL` et `GEMINI_THINKING_LEVEL`.
 
 | Paramètre | Valeur | Pourquoi |
 |---|---|---|
@@ -147,7 +147,7 @@ Les deux réglages principaux sont des constantes en tête de [askGeminiPrompto.
 
 Les tokens de réflexion sont facturés au tarif des tokens de sortie, d'où l'intérêt de `LOW`.
 
-Le client est créé à chaque traitement par `init_gemini_client()`, puis enveloppé dans l'adaptateur `GeminiModel`, qui porte la configuration et implémente le port `ports.AIModel`. La clé est lue par `lire_cle_api()` : première ligne de `GeminiKey.txt` qui n'est ni vide ni un commentaire `#`, avec tolérance du BOM ajouté par le Bloc-notes Windows. Si la clé est absente ou vaut encore la valeur du modèle `GeminiKey.txt.template`, le traitement s'arrête avec un message explicite. Seuls les 4 derniers caractères de la clé sont affichés dans les logs, car ces logs sont recopiés dans les rapports PDF.
+Le client est créé à chaque traitement par `gemini_model.create_client()`, puis enveloppé dans l'adaptateur `GeminiModel`, qui porte la configuration et implémente le port `ports.AIModel`. La clé est lue par `config.read_api_key()` : première ligne de `GeminiKey.txt` qui n'est ni vide ni un commentaire `#`, avec tolérance du BOM ajouté par le Bloc-notes Windows. Si la clé est absente ou vaut encore la valeur du modèle `GeminiKey.txt.template`, le traitement s'arrête avec un message explicite. Seuls les 4 derniers caractères de la clé sont affichés dans les logs, car ces logs sont recopiés dans les rapports PDF.
 
 ---
 
@@ -286,7 +286,7 @@ sequenceDiagram
     JS-->>TK: true
 ```
 
-Côté Python, l'adaptateur `EelEditor.write_markdown()` appelle `set_markdown()`, qui ne vérifie que l'absence d'exception. Un retour `None` du JavaScript est considéré comme un succès.
+Côté Python, l'adaptateur `EelEditor.write_markdown()` appelle la fonction JavaScript `writeMarkdown` et ne vérifie que l'absence d'exception. Un retour `None` du JavaScript est considéré comme un succès.
 
 ---
 
@@ -320,8 +320,8 @@ flowchart LR
         F["Statistiques tokens"]
     end
     IN --> PREP["report.build_report_markdown()<br/>assemble un Markdown en 7 sections"]
-    PREP --> CONV["convertir_markdown_vers_paragraphes()<br/>parseur maison → objets ReportLab"]
-    CONV --> GEN["generer_pdf_reportlab()<br/>SimpleDocTemplate A4"]
+    PREP --> CONV["pdf_report.markdown_to_flowables()<br/>parseur maison → objets ReportLab"]
+    CONV --> GEN["pdf_report.generate_pdf()<br/>SimpleDocTemplate A4"]
     GEN --> PDF["reports/rapport_complet_*.pdf"]
 ```
 
@@ -370,7 +370,7 @@ Plusieurs mécanismes se superposent pour que rien ne se perde. Ils sont proviso
 
 ```mermaid
 flowchart LR
-    DOM["Domaine : _logger.info(msg)<br/>module logging"] --> BRIDGE["LogMessageHandler<br/>pont provisoire"]
+    DOM["Domaine et infrastructure :<br/>_logger.info(msg), module logging"] --> BRIDGE["LogMessageHandler<br/>pont provisoire"]
     BRIDGE --> LM
     LM["log_message(msg)"] --> PRINT["print()"]
     LM --> LIST["logs_complets[]<br/>liste en mémoire"]
@@ -381,7 +381,7 @@ flowchart LR
     DOM --> STEPS["ProcessingResult.step_logs<br/>étapes 3 et 4"] --> PDF
 ```
 
-- **Le domaine** (`promptodys/domain/`) journalise avec le module standard `logging` (`_logger = logging.getLogger(__name__)`), sans connaître la console ni le rapport.
+- **Le domaine et l'infrastructure** (`promptodys/`) journalisent avec le module standard `logging` (`_logger = logging.getLogger(__name__)`), sans connaître la console ni le rapport. Exception provisoire : les traces détaillées de `EelEditor` et `DiskDocumentStore` passent encore par `print()`, donc vont à la console sans entrer dans le rapport.
 - **`LogMessageHandler`**, installé par `configure_logger()` au démarrage, renvoie chaque message du logger `promptodys` vers `log_message()`, message seul, sans niveau ni heure.
 - **`log_message()`** écrit dans la console et ajoute à la liste `logs_complets`.
 - **`RedirectText`** détourne `sys.stdout` et `sys.stderr` vers la zone de texte Tkinter, en gardant une copie vers la vraie console. Les exceptions non prévues apparaissent donc aussi dans l'interface.
@@ -404,7 +404,7 @@ flowchart LR
 
 ### Changer le modèle ou les paramètres
 
-Il suffit de modifier les deux constantes en tête de [askGeminiPrompto.py](../askGeminiPrompto.py). Elles sont utilisées par la configuration de l'adaptateur `GeminiModel` (étape 1), l'appel de l'étape 5, les logs et le pied du rapport PDF.
+Il suffit de modifier les deux constantes en tête de [promptodys/infrastructure/config.py](../promptodys/infrastructure/config.py). Elles sont utilisées par la configuration de l'adaptateur `GeminiModel` (étape 1), l'appel de l'étape 5, les logs et le pied du rapport PDF.
 
 ```python
 # Modèle Gemini utilisé (ex. "gemini-3.8-flash", "gemini-3.5-flash-lite")
@@ -417,9 +417,9 @@ GEMINI_THINKING_LEVEL = types.ThinkingLevel.LOW
 La configuration de `GeminiModel` en découle :
 
 ```python
-self.config = types.GenerateContentConfig(
+self.generate_content_config = types.GenerateContentConfig(
     thinking_config=types.ThinkingConfig(
-        thinking_level=GEMINI_THINKING_LEVEL,
+        thinking_level=config.GEMINI_THINKING_LEVEL,
         include_thoughts=True,
     ),
 )
@@ -434,4 +434,4 @@ Points d'attention :
 
 ### Changer le contenu du rapport PDF
 
-Modifier `build_report_markdown()` ([promptodys/domain/report.py](../promptodys/domain/report.py)) pour les sections, et `convertir_markdown_vers_paragraphes()` ([askGeminiPrompto.py](../askGeminiPrompto.py)) pour le rendu. Toute nouvelle syntaxe Markdown dans le rapport doit être ajoutée au parseur, sinon elle s'affiche en texte brut.
+Modifier `build_report_markdown()` ([promptodys/domain/report.py](../promptodys/domain/report.py)) pour les sections, et `markdown_to_flowables()` ([promptodys/infrastructure/pdf_report.py](../promptodys/infrastructure/pdf_report.py)) pour le rendu. Toute nouvelle syntaxe Markdown dans le rapport doit être ajoutée au parseur, sinon elle s'affiche en texte brut.
