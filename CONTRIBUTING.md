@@ -358,7 +358,10 @@ La CI échoue si un contrat est rompu. Si vous en rencontrez un, déplacez le co
 3. **Noms de variables** : `snake_case` pour Python, `camelCase` pour JavaScript
 4. **Noms de fonctions** : Descriptifs ; en anglais dans le paquet `promptodys/` (modules, classes, fonctions), messages, docstrings et commentaires en français. Le code encore dans `askGeminiPrompto.py` garde ses noms français jusqu'à son déplacement
 5. **Commentaires** : Expliquer le "pourquoi", pas le "quoi"
-6. **Logs** : Utiliser `log_message()` avec emojis pour la lisibilité
+6. **Logs** : Utiliser `log_message()` avec emojis pour la lisibilité dans `askGeminiPrompto.py`. Dans le paquet `promptodys/`, utiliser le module `logging` avec un logger privé au module, `_logger = logging.getLogger(__name__)`, et les mêmes préfixes à emojis : `main()` les renvoie vers la console et le rapport
+7. **Imports du paquet** : importer le module, pas ses fonctions : `from promptodys.domain import note`, puis `note.extract_note_content(...)`. L'appel montre d'où vient la fonction, et un test peut la remplacer avec `monkeypatch.setattr(note, ...)`. Seuls les tests d'un module importent directement les fonctions qu'ils testent
+8. **Noms privés** : préfixer par `_` ce qui ne sert qu'au module (`_logger`, regex compilées comme `_BOLD_MARKER_PATTERN`). Une regex compilée porte le suffixe `_PATTERN`
+9. **Ports du domaine** : un adaptateur hérite explicitement du `Protocol` qu'il implémente (`class EelEditor(ports.Editor)`). Les faux des tests n'en héritent pas : une méthode manquante y lève `AttributeError` dès son appel
 
 ### Structure des logs
 
@@ -432,14 +435,21 @@ uv run pytest
 
 | Fichier | Ce qu'il couvre |
 |---|---|
-| `test_import.py` | Importer le module ne crée aucun dossier |
-| `test_note.py` | Extraction de la note corrigée et du débrief, ajout de la note d'origine |
+| `domain/test_note.py` | Prompt, extraction de la note corrigée et du débrief, ajout de la note d'origine, marqueurs `__BOLD_n__` |
+| `domain/test_report.py` | Contenu Markdown du rapport |
+| `domain/test_documents.py` | Chemin de sauvegarde (assainissement du nom, anti-récursion), cas d'usage sauvegarder et ouvrir |
+| `domain/test_processing.py` | Cas d'usage du traitement IA : succès, abandon, erreurs de l'IA |
+| `domain/conftest.py` | Faux éditeur, faux modèle d'IA et faux rangement, partagés par les tests du domaine |
+| `test_adaptateurs.py` | Adaptateurs de `askGeminiPrompto.py` : disque réel (dossier temporaire), Eel et Gemini simulés |
+| `test_traitement.py` | Assemblage du traitement IA (étapes, rapport, abandon) avec Gemini, l'éditeur et le PDF simulés |
+| `test_import.py` | Importer le module ou la couche domaine ne crée aucun dossier |
+| `test_logs.py` | Les logs du domaine arrivent dans la console et le rapport |
+| `test_port.py` | Disponibilité du port de l'éditeur |
 | `test_rapport.py` | Nettoyage HTML du contenu pour le rapport PDF |
-| `test_sauvegarde.py` | Préparation du chemin de sauvegarde (assainissement du nom, anti-récursion) |
 
-`pyproject.toml` (section `[tool.pytest.ini_options]`) rend `askGeminiPrompto.py` importable depuis `tests/`, et pytest-timeout fait échouer au bout de 10 s un test qui boucle, au lieu de figer pytest.
+`pyproject.toml` (section `[tool.pytest.ini_options]`) rend `askGeminiPrompto.py` et le paquet `promptodys/` importables depuis `tests/`, et pytest-timeout fait échouer au bout de 10 s un test qui boucle, au lieu de figer pytest.
 
-Pour être testable, une fonction doit pouvoir être appelée sans interface, sans réseau et sans écrire sur le disque : extrayez la logique dans une fonction pure, comme `preparer_chemin_sauvegarde()`.
+Pour être testable, une fonction doit pouvoir être appelée sans interface, sans réseau et sans écrire sur le disque : placez la logique dans la couche domaine, sous forme de fonction pure comme `documents.prepare_save_path()`, ou de cas d'usage qui reçoit ses dépendances par les ports, comme `processing.process_note()`. Les tests lui passent alors de faux adaptateurs.
 
 **Tests à implémenter :**
 - [ ] Tests d'intégration pour le pipeline IA

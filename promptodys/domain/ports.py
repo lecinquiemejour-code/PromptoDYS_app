@@ -1,8 +1,9 @@
 """Ports du domaine : ce dont les cas d'usage ont besoin du monde extérieur, et les données échangées.
 
 Les adaptateurs (Eel, Gemini, disque) héritent explicitement de leur Protocol, pour que le lien
-se voie à la lecture. Rien ne vérifie à l'exécution qu'ils implémentent toutes les méthodes :
-une méthode oubliée hérite du corps vide du Protocol et renvoie None.
+se voie à la lecture. Comme les méthodes ne sont pas marquées @abstractmethod, rien n'oblige
+un adaptateur à toutes les redéfinir : une méthode oubliée hérite du corps vide du Protocol (...)
+et renvoie None au lieu de lever une erreur.
 Les faux des tests n'en héritent pas : une méthode manquante y lève AttributeError dès son appel.
 """
 
