@@ -166,6 +166,7 @@ uv sync --locked   # crée .venv à partir de uv.lock, sans le modifier
 uv run ruff check --fix  # lint, corrige ce qui est sûr (voir Standards de code)
 uv run ruff format       # formatage, après le lint (voir Standards de code)
 uv run lint-imports      # dépendances entre couches (voir Standards de code)
+uv run pyright           # types du paquet promptodys/ (voir Standards de code)
 uv run pytest            # tests automatisés (voir Tests)
 uv run python askGeminiPrompto.py
 
@@ -185,6 +186,7 @@ uv add <paquet>
 | Je vérifie le code (lint) | `uv run ruff check` |
 | Je formate le code (après le lint) | `uv run ruff format` |
 | Je vérifie les dépendances entre couches | `uv run lint-imports` |
+| Je vérifie les types | `uv run pyright` |
 | Je lance les tests | `uv run pytest` |
 | Je build l'exécutable (pour le système courant) | `uv sync --locked` puis `uv run pyinstaller --clean PromptoDYS.spec` |
 | Je change la version du projet | `uv version 1.3.0b1` (met à jour `pyproject.toml` et `uv.lock` ensemble) |
@@ -193,7 +195,7 @@ uv add <paquet>
 
 `uv run` synchronise l'environnement automatiquement avant de lancer la commande : pas besoin d'activer le `.venv` (`source .venv/bin/activate`).
 
-À chaque push, sur n'importe quelle branche, le workflow [ci.yml](.github/workflows/ci.yml) relance ruff (lint et formatage), import-linter, pytest et le build de l'exécutable Windows. Le résultat s'affiche à côté du commit (✅ ou ❌) et dans l'onglet Actions, avec un résumé en haut de chaque exécution (signalements ruff par règle, tests en échec, résultat du build). Depuis le terminal : `gh run list --workflow ci.yml --branch <branche>`, et `gh run view --log-failed` pour les journaux des étapes en échec.
+À chaque push, sur n'importe quelle branche, le workflow [ci.yml](.github/workflows/ci.yml) relance ruff (lint et formatage), import-linter, pyright, pytest et le build de l'exécutable Windows. Le résultat s'affiche à côté du commit (✅ ou ❌) et dans l'onglet Actions, avec un résumé en haut de chaque exécution (signalements ruff par règle, tests en échec, résultat du build). Depuis le terminal : `gh run list --workflow ci.yml --branch <branche>`, et `gh run view --log-failed` pour les journaux des étapes en échec.
 
 ### 4. Commiter
 
@@ -218,6 +220,7 @@ Avant de soumettre votre PR, vérifiez :
 
 - [ ] Le code suit les [standards de code](#standards-de-code) : `uv run ruff check --fix` puis `uv run ruff format` ont été lancés, et `uv run ruff check` ne signale rien de nouveau
 - [ ] `uv run lint-imports` respecte tous les contrats
+- [ ] `uv run pyright` ne signale aucune erreur
 - [ ] `uv run pytest` passe, et une correction de bug testable est accompagnée d'un test
 - [ ] Le workflow CI est vert sur la branche (onglet Actions)
 - [ ] La documentation est mise à jour
@@ -350,6 +353,24 @@ uv run lint-imports   # signale chaque import qui rompt un contrat
 ```
 
 La CI échoue si un contrat est rompu. Si vous en rencontrez un, déplacez le code dans la bonne couche ou passez par un port (`Protocol`) du domaine, plutôt que de modifier le contrat.
+
+### Vérification des types avec pyright
+
+[pyright](https://microsoft.github.io/pyright/) vérifie les annotations de type sans exécuter le code. Il est installé avec les dépendances de dev et configuré dans la section `[tool.pyright]` de `pyproject.toml` :
+
+| Périmètre | Mode | Pourquoi |
+|---|---|---|
+| `promptodys/domain/` | `strict` | Code entièrement annoté, sans bibliothèque tierce : chaque paramètre, retour et conteneur doit avoir un type connu |
+| reste de `promptodys/` | `standard` | Les couches infrastructure et présentation dépendent de bibliothèques mal typées (Eel, google-genai) |
+| `askGeminiPrompto.py`, `tests/` | non vérifiés | Pas encore annotés ; le code entre dans le périmètre en sortant du monolithe |
+
+```bash
+uv run pyright   # signale les erreurs de type du paquet promptodys/
+```
+
+Lancez-le toujours par `uv run` : uv active `.venv`, où pyright trouve l'interpréteur (Python 3.14) et les bibliothèques du projet. La CI échoue si pyright signale une erreur.
+
+En mode strict, les conteneurs vides doivent porter leur type : `field(default_factory=list[Image])` et non `field(default_factory=list)`, `step_logs: list[str] = []` et non `step_logs = []`.
 
 ### Règles générales
 

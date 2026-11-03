@@ -15,6 +15,7 @@ dependencies = [
 dev = [
     "import-linter>=2.15",
     "pyinstaller>=6",
+    "pyright>=1.1.414",
     "pytest>=9.2.0",
     "pytest-timeout>=2.4.0",
     "ruff>=0.17.3",
@@ -68,6 +69,15 @@ name = "infrastructure n'importe pas presentation"
 type = "forbidden"
 source_modules = ["promptodys.infrastructure"]
 forbidden_modules = ["promptodys.presentation"]
+
+[tool.pyright]
+# Le paquet seulement : askGeminiPrompto.py et les tests ne sont pas annotés.
+# Chaque couche entre dans la vérification quand elle sort du monolithe.
+# Lancé par uv run, qui active .venv : pyright y trouve l'interpréteur et les bibliothèques.
+include = ["promptodys"]
+typeCheckingMode = "standard"
+# Le domaine est entièrement annoté et n'utilise aucune bibliothèque tierce
+strict = ["promptodys/domain"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

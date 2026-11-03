@@ -42,6 +42,11 @@ jobs:
         if: ${{ !cancelled() }}
         run: uv run lint-imports
 
+      # Types du paquet promptodys/ (configuration dans [tool.pyright] de pyproject.toml)
+      - name: Types (pyright)
+        if: ${{ !cancelled() }}
+        run: uv run pyright
+
       # Résumé en haut de la page de l'exécution, même si ruff a échoué
       - name: Résumé
         if: always()
@@ -72,6 +77,15 @@ jobs:
               echo "❌ Contrats rompus (lancer \`uv run lint-imports\`) :"
               echo '```'
               echo "$contracts"
+              echo '```'
+            fi
+            echo "## Types (pyright)"
+            if types=$(uv run pyright 2>&1); then
+              echo "✅ Aucune erreur de type"
+            else
+              echo "❌ Erreurs de type (lancer \`uv run pyright\`) :"
+              echo '```'
+              echo "$types"
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"

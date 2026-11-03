@@ -191,7 +191,7 @@ Les adaptateurs (`EelEditor`, `GeminiModel`, `DiskDocumentStore`) sont encore da
 
 Écarts aux règles ci-dessus, décidés pendant la migration :
 - **Trois ports au lieu de deux** : `Editor`, `AIModel` et `DocumentStore`. Sans port de rangement, sauvegarder et ouvrir n'auraient pas pu devenir des cas d'usage testables.
-- **`Protocol` hérités explicitement** : `class EelEditor(ports.Editor)`. Le lien se lit dans le code, faute de vérificateur de types (mypy, pyright) dans le projet. Comme les méthodes des ports ne sont pas marquées `@abstractmethod`, rien n'oblige un adaptateur à toutes les redéfinir : une méthode oubliée hérite du corps vide du Protocol (`...`) et renvoie `None` au lieu de lever une erreur. Les faux des tests n'héritent pas des ports.
+- **`Protocol` hérités explicitement** : `class EelEditor(ports.Editor)`. Le lien se lit dans le code. Comme les méthodes des ports ne sont pas marquées `@abstractmethod`, rien n'oblige un adaptateur à toutes les redéfinir : une méthode oubliée hérite du corps vide du Protocol (`...`) et renvoie `None` au lieu de lever une erreur. Les faux des tests n'héritent pas des ports. pyright vérifie maintenant le paquet `promptodys/` (voir R10), mais les adaptateurs restent hors de son périmètre tant qu'ils sont dans `askGeminiPrompto.py` : leur conformité aux ports sera vérifiée à l'étape 2.
 - **Journalisation du domaine avec `logging`** (`_logger = logging.getLogger(__name__)`), plutôt qu'une fonction de log injectée. Un handler provisoire, `LogMessageHandler`, renvoie ces messages vers `log_message` jusqu'à R7.
 - **Imports de modules** : `from promptodys.domain import note`, puis `note.extract_note_content(...)`.
 - **Étapes renumérotées** : 1 client et configuration, 2 modèle de prompt, 3 lecture de l'éditeur, 4 prompt, 5 flux, 6 extraction, 7 injection, 8 jetons, 9 PDF. Les étapes 1, 2 et 9 dépendent de l'infrastructure et restent dans `traitement_gemini()`.
@@ -225,7 +225,7 @@ Les dix `global` disparaissent au fil du découpage, mais il faut décider par q
 
 **R10. Python moderne.**
 - `pathlib.Path` à la place de `os.path`.
-- Annotations de type.
+- Annotations de type. pyright est en place (`[tool.pyright]` de `pyproject.toml`, lancé en CI) : mode strict sur `promptodys/domain/`, standard sur le reste du paquet. `askGeminiPrompto.py` et les tests restent hors périmètre jusqu'à leur découpage.
 - `dataclass` pour les données échangées avec l'éditeur et pour le résultat du traitement.
 - Imports en tête de fichier (`sys` est réimporté [l. 134](../askGeminiPrompto.py#L134), `traceback` dans deux fonctions).
 - **Portabilité** : `subprocess.Popen('explorer …')` ([l. 1413](../askGeminiPrompto.py#L1413)) ne fonctionne que sous Windows ; utiliser `os.startfile`, `open` ou `xdg-open` selon la plateforme (le développement se fait aussi sous macOS).
