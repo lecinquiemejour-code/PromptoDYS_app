@@ -58,20 +58,8 @@ import subprocess  # Pour ouvrir le dossier reports
 # --- Couche domaine (règles pures, voir promptodys/) ---
 from promptodys.domain import documents, note, ports, processing, report
 
-# Modèle Gemini utilisé (ex. "gemini-3.8-flash", "gemini-3.5-flash-lite")
-GEMINI_MODEL = "gemini-3.8-flash"
-
-# Niveau de réflexion Gemini 3.x
-GEMINI_THINKING_LEVEL = types.ThinkingLevel.LOW
-
-# Dossier de l'application : celui de l'exe une fois packagé, celui du script en développement.
-# GeminiKey.txt et reports/ y sont lus et écrits, quel que soit le dossier courant.
-APP_DIR = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__))
-REPORTS_DIR = os.path.join(APP_DIR, "reports")
-
-# Port du serveur Eel. Il reste fixe : le localStorage et l'IndexedDB de Chrome
-# (thème, brouillon, images) sont rattachés à l'origine http://localhost:<port>
-EEL_PORT = 8080
+# --- Couche infrastructure (adaptateurs, configuration) ---
+from promptodys.infrastructure import config
 
 # --- NOUVELLE VARIABLE POUR CAPTURER TOUS LES LOGS ---
 logs_complets = []
@@ -142,27 +130,6 @@ def configure_logger():
     logger.propagate = False  # pas de second affichage par le logger racine
 
 
-def find_web_folder():
-    """Trouve le dossier contenant index.html (compatible PyInstaller)"""
-    # Si on est dans un exécutable PyInstaller
-    if hasattr(sys, "_MEIPASS"):
-        base_path = sys._MEIPASS
-        possible_folders = ["build_web", "build"]
-    else:
-        # Mode développement normal
-        base_path = APP_DIR
-        possible_folders = ["build_web", "build", "dist", "public", "."]
-
-    for folder in possible_folders:
-        index_path = os.path.join(base_path, folder, "index.html")
-        if os.path.exists(index_path):
-            print(f"✅ Dossier web trouvé: {folder}/")
-            return os.path.join(base_path, folder)
-
-    print("⌐ Aucun index.html trouvé dans:", possible_folders)
-    return None
-
-
 def get_markdown():
     """
     📖 LECTURE: Récupère le contenu Markdown actuel
@@ -198,43 +165,6 @@ def set_markdown(markdown_content):
     except Exception as e:
         print(f"❌ ÉCHEC: Erreur écriture: {e}")
         return False
-
-
-# --- Répertoire par défaut des projets PromptoDYS ---
-def _get_documents_folder():
-    """Récupère le vrai dossier Documents Windows (compatible OneDrive)"""
-    try:
-        import ctypes
-        import ctypes.wintypes
-
-        CSIDL_PERSONAL = 5  # "Mes documents" dans l'API Shell Windows
-        buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
-        ctypes.windll.shell32.SHGetFolderPathW(None, CSIDL_PERSONAL, None, 0, buf)
-        if buf.value:
-            return buf.value
-    except Exception:
-        pass
-    # Fallback si non-Windows ou erreur
-    return os.path.expanduser("~/Documents")
-
-
-PROMPTO_DOCS_DIR = os.path.join(_get_documents_folder(), "PromptoDYS")
-
-
-# --- Profil Chrome dédié à l'éditeur ---
-def _get_chrome_profile_dir():
-    """Dossier du profil Chrome isolé de PromptoDYS (hors Documents, non synchronisé par OneDrive)"""
-    if sys.platform == "win32":
-        base_dir = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~\\AppData\\Local")
-    elif sys.platform == "darwin":
-        base_dir = os.path.expanduser("~/Library/Application Support")
-    else:
-        # Fallback Linux et autres
-        base_dir = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
-    return os.path.join(base_dir, "PromptoDYS", "ChromeProfile")
-
-
-CHROME_PROFILE_DIR = _get_chrome_profile_dir()
 
 
 # --- Disponibilité du port de l'éditeur ---
@@ -481,7 +411,7 @@ class GeminiModel(ports.AIModel):
         self.client = client
         self.config = types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(
-                thinking_level=GEMINI_THINKING_LEVEL,
+                thinking_level=config.GEMINI_THINKING_LEVEL,
                 include_thoughts=True,
             ),
         )
@@ -492,7 +422,7 @@ class GeminiModel(ports.AIModel):
         last_response = None
         try:
             for response in self.client.models.generate_content_stream(
-                model=GEMINI_MODEL, contents=prompt, config=self.config
+                model=config.GEMINI_MODEL, contents=prompt, config=self.config
             ):
                 last_response = response
                 if not response.candidates:
@@ -761,11 +691,11 @@ def sauvegarder_rapport(
         return None, None
 
     # Créer le dossier reports s'il n'existe pas
-    os.makedirs(REPORTS_DIR, exist_ok=True)
+    os.makedirs(config.REPORTS_DIR, exist_ok=True)
 
     # Générer un nom de fichier avec timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    base_filename = os.path.join(REPORTS_DIR, f"rapport_complet_{timestamp}")
+    base_filename = os.path.join(config.REPORTS_DIR, f"rapport_complet_{timestamp}")
 
     log_message(f"💾 SAUVEGARDE: Création du fichier PDF {base_filename}.pdf")
 
@@ -778,8 +708,8 @@ def sauvegarder_rapport(
         processed_note=contenu_traite,
         correction_debrief=debrief_correction,
         token_stats=stats_tokens,
-        model=GEMINI_MODEL,
-        thinking_level=GEMINI_THINKING_LEVEL.value,
+        model=config.GEMINI_MODEL,
+        thinking_level=config.GEMINI_THINKING_LEVEL.value,
         generated_at=datetime.now(),
     )
     log_message("✅ SUCCÈS: Rapport complet préparé")
@@ -812,35 +742,22 @@ def sauvegarder_rapport(
 
 # --- Fonctions Gemini ---
 
-GEMINI_API_KEY_PLACEHOLDER = "YOUR_GEMINI_API_KEY_HERE"
-
-
-def lire_cle_api():
-    """Lit la clé API dans GeminiKey.txt (ignore lignes vides et commentaires #)"""
-    # utf-8-sig : tolère le BOM ajouté par le Bloc-notes Windows
-    with open(os.path.join(APP_DIR, "GeminiKey.txt"), encoding="utf-8-sig") as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("#"):
-                return line
-    return ""
-
 
 def init_gemini_client():
     """Initialise le client Gemini avec la clé API"""
     try:
-        api_key = lire_cle_api()
+        api_key = config.read_api_key()
         if not api_key:
             log_message("❌ ÉCHEC: Aucune clé API trouvée dans GeminiKey.txt")
             return None
-        if api_key == GEMINI_API_KEY_PLACEHOLDER:
+        if api_key == config.GEMINI_API_KEY_PLACEHOLDER:
             log_message("❌ ÉCHEC: GeminiKey.txt contient encore la valeur du template, remplacez-la par votre clé")
             return None
         # Seuls les 4 derniers caractères : ce log est recopié dans les rapports PDF
         log_message(f"🔑 INFO: Clé API chargée (...{api_key[-4:]})")
         return genai.Client(api_key=api_key)
     except FileNotFoundError:
-        log_message(f"❌ ÉCHEC: Fichier GeminiKey.txt introuvable dans {APP_DIR}")
+        log_message(f"❌ ÉCHEC: Fichier GeminiKey.txt introuvable dans {config.APP_DIR}")
         return None
     except Exception as e:
         log_message(f"❌ ÉCHEC: Erreur initialisation Gemini: {e}")
@@ -893,7 +810,8 @@ def traitement_gemini(annulation):
         return False
     modele = GeminiModel(client)
     log_message(
-        f"✅ SUCCÈS: Client Gemini initialisé (Modèle: {GEMINI_MODEL}, Thinking level: {GEMINI_THINKING_LEVEL.value})"
+        f"✅ SUCCÈS: Client Gemini initialisé (Modèle: {config.GEMINI_MODEL}, "
+        f"Thinking level: {config.GEMINI_THINKING_LEVEL.value})"
     )
 
     # 2. Lire le modèle de prompt
@@ -925,7 +843,7 @@ def traitement_gemini(annulation):
 
     if pdf_file:
         log_message("🎉 SUCCÈS: Rapport PDF sauvegardé !")
-        log_message(f"📁 Rapport PDF dans {REPORTS_DIR}")
+        log_message(f"📁 Rapport PDF dans {config.REPORTS_DIR}")
     else:
         log_message("⚠️ ATTENTION: Sauvegarde PDF échouée")
 
@@ -1064,12 +982,12 @@ def gui_control_panel():
             global editeur_lance, lancement_editeur_en_cours
             # Vérifier le port avant d'ouvrir Chrome : s'il est pris, Chrome afficherait
             # la page de l'autre programme. On n'ouvre alors aucune fenêtre.
-            if not attendre_port_libre(EEL_PORT):
-                log_message(f"❌ Le port {EEL_PORT} est utilisé par un autre programme : éditeur non ouvert")
+            if not attendre_port_libre(config.EEL_PORT):
+                log_message(f"❌ Le port {config.EEL_PORT} est utilisé par un autre programme : éditeur non ouvert")
                 lancement_editeur_en_cours = False
                 echec_ouverture(
-                    f"❌ Port {EEL_PORT} déjà utilisé par un autre programme",
-                    f"Un autre programme utilise le port {EEL_PORT},\n"
+                    f"❌ Port {config.EEL_PORT} déjà utilisé par un autre programme",
+                    f"Un autre programme utilise le port {config.EEL_PORT},\n"
                     "nécessaire à l'éditeur.\n\n"
                     "Fermez les autres programmes ouverts,\n"
                     "ou redémarrez l'ordinateur, puis réessayez.",
@@ -1080,10 +998,10 @@ def gui_control_panel():
                     "index.html",
                     mode="chrome",
                     size=(1200, 800),
-                    port=EEL_PORT,
+                    port=config.EEL_PORT,
                     cmdline_args=[
-                        f"--app=http://localhost:{EEL_PORT}/index.html",
-                        f"--user-data-dir={CHROME_PROFILE_DIR}",
+                        f"--app=http://localhost:{config.EEL_PORT}/index.html",
+                        f"--user-data-dir={config.CHROME_PROFILE_DIR}",
                         "--disable-features=VizDisplayCompositor",
                         "--no-first-run",
                         "--no-default-browser-check",
@@ -1103,9 +1021,9 @@ def gui_control_panel():
                         "index.html",
                         mode="chrome-app",
                         size=(1200, 800),
-                        port=EEL_PORT,
+                        port=config.EEL_PORT,
                         cmdline_args=[
-                            f"--user-data-dir={CHROME_PROFILE_DIR}",
+                            f"--user-data-dir={config.CHROME_PROFILE_DIR}",
                             "--no-first-run",
                             "--no-default-browser-check",
                         ],
@@ -1153,7 +1071,7 @@ def gui_control_panel():
         )
 
         # Toujours afficher le dialogue — pré-rempli si document déjà ouvert/sauvegardé
-        initial_dir = os.path.dirname(current_document_path) if current_document_path else PROMPTO_DOCS_DIR
+        initial_dir = os.path.dirname(current_document_path) if current_document_path else config.PROMPTO_DOCS_DIR
         initial_name = os.path.basename(current_document_path) if current_document_path else "nouveau_document"
 
         # Le dialogue se rouvre tant que le nom saisi est vide après assainissement
@@ -1210,7 +1128,7 @@ def gui_control_panel():
         # 1. Choisir le fichier AVANT de lancer l'éditeur (le filedialog est indépendant)
         selected_path = filedialog.askopenfilename(
             title="Ouvrir un document PromptoDYS",
-            initialdir=PROMPTO_DOCS_DIR,
+            initialdir=config.PROMPTO_DOCS_DIR,
             filetypes=[
                 ("Documents Markdown", "*.md"),
                 ("Tous les fichiers", "*.*"),
@@ -1340,7 +1258,7 @@ def gui_control_panel():
     def btn_ouvrir_rapports():
         """Ouvre le dossier des rapports PDF dans l'explorateur Windows"""
         log_message("📂 Action: Ouverture du dossier reports...")
-        reports_path = REPORTS_DIR
+        reports_path = config.REPORTS_DIR
 
         # Créer le dossier s'il n'existe pas
         os.makedirs(reports_path, exist_ok=True)
@@ -1722,20 +1640,20 @@ def main():
     log_message("💾 Sauvegarde automatique : PDF uniquement avec CAPTURE COMPLÈTE des logs")
 
     # Trouver le dossier web
-    web_folder = find_web_folder()
+    web_folder = config.find_web_folder()
     if not web_folder:
         log_message("💡 Placez votre build React dans le dossier 'build/'")
         return
 
     # Créer le dossier reports
-    os.makedirs(REPORTS_DIR, exist_ok=True)
-    log_message(f"📁 Dossier des rapports PDF : {REPORTS_DIR}")
+    os.makedirs(config.REPORTS_DIR, exist_ok=True)
+    log_message(f"📁 Dossier des rapports PDF : {config.REPORTS_DIR}")
 
     # Créer le dossier des documents et le profil Chrome de l'éditeur
-    os.makedirs(PROMPTO_DOCS_DIR, exist_ok=True)
-    log_message(f"📁 Dossier projets PromptoDYS : {PROMPTO_DOCS_DIR}")
-    os.makedirs(CHROME_PROFILE_DIR, exist_ok=True)
-    log_message(f"🌐 Profil Chrome PromptoDYS : {CHROME_PROFILE_DIR}")
+    os.makedirs(config.PROMPTO_DOCS_DIR, exist_ok=True)
+    log_message(f"📁 Dossier projets PromptoDYS : {config.PROMPTO_DOCS_DIR}")
+    os.makedirs(config.CHROME_PROFILE_DIR, exist_ok=True)
+    log_message(f"🌐 Profil Chrome PromptoDYS : {config.CHROME_PROFILE_DIR}")
 
     # Initialiser Eel (préparation, mais ne lance pas encore)
     eel.init(web_folder)

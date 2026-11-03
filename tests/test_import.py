@@ -31,3 +31,15 @@ def test_domain_import_creates_no_folder(monkeypatch):
         importlib.import_module(f"promptodys.domain.{module}")
 
     assert dossiers_crees == []
+
+
+def test_infrastructure_import_creates_no_folder(monkeypatch):
+    """Importer la configuration ne doit rien écrire sur le disque (constat M12)."""
+    dossiers_crees = []
+    monkeypatch.setattr(os, "makedirs", lambda chemin, *args, **kwargs: dossiers_crees.append(chemin))
+    for nom in [nom for nom in sys.modules if nom.startswith("promptodys")]:
+        monkeypatch.delitem(sys.modules, nom)
+
+    importlib.import_module("promptodys.infrastructure.config")
+
+    assert [chemin for chemin in dossiers_crees if "PromptoDYS" in str(chemin)] == []
