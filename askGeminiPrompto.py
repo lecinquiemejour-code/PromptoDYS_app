@@ -32,17 +32,9 @@ import threading
 import time
 import socket
 from datetime import datetime
-import re
 import base64
 import mimetypes
 # import socket # Supprimé : Vérification internet retirée
-
-# --- Imports pour PDF avec reportlab (remplace weasyprint) ---
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 
 # --- Imports Gemini ---
 from google import genai
@@ -56,10 +48,10 @@ import sv_ttk  # Thème Sun Valley (Windows 11 look)
 import subprocess  # Pour ouvrir le dossier reports
 
 # --- Couche domaine (règles pures, voir promptodys/) ---
-from promptodys.domain import documents, note, ports, processing, report
+from promptodys.domain import documents, ports, processing
 
 # --- Couche infrastructure (adaptateurs, configuration) ---
-from promptodys.infrastructure import config, disk_document_store
+from promptodys.infrastructure import config, disk_document_store, pdf_report
 
 # --- NOUVELLE VARIABLE POUR CAPTURER TOUS LES LOGS ---
 logs_complets = []
@@ -408,244 +400,6 @@ def on_editor_close():
         root_global.after(0, lambda: status_label_global.config(text="🔴 Éditeur fermé"))
 
 
-def nettoyer_html_tags(text):
-    """Supprime les balises HTML problématiques pour reportlab"""
-    # Remplacer les marqueurs __BOLD_n__ par des séparateurs horizontaux MD
-    text, bold_count = note.replace_bold_markers(text)
-    if bold_count > 0:
-        log_message(f"🔄 NETTOYAGE: {bold_count} marqueurs __BOLD_n__ remplacés par des séparateurs ---")
-
-    # Supprimer les balises <span> avec styles
-    text = re.sub(r"<span[^>]*>", "", text)
-    text = re.sub(r"</span>", "", text)
-
-    # Supprimer seulement les émojis problématiques pour reportlab
-    text = re.sub(r"[🎉🎯🔧📊📝📄✅❌⚙️🚀🔍✏️🧠🔢💾🎮📋💡🤖📖🔗🪟📁⏳🔄💭]", "", text)
-
-    # Nettoyer les caractères spéciaux
-    text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-    # Remettre les balises autorisées
-    text = text.replace("&lt;b&gt;", "<b>").replace("&lt;/b&gt;", "</b>")
-    text = text.replace("&lt;i&gt;", "<i>").replace("&lt;/i&gt;", "</i>")
-    text = text.replace("&lt;u&gt;", "<u>").replace("&lt;/u&gt;", "</u>")
-
-    return text
-
-
-def convertir_markdown_vers_paragraphes(contenu_md):
-    """Convertit le contenu Markdown en paragraphes reportlab (VERSION CORRIGÉE PDF)"""
-
-    # Styles reportlab
-    styles = getSampleStyleSheet()
-
-    # Styles personnalisés
-    title_style = ParagraphStyle(
-        "CustomTitle",
-        parent=styles["Title"],
-        fontSize=16,
-        textColor=colors.darkblue,
-        spaceAfter=15,
-        alignment=1,  # Centré
-    )
-
-    heading1_style = ParagraphStyle(
-        "CustomHeading1",
-        parent=styles["Heading1"],
-        fontSize=12,
-        textColor=colors.darkblue,
-        spaceBefore=12,
-        spaceAfter=8,
-    )
-
-    heading2_style = ParagraphStyle(
-        "CustomHeading2",
-        parent=styles["Heading2"],
-        fontSize=10,
-        textColor=colors.darkslategray,
-        spaceBefore=10,
-        spaceAfter=6,
-    )
-
-    normal_style = ParagraphStyle(
-        "CustomNormal",
-        parent=styles["Normal"],
-        fontSize=9,  # Plus gros pour meilleure lisibilité
-        spaceBefore=6,
-        spaceAfter=6,
-        leftIndent=0,
-        rightIndent=0,
-    )
-
-    code_style = ParagraphStyle(
-        "CustomCode",
-        parent=normal_style,
-        fontSize=9,  # Plus gros pour meilleure lisibilité
-        fontName="Helvetica",  # Police normale au lieu de Courier
-        backgroundColor=colors.lightblue,  # Couleur plus visible
-        borderWidth=2,
-        borderColor=colors.darkblue,
-        leftIndent=15,
-        rightIndent=15,
-        spaceBefore=8,
-        spaceAfter=8,
-        borderPadding=10,  # Plus d'espace autour du texte
-    )
-
-    # Parsing simple du Markdown
-    paragraphes = []
-    lignes = contenu_md.split("\n")
-    in_code_block = False
-
-    for ligne in lignes:
-        ligne_original = ligne
-        ligne = ligne.strip()
-
-        if not ligne and not in_code_block:
-            paragraphes.append(Spacer(1, 4))
-            continue
-
-        # Gestion des blocs de code (```)
-        if ligne.startswith("```"):
-            in_code_block = not in_code_block
-            continue
-
-        if in_code_block:
-            # Dans un bloc de code, garder le formatage original
-            text_clean = nettoyer_html_tags(ligne_original.rstrip())
-            if text_clean.strip():  # Éviter les lignes complètement vides
-                paragraphes.append(Paragraph(text_clean, code_style))
-            continue
-
-        # Nettoyer les balises HTML pour PDF
-        ligne_clean = nettoyer_html_tags(ligne)
-
-        # Titre principal (# )
-        if ligne_clean.startswith("# "):
-            text = ligne_clean[2:].strip()
-            paragraphes.append(Paragraph(text, title_style))
-
-        # Sous-titre niveau 1 (## )
-        elif ligne_clean.startswith("## "):
-            text = ligne_clean[3:].strip()
-            paragraphes.append(Paragraph(text, heading1_style))
-
-        # Sous-titre niveau 2 (### )
-        elif ligne_clean.startswith("### "):
-            text = ligne_clean[4:].strip()
-            paragraphes.append(Paragraph(text, heading2_style))
-
-        # Ligne de séparation (---)
-        elif ligne_clean.startswith("---"):
-            paragraphes.append(Spacer(1, 8))
-
-        # Liste à puces (- ou *)
-        elif ligne_clean.startswith("- ") or ligne_clean.startswith("* "):
-            text = ligne_clean[2:].strip()
-            paragraphes.append(Paragraph(f"• {text}", normal_style))
-
-        # Texte normal
-        else:
-            # Gérer le gras inline (**texte**)
-            ligne_final = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", ligne_clean)
-
-            # Gérer l'italique inline (*texte*)
-            ligne_final = re.sub(r"\*([^*]+)\*", r"<i>\1</i>", ligne_final)
-
-            if ligne_final.strip():  # Éviter les paragraphes vides
-                paragraphes.append(Paragraph(ligne_final, normal_style))
-
-    return paragraphes
-
-
-def generer_pdf_reportlab(contenu_final, pdf_filepath):
-    """Génère un PDF avec reportlab (VERSION CORRIGÉE POUR SPAN TAGS)"""
-    try:
-        log_message("📁 ÉTAPE: Génération PDF avec reportlab...")
-
-        # Créer le document PDF
-        doc = SimpleDocTemplate(
-            pdf_filepath,
-            pagesize=A4,
-            rightMargin=0.5 * inch,
-            leftMargin=0.5 * inch,
-            topMargin=0.5 * inch,
-            bottomMargin=0.5 * inch,
-        )
-
-        # Convertir le Markdown en éléments reportlab
-        elements = convertir_markdown_vers_paragraphes(contenu_final)
-
-        # Construire le PDF
-        doc.build(elements)
-
-        log_message(f"✅ SUCCÈS: Fichier .pdf créé → {pdf_filepath}")
-        return pdf_filepath
-
-    except Exception as e:
-        log_message(f"❌ ÉCHEC: Erreur génération PDF → {e}")
-        log_message("💡 INFO: Tentative d'archivage PDF échouée")
-        return None
-
-
-def sauvegarder_rapport(
-    contenu_original, logs_etapes, streaming_gemini, contenu_traite, debrief_correction, stats_tokens=None
-):
-    """Sauvegarde le rapport COMPLET en PDF uniquement"""
-    if not contenu_traite or not contenu_traite.strip():
-        log_message("⚠️ ATTENTION: Aucun contenu traité à sauvegarder")
-        return None, None
-
-    # Créer le dossier reports s'il n'existe pas
-    os.makedirs(config.REPORTS_DIR, exist_ok=True)
-
-    # Générer un nom de fichier avec timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    base_filename = os.path.join(config.REPORTS_DIR, f"rapport_complet_{timestamp}")
-
-    log_message(f"💾 SAUVEGARDE: Création du fichier PDF {base_filename}.pdf")
-
-    # ÉTAPE 1: Préparer le contenu complet avec TOUS les logs
-    log_message("🔧 ÉTAPE: Préparation du rapport complet...")
-    contenu_final = report.build_report_markdown(
-        original_note=contenu_original,
-        step_logs=logs_etapes,
-        ai_stream=streaming_gemini,
-        processed_note=contenu_traite,
-        correction_debrief=debrief_correction,
-        token_stats=stats_tokens,
-        model=config.GEMINI_MODEL,
-        thinking_level=config.GEMINI_THINKING_LEVEL.value,
-        generated_at=datetime.now(),
-    )
-    log_message("✅ SUCCÈS: Rapport complet préparé")
-
-    # ÉTAPE 2: Pas de sauvegarde MD (PDF uniquement)
-    md_filepath = None  # MD non sauvegardé (PDF uniquement)
-
-    # ÉTAPE 3: Générer le PDF directement (archivage uniquement)
-    log_message("📁 ÉTAPE: Génération PDF directement...")
-    pdf_filepath = generer_pdf_reportlab(contenu_final, f"{base_filename}.pdf")
-
-    # BILAN FINAL
-    log_message("\n📊 BILAN SAUVEGARDE PDF:")
-    log_message("=" * 30)
-
-    if md_filepath:
-        log_message(f"✅ Markdown : {os.path.basename(md_filepath)}")
-    else:
-        log_message("⚠️ Markdown : Non sauvegardé (PDF uniquement)")
-
-    if pdf_filepath:
-        log_message(f"✅ PDF      : {os.path.basename(pdf_filepath)}")
-    else:
-        log_message("❌ PDF      : ÉCHEC")
-
-    log_message("=" * 30)
-
-    return md_filepath, pdf_filepath
-
-
 # --- Fonctions Gemini ---
 
 
@@ -738,13 +492,13 @@ def traitement_gemini(annulation):
 
     # 9. Sauvegarde automatique PDF uniquement
     log_message("\n💾 ÉTAPE 9: Sauvegarde automatique rapport PDF...")
-    md_file, pdf_file = sauvegarder_rapport(
-        contenu_original=resultat.original_note,
-        logs_etapes=logs_avant_traitement + resultat.step_logs,
-        streaming_gemini=resultat.ai_stream,
-        contenu_traite=resultat.processed_note,
-        debrief_correction=resultat.correction_debrief,
-        stats_tokens=resultat.token_stats,
+    pdf_file = pdf_report.save_report(
+        original_note=resultat.original_note,
+        step_logs=logs_avant_traitement + resultat.step_logs,
+        ai_stream=resultat.ai_stream,
+        processed_note=resultat.processed_note,
+        correction_debrief=resultat.correction_debrief,
+        token_stats=resultat.token_stats,
     )
 
     if pdf_file:
