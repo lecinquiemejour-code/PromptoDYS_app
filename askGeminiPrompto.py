@@ -36,11 +36,6 @@ import base64
 import mimetypes
 # import socket # Supprimé : Vérification internet retirée
 
-# --- Imports Gemini ---
-from google import genai
-from google.genai import types
-import google.genai.errors as genai_errors
-
 # --- Imports GUI Tkinter + sv_ttk ---
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
@@ -51,7 +46,7 @@ import subprocess  # Pour ouvrir le dossier reports
 from promptodys.domain import documents, ports, processing
 
 # --- Couche infrastructure (adaptateurs, configuration) ---
-from promptodys.infrastructure import config, disk_document_store, pdf_report
+from promptodys.infrastructure import config, disk_document_store, gemini_model, pdf_report
 
 # --- NOUVELLE VARIABLE POUR CAPTURER TOUS LES LOGS ---
 logs_complets = []
@@ -302,51 +297,6 @@ class EelEditor(ports.Editor):
             return False
 
 
-class GeminiModel(ports.AIModel):
-    """Modèle Gemini"""
-
-    def __init__(self, client):
-        self.client = client
-        self.config = types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(
-                thinking_level=config.GEMINI_THINKING_LEVEL,
-                include_thoughts=True,
-            ),
-        )
-
-    def stream(self, prompt):
-        """Morceaux de réflexion et de réponse, puis un dernier morceau avec les jetons consommés.
-        Les erreurs de Gemini deviennent des ports.AIModelError"""
-        last_response = None
-        try:
-            for response in self.client.models.generate_content_stream(
-                model=config.GEMINI_MODEL, contents=prompt, config=self.config
-            ):
-                last_response = response
-                if not response.candidates:
-                    continue
-                if not response.candidates[0].content or not response.candidates[0].content.parts:
-                    continue
-                for part in response.candidates[0].content.parts:
-                    if part.text:
-                        yield ports.AIChunk(text=part.text, thought=bool(part.thought))
-        except genai_errors.ServerError as e:
-            raise ports.AIModelError(f"Erreur serveur Gemini: {e}") from e
-        except genai_errors.APIError as e:
-            raise ports.AIModelError(f"Erreur API Gemini: {e}") from e
-
-        usage = getattr(last_response, "usage_metadata", None)
-        if usage:
-            yield ports.AIChunk(
-                usage={
-                    "input": getattr(usage, "prompt_token_count", "N/A"),
-                    "output": getattr(usage, "candidates_token_count", "N/A"),
-                    "thinking": getattr(usage, "thoughts_token_count", "N/A"),
-                    "total": getattr(usage, "total_token_count", "N/A"),
-                }
-            )
-
-
 # Instances partagées par les boutons du panneau (aucun effet de bord à la construction)
 editeur_eel = EelEditor()
 stockage_documents = disk_document_store.DiskDocumentStore()
@@ -403,27 +353,6 @@ def on_editor_close():
 # --- Fonctions Gemini ---
 
 
-def init_gemini_client():
-    """Initialise le client Gemini avec la clé API"""
-    try:
-        api_key = config.read_api_key()
-        if not api_key:
-            log_message("❌ ÉCHEC: Aucune clé API trouvée dans GeminiKey.txt")
-            return None
-        if api_key == config.GEMINI_API_KEY_PLACEHOLDER:
-            log_message("❌ ÉCHEC: GeminiKey.txt contient encore la valeur du template, remplacez-la par votre clé")
-            return None
-        # Seuls les 4 derniers caractères : ce log est recopié dans les rapports PDF
-        log_message(f"🔑 INFO: Clé API chargée (...{api_key[-4:]})")
-        return genai.Client(api_key=api_key)
-    except FileNotFoundError:
-        log_message(f"❌ ÉCHEC: Fichier GeminiKey.txt introuvable dans {config.APP_DIR}")
-        return None
-    except Exception as e:
-        log_message(f"❌ ÉCHEC: Erreur initialisation Gemini: {e}")
-        return None
-
-
 def lire_prompto_dys():
     """Lit promptodys.prompt : la copie embarquée dans l'exécutable PyInstaller,
     ou celle du dossier du script en mode développement"""
@@ -464,11 +393,11 @@ def traitement_gemini(annulation):
 
     # 1. Initialiser le client et sa configuration
     log_message("🔑 ÉTAPE 1: Initialisation du client Gemini...")
-    client = init_gemini_client()
+    client = gemini_model.create_client()
     if not client:
         log_message("❌ ÉCHEC: Impossible d'initialiser Gemini")
         return False
-    modele = GeminiModel(client)
+    modele = gemini_model.GeminiModel(client)
     log_message(
         f"✅ SUCCÈS: Client Gemini initialisé (Modèle: {config.GEMINI_MODEL}, "
         f"Thinking level: {config.GEMINI_THINKING_LEVEL.value})"

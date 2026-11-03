@@ -40,7 +40,7 @@ def test_infrastructure_import_creates_no_folder(monkeypatch):
     for nom in [nom for nom in sys.modules if nom.startswith("promptodys")]:
         monkeypatch.delitem(sys.modules, nom)
 
-    for module in ("config", "disk_document_store"):
+    for module in ("config", "disk_document_store", "pdf_report", "gemini_model"):
         importlib.import_module(f"promptodys.infrastructure.{module}")
 
     assert [chemin for chemin in dossiers_crees if "PromptoDYS" in str(chemin)] == []

@@ -6,7 +6,7 @@ import pytest
 
 import askGeminiPrompto as app
 from promptodys.domain import ports
-from promptodys.infrastructure import pdf_report
+from promptodys.infrastructure import gemini_model, pdf_report
 
 
 class _Editor:
@@ -34,8 +34,8 @@ def traitement(monkeypatch):
     """Remplace Gemini, l'éditeur et le PDF ; renvoie (éditeur, rapports demandés)."""
     editor = _Editor()
     rapports = []
-    monkeypatch.setattr(app, "init_gemini_client", lambda: object())
-    monkeypatch.setattr(app, "GeminiModel", _Model)
+    monkeypatch.setattr(gemini_model, "create_client", lambda: object())
+    monkeypatch.setattr(gemini_model, "GeminiModel", _Model)
     monkeypatch.setattr(app, "lire_prompto_dys", lambda: "Corrige : [TEXTE]")
     monkeypatch.setattr(app, "editeur_eel", editor)
     monkeypatch.setattr(pdf_report, "save_report", lambda **kwargs: rapports.append(kwargs) or "r.pdf")
@@ -74,7 +74,7 @@ def test_traitement_gemini_cancelled_produces_no_report(traitement):
 def test_traitement_gemini_without_client(traitement, monkeypatch):
     """Sans client Gemini (clé absente), le traitement échoue avant de lire l'éditeur."""
     editor, rapports = traitement
-    monkeypatch.setattr(app, "init_gemini_client", lambda: None)
+    monkeypatch.setattr(gemini_model, "create_client", lambda: None)
 
     assert not app.traitement_gemini(threading.Event())
 
