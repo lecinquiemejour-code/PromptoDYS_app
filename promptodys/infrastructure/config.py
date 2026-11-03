@@ -4,10 +4,15 @@ Ce module ne fait que calculer des valeurs : aucun dossier n'est créé à l'imp
 main() s'en charge au démarrage.
 """
 
+import logging
 import os
 import sys
 
 from google.genai import types
+
+from promptodys.domain import note
+
+_logger = logging.getLogger(__name__)
 
 # Modèle Gemini utilisé (ex. "gemini-3.8-flash", "gemini-3.5-flash-lite")
 GEMINI_MODEL = "gemini-3.8-flash"
@@ -23,6 +28,11 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REPORTS_DIR = os.path.join(APP_DIR, "reports")
+
+# Ressources livrées avec l'application : copie embarquée dans l'exe (sys._MEIPASS, dossier où
+# PyInstaller les décompresse), racine du dépôt en développement. Un fichier posé à côté de l'exe est ignoré.
+RESOURCES_DIR: str = getattr(sys, "_MEIPASS", None) or APP_DIR
+PROMPT_TEMPLATE_FILE = os.path.join(RESOURCES_DIR, "promptodys.prompt")
 
 # Port du serveur Eel. Il reste fixe : le localStorage et l'IndexedDB de Chrome
 # (thème, brouillon, images) sont rattachés à l'origine http://localhost:<port>
@@ -42,6 +52,25 @@ def read_api_key() -> str:
             if line and not line.startswith("#"):
                 return line
     return ""
+
+
+def read_prompt_template() -> str | None:
+    """Lit le modèle de prompt promptodys.prompt (copie embarquée dans l'exe, ou celle du dépôt).
+    None s'il est absent, illisible ou sans balise [TEXTE]"""
+    try:
+        with open(PROMPT_TEMPLATE_FILE, encoding="utf-8") as f:
+            template = f.read()
+    except FileNotFoundError:
+        _logger.info("❌ ÉCHEC: Fichier promptodys.prompt introuvable")
+        return None
+    except Exception as e:
+        _logger.info(f"❌ ÉCHEC: Erreur lecture promptodys.prompt: {e}")
+        return None
+
+    if note.TEXT_PLACEHOLDER not in template:
+        _logger.info(f"❌ ÉCHEC: Balise {note.TEXT_PLACEHOLDER} manquante dans promptodys.prompt")
+        return None
+    return template
 
 
 def find_web_folder() -> str | None:

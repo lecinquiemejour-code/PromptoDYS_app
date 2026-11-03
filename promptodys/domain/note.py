@@ -9,6 +9,10 @@ _logger = logging.getLogger(__name__)
 NOTE_START = "<NOTE>"
 NOTE_END = "</NOTE>"
 
+# Balises du modèle de prompt (promptodys.prompt), remplacées par build_prompt()
+TEXT_PLACEHOLDER = "[TEXTE]"
+DATE_PLACEHOLDER = "[DATE]"
+
 # Marqueurs __BOLD_n__ du convertisseur Markdown de l'éditeur, parfois recopiés par Gemini
 _BOLD_MARKER_PATTERN = re.compile(r"__BOLD_\d+__")
 
@@ -24,7 +28,7 @@ _TRAILING_SEPARATOR_PATTERN = re.compile(r"(\s*\n)?-{3,}\s*$")
 
 def build_prompt(template: str, text: str, today: date) -> str:
     """Remplace [TEXTE] par la note de l'élève et [DATE] par la date du jour (JJ/MM/AAAA)."""
-    return template.replace("[TEXTE]", text).replace("[DATE]", today.strftime("%d/%m/%Y"))
+    return template.replace(TEXT_PLACEHOLDER, text).replace(DATE_PLACEHOLDER, today.strftime("%d/%m/%Y"))
 
 
 def replace_bold_markers(text: str) -> tuple[str, int]:

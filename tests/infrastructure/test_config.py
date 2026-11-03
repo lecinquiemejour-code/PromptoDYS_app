@@ -42,3 +42,26 @@ def test_find_web_folder_finds_build_web():
     if not os.path.isfile(os.path.join(config.APP_DIR, "build_web", "index.html")):
         pytest.skip("build_web/ absent de ce poste")
     assert config.find_web_folder() == os.path.join(config.APP_DIR, "build_web")
+
+
+def test_prompt_template_is_read_from_repository_in_development():
+    """En développement, le modèle de prompt est celui du dépôt, et il contient la balise [TEXTE]."""
+    assert os.path.join(config.APP_DIR, "promptodys.prompt") == config.PROMPT_TEMPLATE_FILE
+    template = config.read_prompt_template()
+    assert template is not None and "[TEXTE]" in template
+
+
+def test_read_prompt_template_requires_text_placeholder(tmp_path, monkeypatch):
+    """Un modèle sans balise [TEXTE] est refusé : la note de l'élève n'y serait jamais insérée."""
+    template_file = tmp_path / "promptodys.prompt"
+    template_file.write_text("Corrige la note du [DATE].", encoding="utf-8")
+    monkeypatch.setattr(config, "PROMPT_TEMPLATE_FILE", str(template_file))
+
+    assert config.read_prompt_template() is None
+
+
+def test_read_prompt_template_missing_file(tmp_path, monkeypatch):
+    """Modèle absent : None, pas d'exception."""
+    monkeypatch.setattr(config, "PROMPT_TEMPLATE_FILE", str(tmp_path / "absent.prompt"))
+
+    assert config.read_prompt_template() is None

@@ -6,7 +6,7 @@ import pytest
 
 import askGeminiPrompto as app
 from promptodys.domain import ports
-from promptodys.infrastructure import gemini_model, pdf_report
+from promptodys.infrastructure import config, gemini_model, pdf_report
 
 
 class _Editor:
@@ -36,7 +36,7 @@ def traitement(monkeypatch):
     rapports = []
     monkeypatch.setattr(gemini_model, "create_client", lambda: object())
     monkeypatch.setattr(gemini_model, "GeminiModel", _Model)
-    monkeypatch.setattr(app, "lire_prompto_dys", lambda: "Corrige : [TEXTE]")
+    monkeypatch.setattr(config, "read_prompt_template", lambda: "Corrige : [TEXTE]")
     monkeypatch.setattr(app, "editeur_eel", editor)
     monkeypatch.setattr(pdf_report, "save_report", lambda **kwargs: rapports.append(kwargs) or "r.pdf")
     monkeypatch.setattr(app, "logs_complets", [])

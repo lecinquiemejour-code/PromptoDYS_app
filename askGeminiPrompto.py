@@ -353,27 +353,6 @@ def on_editor_close():
 # --- Fonctions Gemini ---
 
 
-def lire_prompto_dys():
-    """Lit promptodys.prompt : la copie embarquée dans l'exécutable PyInstaller,
-    ou celle du dossier du script en mode développement"""
-    base_path = getattr(sys, "_MEIPASS", os.path.dirname(__file__))
-    try:
-        with open(os.path.join(base_path, "promptodys.prompt"), encoding="utf-8") as f:
-            contenu = f.read()
-
-        if "[TEXTE]" not in contenu:
-            log_message("❌ ÉCHEC: Balise [TEXTE] manquante dans promptodys.prompt")
-            return None
-
-        return contenu
-    except FileNotFoundError:
-        log_message("❌ ÉCHEC: Fichier promptodys.prompt introuvable")
-        return None
-    except Exception as e:
-        log_message(f"❌ ÉCHEC: Erreur lecture promptodys.prompt: {e}")
-        return None
-
-
 def traitement_gemini(annulation):
     """Traitement IA Gemini : client → modèle de prompt → cas d'usage processing.process_note → rapport PDF
 
@@ -405,7 +384,7 @@ def traitement_gemini(annulation):
 
     # 2. Lire le modèle de prompt
     log_message("\n📋 ÉTAPE 2: Lecture du template promptodys.prompt...")
-    prompt_template = lire_prompto_dys()
+    prompt_template = config.read_prompt_template()
     if not prompt_template:
         log_message("❌ ÉCHEC: Impossible de lire promptodys.prompt")
         return False
