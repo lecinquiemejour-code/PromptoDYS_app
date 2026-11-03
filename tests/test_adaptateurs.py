@@ -18,42 +18,6 @@ def _document():
     )
 
 
-# --- DiskDocumentStore ---
-
-
-def test_disk_store_save_creates_arduino_layout(tmp_path):
-    """Le document est rangé dans <dossier>/<nom>/<nom>.md, ses images dans images/."""
-    doc_dir = app.DiskDocumentStore().save(_document(), str(tmp_path), "cours")
-    assert doc_dir == str(tmp_path / "cours")
-    assert (tmp_path / "cours" / "cours.md").read_text(encoding="utf-8") == _document().markdown
-    assert (tmp_path / "cours" / "images" / "schema.png").read_bytes() == PNG
-
-
-def test_disk_store_round_trip_from_md_file_or_folder(tmp_path):
-    """Un document enregistré se relit à l'identique, par son fichier .md comme par son dossier."""
-    store = app.DiskDocumentStore()
-    doc_dir = store.save(_document(), str(tmp_path), "cours")
-    assert store.load(str(tmp_path / "cours" / "cours.md")) == (_document(), doc_dir)
-    assert store.load(doc_dir) == (_document(), doc_dir)
-
-
-def test_disk_store_load_ignores_non_images(tmp_path):
-    """Un fichier qui n'est pas une image, dans images/, n'est pas chargé."""
-    store = app.DiskDocumentStore()
-    doc_dir = store.save(_document(), str(tmp_path), "cours")
-    (tmp_path / "cours" / "images" / "notes.txt").write_text("pas une image")
-    document, _ = store.load(doc_dir)
-    assert [image.filename for image in document.images] == ["schema.png"]
-
-
-def test_disk_store_load_invalid_path(tmp_path):
-    """Un chemin qui n'existe pas, ou un dossier sans .md du même nom, ne donne aucun document."""
-    store = app.DiskDocumentStore()
-    assert store.load(str(tmp_path / "absent")) is None
-    (tmp_path / "vide").mkdir()
-    assert store.load(str(tmp_path / "vide")) is None
-
-
 # --- EelEditor ---
 
 

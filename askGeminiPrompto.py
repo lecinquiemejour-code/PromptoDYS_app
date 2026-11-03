@@ -59,7 +59,7 @@ import subprocess  # Pour ouvrir le dossier reports
 from promptodys.domain import documents, note, ports, processing, report
 
 # --- Couche infrastructure (adaptateurs, configuration) ---
-from promptodys.infrastructure import config
+from promptodys.infrastructure import config, disk_document_store
 
 # --- NOUVELLE VARIABLE POUR CAPTURER TOUS LES LOGS ---
 logs_complets = []
@@ -310,100 +310,6 @@ class EelEditor(ports.Editor):
             return False
 
 
-class DiskDocumentStore(ports.DocumentStore):
-    """Documents sur le disque, « façon Arduino » :
-
-    directory/name/
-    ├── name.md
-    └── images/
-        ├── photo_xxx.png
-        └── schema_xxx.jpg
-    """
-
-    def save(self, document, directory, name):
-        """Écrit le document (style Arduino : on écrase le contenu existant).
-        Renvoie le dossier du document, None si le .md n'a pas pu être écrit"""
-        print(f"💾 SAUVEGARDE: Début pour '{name}' dans '{directory}'")
-        doc_dir = os.path.join(directory, name)
-        images_dir = os.path.join(doc_dir, "images")
-        os.makedirs(images_dir, exist_ok=True)
-        print(f"📁 SAUVEGARDE: Dossier créé/existant: {doc_dir}")
-
-        md_path = os.path.join(doc_dir, f"{name}.md")
-        try:
-            with open(md_path, "w", encoding="utf-8") as f:
-                f.write(document.markdown)
-            print(f"✅ SAUVEGARDE: Fichier MD écrit: {md_path}")
-        except Exception as e:
-            print(f"❌ SAUVEGARDE: Erreur écriture MD: {e}")
-            return None
-
-        images_saved = 0
-        for image in document.images:
-            try:
-                with open(os.path.join(images_dir, image.filename), "wb") as f:
-                    f.write(image.content)
-                images_saved += 1
-                print(f"  🖼️ Image sauvée: {image.filename} ({len(image.content)} octets)")
-            except Exception as e:
-                print(f"  ❌ Erreur image '{image.filename}': {e}")
-
-        print(f"✅ SAUVEGARDE TERMINÉE: {md_path} + {images_saved} image(s)")
-        return doc_dir
-
-    def load(self, path):
-        """Lit le document désigné par son dossier OU par son fichier .md (principe Arduino :
-        les deux fonctionnent pareil). Renvoie (document, dossier du document), None en cas d'erreur"""
-        print(f"📂 OUVERTURE: Chemin reçu: '{path}'")
-
-        if path.endswith(".md") and os.path.isfile(path):
-            doc_dir = os.path.dirname(path)
-            print(f"📂 OUVERTURE: Fichier .md détecté → dossier déduit: {doc_dir}")
-        elif os.path.isdir(path):
-            doc_dir = path
-            print("📂 OUVERTURE: Dossier sélectionné directement")
-        else:
-            print(f"❌ OUVERTURE: Chemin invalide (ni dossier, ni fichier .md): {path}")
-            return None
-
-        # Convention : nom du dossier = nom du fichier .md
-        document_name = os.path.basename(doc_dir)
-        md_path = os.path.join(doc_dir, f"{document_name}.md")
-        images_dir = os.path.join(doc_dir, "images")
-
-        if not os.path.exists(md_path):
-            print(f"❌ OUVERTURE: Fichier non trouvé: {md_path}")
-            return None
-        try:
-            with open(md_path, encoding="utf-8") as f:
-                markdown = f.read()
-            print(f"📄 OUVERTURE: Markdown lu ({len(markdown)} caractères)")
-        except Exception as e:
-            print(f"❌ OUVERTURE: Erreur lecture MD: {e}")
-            return None
-
-        images = []
-        if os.path.exists(images_dir):
-            for filename in os.listdir(images_dir):
-                image_path = os.path.join(images_dir, filename)
-                if not os.path.isfile(image_path):
-                    continue
-                mime_type, _ = mimetypes.guess_type(image_path)
-                if not mime_type or not mime_type.startswith("image/"):
-                    print(f"  ⚠️ Fichier ignoré (pas une image): {filename}")
-                    continue
-                try:
-                    with open(image_path, "rb") as f:
-                        images.append(ports.Image(filename=filename, content=f.read(), mime_type=mime_type))
-                    print(f"  🖼️ Image chargée: {filename} ({mime_type})")
-                except Exception as e:
-                    print(f"  ❌ Erreur lecture image '{filename}': {e}")
-        else:
-            print("📁 OUVERTURE: Pas de dossier images/ (document texte seul)")
-
-        return ports.Document(markdown=markdown, images=images), doc_dir
-
-
 class GeminiModel(ports.AIModel):
     """Modèle Gemini"""
 
@@ -451,7 +357,7 @@ class GeminiModel(ports.AIModel):
 
 # Instances partagées par les boutons du panneau (aucun effet de bord à la construction)
 editeur_eel = EelEditor()
-stockage_documents = DiskDocumentStore()
+stockage_documents = disk_document_store.DiskDocumentStore()
 
 
 # --- Fonctions de tracking état éditeur (appelées par React) ---
