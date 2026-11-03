@@ -278,6 +278,8 @@ Ce n'est pas un bug, mais c'est ce qui a rendu B1 et B2 possibles : l'état du b
 
 [Ligne 289](../askGeminiPrompto.py#L289) : `os.path.join(images_dir, image["filename"])` utilise tel quel un nom venant du JavaScript. Un nom contenant `..\` écrirait hors du dossier `images/`. Le risque réel est faible (tout est local), mais `os.path.basename()` règle la question en un mot.
 
+**Statut : ✅ résolu.** `DiskDocumentStore.save()`, déplacé dans `promptodys/infrastructure/disk_document_store.py`, ne garde que le dernier composant du nom (`os.path.basename`) : `../../x.png` est écrit en `images/x.png`. Un nom vide, `.` ou `..` est ignoré avec un message, le document est quand même enregistré. Deux tests dans `tests/infrastructure/test_disk_document_store.py`.
+
 ### M7. Double avertissement « Balises NOTE absentes »
 
 `extraire_contenu_note()` ([ligne 819](../askGeminiPrompto.py#L819)) et `traitement_gemini()` ([ligne 992](../askGeminiPrompto.py#L992)) testent tous deux la présence des balises et loggent le même message. Un seul test suffirait.
@@ -503,7 +505,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | M3 | ✅ Résolu | `except:` nus, f-strings vides (`except` ciblés, `ruff check` propre) | Trivial | 1 |
 | M4 | 🟡 Mineur | Fichier monolithique, douze globales | Moyen | 3 |
 | M5 | 🟡 Partiellement résolu | Extrait de clé dans les logs et le PDF (raccourci aux 4 derniers caractères) | Trivial | 1 |
-| M6 | 🟡 Mineur | Nom d'image non assaini | Trivial | 1 |
+| M6 | ✅ Résolu | Nom d'image non assaini (`basename`, nom inutilisable ignoré) | Trivial | 1 |
 | M7 | 🟡 Mineur | Double avertissement NOTE | Trivial | 1 |
 | M8 | 🟡 Mineur | Parseur PDF : émojis (carré noir garanti), italique vs maths, listes numérotées | Faible | 1 ou 4 |
 | M9 | 🟡 Mineur | Console Tk sans purge | Trivial | 1 |

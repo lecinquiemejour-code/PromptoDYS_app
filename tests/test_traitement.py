@@ -6,6 +6,7 @@ import pytest
 
 import askGeminiPrompto as app
 from promptodys.domain import ports
+from promptodys.infrastructure import config, gemini_model, pdf_report
 
 
 class _Editor:
@@ -33,11 +34,11 @@ def traitement(monkeypatch):
     """Remplace Gemini, l'éditeur et le PDF ; renvoie (éditeur, rapports demandés)."""
     editor = _Editor()
     rapports = []
-    monkeypatch.setattr(app, "init_gemini_client", lambda: object())
-    monkeypatch.setattr(app, "GeminiModel", _Model)
-    monkeypatch.setattr(app, "lire_prompto_dys", lambda: "Corrige : [TEXTE]")
+    monkeypatch.setattr(gemini_model, "create_client", lambda: object())
+    monkeypatch.setattr(gemini_model, "GeminiModel", _Model)
+    monkeypatch.setattr(config, "read_prompt_template", lambda: "Corrige : [TEXTE]")
     monkeypatch.setattr(app, "editeur_eel", editor)
-    monkeypatch.setattr(app, "sauvegarder_rapport", lambda **kwargs: rapports.append(kwargs) or (None, "r.pdf"))
+    monkeypatch.setattr(pdf_report, "save_report", lambda **kwargs: rapports.append(kwargs) or "r.pdf")
     monkeypatch.setattr(app, "logs_complets", [])
     return editor, rapports
 
@@ -50,9 +51,9 @@ def test_traitement_gemini_completed(traitement):
 
     assert editor.writes[0].startswith("Note corrigée")
     [rapport] = rapports
-    assert rapport["contenu_original"] == "Note brute"
-    assert rapport["contenu_traite"] == editor.writes[0]
-    logs = "\n".join(rapport["logs_etapes"])
+    assert rapport["original_note"] == "Note brute"
+    assert rapport["processed_note"] == editor.writes[0]
+    logs = "\n".join(rapport["step_logs"])
     for etape in ("ÉTAPE 1", "ÉTAPE 2", "ÉTAPE 3", "ÉTAPE 4"):
         assert etape in logs
     assert "ÉTAPE 5" not in logs
@@ -73,7 +74,7 @@ def test_traitement_gemini_cancelled_produces_no_report(traitement):
 def test_traitement_gemini_without_client(traitement, monkeypatch):
     """Sans client Gemini (clé absente), le traitement échoue avant de lire l'éditeur."""
     editor, rapports = traitement
-    monkeypatch.setattr(app, "init_gemini_client", lambda: None)
+    monkeypatch.setattr(gemini_model, "create_client", lambda: None)
 
     assert not app.traitement_gemini(threading.Event())
 

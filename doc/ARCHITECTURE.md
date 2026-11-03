@@ -2,7 +2,7 @@
 
 > Document de référence pour comprendre comment les deux projets (application Python et éditeur React) coopèrent, du clic de l'élève jusqu'au rapport PDF.
 >
-> Dernière mise à jour : 02/11/2026. Les schémas sont en Mermaid et se rendent directement dans GitHub, VS Code et la plupart des visionneuses Markdown.
+> Dernière mise à jour : 03/11/2026. Les schémas sont en Mermaid et se rendent directement dans GitHub, VS Code et la plupart des visionneuses Markdown.
 
 ---
 
@@ -72,7 +72,7 @@ flowchart LR
 ### Rôle de chaque acteur
 
 - **Panneau Tkinter** ([askGeminiPrompto.py](../askGeminiPrompto.py), fonction `gui_control_panel`) : chef d'orchestre. Cinq boutons, une barre de statut, une console de logs. Chaque action longue tourne dans un thread séparé pour ne pas figer la fenêtre.
-- **Serveur Eel** : démarré par `eel.init(build_web)` puis `eel.start(...)` quand on clique sur Ouvrir l'éditeur. Il sert les fichiers statiques de l'éditeur et maintient le WebSocket.
+- **Serveur Eel** : préparé par `eel_editor.init(build_web)` au démarrage, puis lancé par `eel_editor.start(...)` quand on clique sur Ouvrir l'éditeur ([promptodys/infrastructure/eel_editor.py](../promptodys/infrastructure/eel_editor.py)). Il sert les fichiers statiques de l'éditeur et maintient le WebSocket.
 - **Éditeur React** : zone d'édition WYSIWYG, barre d'outils, thème DYS, lecture vocale, formules MathJax. Il fonctionne aussi seul dans un navigateur, sans Python.
 - **Stockage navigateur** : les images insérées sont copiées en IndexedDB, le brouillon et le thème en localStorage. Cela survit à un rafraîchissement de page.
 
@@ -83,10 +83,10 @@ Le code Python sort progressivement du fichier unique [askGeminiPrompto.py](../a
 | Couche | Contenu | État |
 |---|---|---|
 | `promptodys/domain/` | Règles métier et cas d'usage, sans Tk, Eel, Gemini ni reportlab : `note.py` (prompt, extraction de la réponse, note d'origine), `report.py` (contenu du rapport), `documents.py` (chemins de sauvegarde, cas d'usage sauvegarder et ouvrir), `processing.py` (cas d'usage du traitement IA), `ports.py` (ports `Editor`, `AIModel`, `DocumentStore` et données échangées) | Fait |
-| `promptodys/infrastructure/` | Adaptateurs des ports : `EelEditor`, `GeminiModel`, `DiskDocumentStore`, rapport PDF, configuration | Vide : les adaptateurs sont encore dans `askGeminiPrompto.py` |
+| `promptodys/infrastructure/` | Adaptateurs des ports et accès au monde extérieur : `eel_editor.py` (adaptateur `EelEditor`, fenêtre de l'éditeur, événements de React, port du serveur), `gemini_model.py` (`GeminiModel`, client Gemini), `disk_document_store.py` (`DiskDocumentStore`), `pdf_report.py` (rapport PDF ReportLab), `config.py` (modèle Gemini, chemins, port, clé API, modèle de prompt) | Fait |
 | `promptodys/presentation/` | Panneau de contrôle Tkinter | Vide : le panneau est encore dans `askGeminiPrompto.py` |
 
-Les adaptateurs héritent explicitement de leur port (`class EelEditor(ports.Editor)`), et `askGeminiPrompto.py` les passe aux cas d'usage du domaine.
+Les adaptateurs héritent explicitement de leur port (`class EelEditor(ports.Editor)`), et pyright vérifie leur conformité. `askGeminiPrompto.py` les passe aux cas d'usage du domaine. Les signaux d'ouverture et de fermeture envoyés par React arrivent dans `eel_editor`, qui les transmet aux fonctions enregistrées par `main()` avec `set_event_handlers()` : l'infrastructure ne touche jamais à l'interface.
 
 ---
 
@@ -188,7 +188,7 @@ sequenceDiagram
 
 Le traitement suit neuf étapes numérotées dans ses logs. La fonction `traitement_gemini()` de [askGeminiPrompto.py](../askGeminiPrompto.py) fait les étapes qui dépendent de l'infrastructure (1, 2 et 9). Elle confie les étapes 3 à 8 au cas d'usage `process_note()` de [promptodys/domain/processing.py](../promptodys/domain/processing.py), qui renvoie un résultat sans toucher à l'interface.
 
-1. Initialisation du client Gemini (clé lue dans `GeminiKey.txt`) et de sa configuration : modèle `GEMINI_MODEL` (`gemini-3.8-flash`) et niveau de réflexion `GEMINI_THINKING_LEVEL` (`LOW`), deux constantes en tête de `askGeminiPrompto.py`.
+1. Initialisation du client Gemini (clé lue dans `GeminiKey.txt`) et de sa configuration : modèle `GEMINI_MODEL` (`gemini-3.8-flash`) et niveau de réflexion `GEMINI_THINKING_LEVEL` (`LOW`), deux constantes en tête de [promptodys/infrastructure/config.py](../promptodys/infrastructure/config.py).
 2. Lecture du template [promptodys.prompt](../promptodys.prompt).
 3. Lecture du Markdown de l'éditeur.
 4. Substitution de `[TEXTE]` et `[DATE]`.
@@ -212,7 +212,7 @@ Si Gemini oublie les balises, Python injecte toute la réponse. C'est le cas dé
 
 ### Le rapport PDF
 
-Son contenu est assemblé en Markdown par `build_report_markdown()` ([promptodys/domain/report.py](../promptodys/domain/report.py)), puis rendu par `generer_pdf_reportlab()`. Il contient le contenu original, les logs de traitement, le flux complet de réflexion et de réponse, la note finale, le débrief et les statistiques de tokens. Un parseur Markdown maison convertit le texte en paragraphes ReportLab, en supprimant les balises `<span>` et les émojis non supportés.
+Son contenu est assemblé en Markdown par `build_report_markdown()` ([promptodys/domain/report.py](../promptodys/domain/report.py)), puis rendu par `generate_pdf()` ([promptodys/infrastructure/pdf_report.py](../promptodys/infrastructure/pdf_report.py)). Il contient le contenu original, les logs de traitement, le flux complet de réflexion et de réponse, la note finale, le débrief et les statistiques de tokens. Un parseur Markdown maison convertit le texte en paragraphes ReportLab, en supprimant les balises `<span>` et les émojis non supportés.
 
 ---
 
@@ -264,7 +264,7 @@ sequenceDiagram
 
 Le résultat sur disque est volontairement **identique** à ce que produisent les boutons de sauvegarde internes à l'éditeur en mode navigateur. Un document sauvé par l'un s'ouvre avec l'autre.
 
-Côté Python, les cas d'usage `save_document()` et `open_document()` de [promptodys/domain/documents.py](../promptodys/domain/documents.py) relient l'éditeur (adaptateur `EelEditor`, qui convertit les images entre base64 et binaire) et le disque (adaptateur `DiskDocumentStore`, dans [askGeminiPrompto.py](../askGeminiPrompto.py)). Le chemin du dernier document ouvert ou sauvé est mémorisé pour pré-remplir le dialogue suivant.
+Côté Python, les cas d'usage `save_document()` et `open_document()` de [promptodys/domain/documents.py](../promptodys/domain/documents.py) relient l'éditeur (adaptateur `EelEditor`, qui convertit les images entre base64 et binaire) et le disque (adaptateur `DiskDocumentStore`, dans [promptodys/infrastructure/disk_document_store.py](../promptodys/infrastructure/disk_document_store.py)). Le chemin du dernier document ouvert ou sauvé est mémorisé pour pré-remplir le dialogue suivant.
 
 ---
 
@@ -324,9 +324,10 @@ Le résultat est `dist/PromptoDYS.exe`. Voir aussi [README_ANTIVIRUS.md](../READ
 
 | Fichier | Rôle |
 |---|---|
-| [askGeminiPrompto.py](../askGeminiPrompto.py) | Point d'entrée et code pas encore découpé : GUI, adaptateurs Eel, Gemini et disque, PDF |
+| [askGeminiPrompto.py](../askGeminiPrompto.py) | Point d'entrée et code pas encore découpé : GUI, journalisation, `traitement_gemini()`, assemblage des couches dans `main()` |
 | [promptodys/domain/](../promptodys/domain/) | Couche domaine : règles métier, cas d'usage et ports (voir [§2](#organisation-du-code-python)) |
-| `tests/` | Tests pytest, dont `tests/domain/` pour la couche domaine (avec de faux adaptateurs) |
+| [promptodys/infrastructure/](../promptodys/infrastructure/) | Couche infrastructure : adaptateurs Eel, Gemini, disque et PDF, configuration |
+| `tests/` | Tests pytest, dont `tests/domain/` pour la couche domaine (avec de faux adaptateurs) et `tests/infrastructure/` pour les adaptateurs (Eel et Gemini simulés, vrai disque dans un dossier temporaire) |
 | [promptodys.prompt](../promptodys.prompt) | Template du prompt envoyé à Gemini |
 | `GeminiKey.txt` | Clé API, **ignoré par git**, à créer depuis [GeminiKey.txt.template](../GeminiKey.txt.template) |
 | [LISEZMOI.txt](../LISEZMOI.txt) | Notice d'installation pour l'utilisateur final, livrée dans le zip de release |
