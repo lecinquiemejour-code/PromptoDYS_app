@@ -2,6 +2,7 @@
 
 - EelEditor : adaptateur du port Editor (lecture et écriture du document) ;
 - init(), start(), close() : préparation, ouverture et fermeture de la fenêtre de l'éditeur ;
+- EelWindow : start(), close() et wait_for_free_port() réunis pour le panneau de contrôle ;
 - on_editor_open(), on_editor_close() : événements envoyés par React, transmis aux fonctions
   enregistrées par set_event_handlers() ;
 - is_port_free(), wait_for_free_port() : disponibilité du port du serveur Eel.
@@ -146,6 +147,28 @@ def wait_for_free_port(port: int, timeout: float = 5.0) -> bool:
             return False
         time.sleep(0.5)
     return True
+
+
+class EelWindow:
+    """Fenêtre de l'éditeur, telle que le panneau de contrôle la manipule (EditorWindow de presentation).
+    N'hérite pas du Protocol : l'infrastructure n'importe pas presentation, la compatibilité est
+    vérifiée par pyright à l'assemblage (promptodys.app)."""
+
+    def __init__(self, port: int, chrome_profile_dir: str) -> None:
+        self.port = port
+        self._chrome_profile_dir = chrome_profile_dir
+
+    def wait_for_free_port(self) -> bool:
+        """Attend que le port de l'éditeur se libère, faux s'il reste occupé"""
+        return wait_for_free_port(self.port)
+
+    def start(self) -> None:
+        """Ouvre l'éditeur et bloque jusqu'à sa fermeture ; lève une exception si Chrome ne démarre pas"""
+        start(self.port, self._chrome_profile_dir)
+
+    def close(self) -> None:
+        """Demande à React de fermer la fenêtre ; lève une exception si la demande n'a pas pu partir"""
+        close()
 
 
 # --- Adaptateur du port Editor ---
