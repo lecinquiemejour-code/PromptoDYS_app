@@ -47,31 +47,44 @@ class _Store:
 
 
 class _Window:
-    """Fenêtre de l'éditeur simulée : start() bloque jusqu'à release(), comme Chrome jusqu'à sa fermeture."""
+    """Fenêtre de l'éditeur simulée : start() bloque, comme Chrome jusqu'à sa fermeture.
+    release() fait se terminer tous les start(), présents et à venir ; end_start(i) seulement le i-ième."""
 
     port = 8080
 
     def __init__(self):
         self.port_free = True
         self.starts = 0
+        self.ended = 0  # Nombre de start() terminés
         self.closes = 0
         self.started = threading.Event()
-        self._released = threading.Event()
+        self._all_released = False
+        self._ends = []  # Un Event par appel de start()
 
     def wait_for_free_port(self):
         return self.port_free
 
     def start(self):
+        end = threading.Event()
+        self._ends.append(end)
         self.starts += 1
         self.started.set()
-        self._released.wait(timeout=5)
+        if not self._all_released:
+            end.wait(timeout=5)
+        self.ended += 1
 
     def close(self):
         self.closes += 1
 
+    def end_start(self, index):
+        """Fait se terminer le index-ième start(), comme à la fermeture de cette fenêtre Chrome"""
+        self._ends[index].set()
+
     def release(self):
-        """Fait se terminer start(), comme à la fermeture de la fenêtre Chrome"""
-        self._released.set()
+        """Fait se terminer tous les start(), y compris ceux qui n'ont pas encore commencé"""
+        self._all_released = True
+        for end in self._ends:
+            end.set()
 
 
 class _Processing:
@@ -141,6 +154,12 @@ def _status(panel):
     return panel._status_label.cget("text")
 
 
+def _react_signals_open(panel):
+    """React signale l'ouverture (depuis un thread d'Eel en vrai) ; la boucle Tk applique le signal"""
+    panel.on_editor_open()
+    panel._root.update()
+
+
 # --- Événements de React ---
 
 
@@ -171,7 +190,7 @@ def test_second_click_on_open_editor_launches_nothing(panel):
     control_panel._open_editor()
     assert _status(control_panel) == "⏳ Ouverture de l'éditeur en cours, veuillez patienter"
 
-    control_panel.on_editor_open()
+    _react_signals_open(control_panel)
     control_panel._open_editor()
     assert _status(control_panel) == "✅ L'éditeur est déjà ouvert"
     assert window.starts == 1
@@ -186,6 +205,40 @@ def test_second_click_on_open_editor_launches_nothing(panel):
             and not control_panel._editor_state.is_starting
         ),
     )
+
+
+def test_late_end_of_a_replaced_launch_is_ignored(panel):
+    """Chrome fermé puis éditeur relancé aussitôt : la fin tardive du premier lancement (Eel rend la main
+    une seconde après la fermeture) ne touche pas au second, et un nouveau clic ne relance rien."""
+    control_panel, window, _ = panel
+
+    # Premier éditeur ouvert, puis fermé par l'élève : React le signale, start() n'a pas encore rendu la main
+    control_panel._open_editor()
+    _run_loop(control_panel, window.started.is_set)
+    _react_signals_open(control_panel)
+    control_panel.on_editor_close()
+    control_panel._root.update()
+
+    # Relance immédiate
+    control_panel._open_editor()
+    _run_loop(control_panel, lambda: window.starts == 2)
+
+    # Le premier start() rend la main : sa fin est ignorée
+    window.end_start(0)
+    _run_loop(control_panel, lambda: window.ended == 1)
+    _run_loop_for(control_panel, 0.2)  # Laisser passer la fin du premier lancement (root.after)
+    assert control_panel._editor_state.is_starting
+    assert _status(control_panel) == "⏳ Ouverture de l'éditeur en cours, veuillez patienter"
+
+    control_panel._open_editor()
+    assert window.starts == 2
+
+    # Le second éditeur s'ouvre, puis se ferme
+    _react_signals_open(control_panel)
+    assert control_panel._editor_state.is_open
+    window.end_start(1)
+    _run_loop(control_panel, lambda: _status(control_panel) == "🔴 Éditeur fermé")
+    assert not control_panel._editor_state.is_open
 
 
 def test_busy_port_opens_no_editor(panel, monkeypatch):
@@ -217,7 +270,7 @@ def test_open_document_launches_editor_then_loads_it(panel, tmp_path, monkeypatc
     _run_loop(control_panel, window.started.is_set)
     assert control_panel._editor.written == []  # Rien n'est envoyé avant le signal de React
 
-    control_panel.on_editor_open()
+    _react_signals_open(control_panel)
     _run_loop(control_panel, lambda: _status(control_panel) == "✅ 'MonDoc' ouvert !")
     assert control_panel._editor.written == [_Store.document]
     assert control_panel._editor_state.document_path == str(document_dir)
@@ -239,7 +292,7 @@ def test_open_document_after_chrome_crash_waits_for_react(panel, tmp_path, monke
     # Premier éditeur : ouvert, puis Chrome se ferme sans on_editor_close
     control_panel._open_editor()
     _run_loop(control_panel, window.started.is_set)
-    control_panel.on_editor_open()
+    _react_signals_open(control_panel)
     window.release()
     _run_loop(control_panel, lambda: not control_panel._editor_state.is_open)
 
@@ -274,7 +327,7 @@ def test_processing_requires_an_open_editor(panel, monkeypatch):
 def test_completed_processing_resets_the_button(panel):
     """Un traitement abouti vide la console au lancement, puis remet le bouton à l'état Prêt."""
     control_panel, _, processing = panel
-    control_panel.on_editor_open()
+    _react_signals_open(control_panel)
     control_panel._append_to_console("log du traitement précédent")
     control_panel._root.update()
 
@@ -292,7 +345,7 @@ def test_completed_processing_resets_the_button(panel):
 def test_failed_processing_shows_failure(panel):
     """Un traitement en échec remet le bouton à l'état Prêt et renvoie aux logs."""
     control_panel, _, processing = panel
-    control_panel.on_editor_open()
+    _react_signals_open(control_panel)
     processing.result = False
 
     control_panel._toggle_processing()
@@ -304,7 +357,7 @@ def test_failed_processing_shows_failure(panel):
 def test_second_click_on_processing_cancels_it(panel):
     """Un second clic déclenche le jeton d'annulation et libère le bouton sans attendre le traitement."""
     control_panel, _, processing = panel
-    control_panel.on_editor_open()
+    _react_signals_open(control_panel)
 
     control_panel._toggle_processing()
     _run_loop(control_panel, processing.started.is_set)
@@ -331,7 +384,7 @@ def test_closing_with_open_editor_closes_it_then_quits(panel, monkeypatch):
     quits = []
     monkeypatch.setattr(messagebox, "askyesno", lambda *args, **kwargs: True)
     monkeypatch.setattr(control_panel, "_quit", lambda: quits.append(True))
-    control_panel.on_editor_open()
+    _react_signals_open(control_panel)
 
     control_panel.on_closing()
     control_panel.on_closing()  # Second clic pendant l'attente : ignoré
@@ -347,7 +400,7 @@ def test_closing_cancelled_keeps_the_application_open(panel, monkeypatch):
     quits = []
     monkeypatch.setattr(messagebox, "askyesno", lambda *args, **kwargs: False)
     monkeypatch.setattr(control_panel, "_quit", lambda: quits.append(True))
-    control_panel.on_editor_open()
+    _react_signals_open(control_panel)
 
     control_panel.on_closing()
 

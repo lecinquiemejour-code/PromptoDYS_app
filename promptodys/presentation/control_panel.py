@@ -117,11 +117,13 @@ class ControlPanel:
     et ouvrir un document, lancer ou abandonner le traitement IA, voir les rapports, quitter.
 
     L'état de l'éditeur (_editor_state, voir EditorState) est géré exclusivement par les événements
-    de React et par le retour de editor_window.start() :
-    - _open_editor()    : lancement demandé (start_requested) ;
+    de React et par le retour de editor_window.start(), et modifié uniquement par le thread de
+    l'interface (les autres threads passent par _in_ui_thread) :
+    - _open_editor()    : lancement demandé (start_requested), qui reçoit son jeton ;
     - on_editor_open()  : React notifie l'ouverture (opened), fin du lancement ;
     - on_editor_close() : React notifie la fermeture (closed) ;
-    - _launch_editor()  : port pris, editor_window.start() qui retourne ou qui lève (closed).
+    - _launch_editor()  : port pris, editor_window.start() qui retourne ou qui lève (launch_ended),
+                          sans effet si un autre lancement a été demandé depuis.
 
     __init__ construit la fenêtre (cachée), run() l'affiche et lance la boucle principale.
     """
@@ -144,7 +146,7 @@ class ControlPanel:
         self._reports_dir = reports_dir
         self._icon_path = icon_path
 
-        # --- État de l'éditeur (modifié aussi par les événements de React, depuis un thread d'Eel) ---
+        # --- État de l'éditeur (modifié par le thread de l'interface seulement, qui construit le panneau) ---
         self._editor_state = EditorState()
         # Fermeture de l'éditeur demandée, en attente de sa confirmation : ignore un second clic sur Quitter
         self._closing = False
@@ -187,14 +189,22 @@ class ControlPanel:
     # --- Événements de React (appelés depuis un thread d'Eel) ---
 
     def on_editor_open(self) -> None:
-        """React signale que l'éditeur est prêt"""
-        self._editor_state.opened()
-        self._in_ui_thread(lambda: self._status_label.config(text="✅ Éditeur ouvert"))
+        """React signale que l'éditeur est prêt. État et statut sont mis à jour par le thread de l'interface"""
+
+        def _opened() -> None:
+            self._editor_state.opened()
+            self._status_label.config(text="✅ Éditeur ouvert")
+
+        self._in_ui_thread(_opened)
 
     def on_editor_close(self) -> None:
-        """React signale la fermeture de l'éditeur"""
-        self._editor_state.closed()
-        self._in_ui_thread(lambda: self._status_label.config(text="🔴 Éditeur fermé"))
+        """React signale la fermeture de l'éditeur. État et statut sont mis à jour par le thread de l'interface"""
+
+        def _closed() -> None:
+            self._editor_state.closed()
+            self._status_label.config(text="🔴 Éditeur fermé")
+
+        self._in_ui_thread(_closed)
 
     # --- Boutons ---
 
@@ -211,34 +221,39 @@ class ControlPanel:
             return
 
         # Dès le clic : un second clic pendant l'attente du port ou de Chrome ne relance rien
-        self._editor_state.start_requested()
+        launch = self._editor_state.start_requested()
         _logger.info("📝 Action: Lancement de l'éditeur...")
         self._status_label.config(text="⏳ Ouverture de l'éditeur en cours, veuillez patienter")
         self._root.update()
 
         # Lancer dans un thread pour ne pas bloquer la GUI
-        thread = threading.Thread(target=self._launch_editor, daemon=True)
+        thread = threading.Thread(target=self._launch_editor, args=(launch,), daemon=True)
         thread.start()
         # « ✅ Éditeur ouvert » est affiché par on_editor_open(), quand React signale que l'éditeur est prêt
 
-    def _show_launch_failure(self, status: str, message: str) -> None:
-        """Échec du lancement : statut et popup, affichés par le thread de l'interface"""
+    def _end_launch(self, launch: object, status: str, error: str | None = None) -> None:
+        """Fin du lancement launch (fenêtre fermée ou jamais ouverte) : état, statut et, en cas d'échec,
+        popup, par le thread de l'interface. Ignorée si un autre lancement a été demandé depuis :
+        elle décrirait une fenêtre qui n'est plus celle de l'élève."""
 
-        def _show() -> None:
+        def _end() -> None:
+            if not self._editor_state.launch_ended(launch):
+                return
             self._status_label.config(text=status)
-            messagebox.showerror("PromptoDYS - Éditeur non ouvert", message)
+            if error is not None:
+                messagebox.showerror("PromptoDYS - Éditeur non ouvert", error)
 
-        self._in_ui_thread(_show)
+        self._in_ui_thread(_end)
 
-    def _launch_editor(self) -> None:
-        """Ouvre l'éditeur (thread dédié) et attend sa fermeture"""
+    def _launch_editor(self, launch: object) -> None:
+        """Ouvre l'éditeur (thread dédié) et attend sa fermeture. launch : jeton de ce lancement"""
         port = self._editor_window.port
         # Vérifier le port avant d'ouvrir Chrome : s'il est pris, Chrome afficherait
         # la page de l'autre programme. On n'ouvre alors aucune fenêtre.
         if not self._editor_window.wait_for_free_port():
             _logger.info(f"❌ Le port {port} est utilisé par un autre programme : éditeur non ouvert")
-            self._editor_state.closed()
-            self._show_launch_failure(
+            self._end_launch(
+                launch,
                 f"❌ Port {port} déjà utilisé par un autre programme",
                 f"Un autre programme utilise le port {port},\n"
                 "nécessaire à l'éditeur.\n\n"
@@ -251,8 +266,8 @@ class ControlPanel:
             self._editor_window.start()
         except Exception as e:
             _logger.info(f"❌ Erreur fallback lancement éditeur: {e}")
-            self._editor_state.closed()
-            self._show_launch_failure(
+            self._end_launch(
+                launch,
                 "❌ Échec de l'ouverture de l'éditeur (voir les logs)",
                 "L'éditeur n'a pas pu s'ouvrir.\n\n"
                 "Vérifiez que Google Chrome est installé,\n"
@@ -263,8 +278,7 @@ class ControlPanel:
 
         # Quand l'éditeur se ferme, on met à jour le statut. L'état est remis à « fermé » même si
         # React n'a jamais signalé l'ouverture, ou n'a pas signalé la fermeture (plantage de Chrome)
-        self._in_ui_thread(lambda: self._status_label.config(text="🔴 Éditeur fermé"))
-        self._editor_state.closed()
+        self._end_launch(launch, "🔴 Éditeur fermé")
 
     def _save_document(self) -> None:
         """Sauvegarde le document — toujours en mode "Enregistrer sous" (dialogue à chaque fois).
@@ -324,8 +338,12 @@ class ControlPanel:
             _logger.info(f"🔍 DEBUG run_save: doc_name='{doc_name}', save_dir='{save_dir}'")
             result = documents.save_document(self._editor, self._store, save_dir, doc_name)
             if result:
-                self._editor_state.document_path = result
-                self._in_ui_thread(lambda: self._status_label.config(text=f"✅ '{doc_name}' sauvegardé !"))
+
+                def _saved() -> None:
+                    self._editor_state.document_path = result
+                    self._status_label.config(text=f"✅ '{doc_name}' sauvegardé !")
+
+                self._in_ui_thread(_saved)
                 _logger.info(f"✅ Document sauvegardé dans: {result}")
             else:
                 self._in_ui_thread(lambda: self._status_label.config(text="❌ Erreur de sauvegarde"))
@@ -379,11 +397,15 @@ class ControlPanel:
 
             result = documents.open_document(self._editor, self._store, selected_path)
             if result:
-                # Mémoriser le dossier du document ouvert (comme Arduino retient le sketch ouvert)
-                self._editor_state.document_path = result
                 doc_name = os.path.basename(result)
                 _logger.info(f"📌 Document courant: {result}")
-                self._in_ui_thread(lambda: self._status_label.config(text=f"✅ '{doc_name}' ouvert !"))
+
+                def _opened() -> None:
+                    # Mémoriser le dossier du document ouvert (comme Arduino retient le sketch ouvert)
+                    self._editor_state.document_path = result
+                    self._status_label.config(text=f"✅ '{doc_name}' ouvert !")
+
+                self._in_ui_thread(_opened)
             else:
                 self._in_ui_thread(lambda: self._status_label.config(text="❌ Erreur d'ouverture"))
 
