@@ -1,7 +1,7 @@
 """Panneau de contrôle Tkinter (thème Sun Valley) : ouvrir l'éditeur, sauvegarder et ouvrir un document,
 lancer ou abandonner le traitement IA, voir les rapports, quitter.
 
-- ControlPanel : la fenêtre, ses boutons et l'état de l'éditeur ;
+- ControlPanel : la fenêtre et ses boutons ; l'état de l'éditeur est un EditorState (editor_state.py) ;
 - EditorWindow : ce que le panneau attend de la fenêtre de l'éditeur (EelWindow dans l'infrastructure) ;
 - RedirectText : affiche stdout et stderr dans la console du panneau.
 
@@ -24,11 +24,16 @@ from typing import Protocol
 import sv_ttk  # Thème Sun Valley (Windows 11 look)
 
 from promptodys.domain import documents, ports
+from promptodys.presentation.editor_state import EditorState
 
 _logger = logging.getLogger(__name__)
 
 # Délai maximum d'attente de la fermeture de l'éditeur avant de quitter quand même
 CLOSE_EDITOR_TIMEOUT_S = 3
+# Délai maximum d'attente du signal de React (on_editor_open) avant d'ouvrir un document
+EDITOR_READY_TIMEOUT_S = 30
+# Après le signal de React, laisse l'éditeur finir d'initialiser ses composants
+REACT_SETTLE_DELAY_S = 1.5
 
 
 # Classe pour rediriger stdout vers la GUI
@@ -111,12 +116,12 @@ class ControlPanel:
     Panneau de contrôle avec Tkinter + sv_ttk (thème Windows 11) : ouvrir l'éditeur, sauvegarder
     et ouvrir un document, lancer ou abandonner le traitement IA, voir les rapports, quitter.
 
-    L'état de l'éditeur est géré exclusivement par les événements de React et par le retour de
-    editor_window.start() :
-    - on_editor_open()  : _editor_open = True (React notifie l'ouverture), fin du lancement ;
-    - on_editor_close() : _editor_open = False (React notifie la fermeture) ;
-    - _launch_editor()  : _editor_open = False (editor_window.start() retourne, ou lève si crash).
-    _editor_starting : du clic sur « Ouvrir l'éditeur » au signal de React (ou à l'échec).
+    L'état de l'éditeur (_editor_state, voir EditorState) est géré exclusivement par les événements
+    de React et par le retour de editor_window.start() :
+    - _open_editor()    : lancement demandé (start_requested) ;
+    - on_editor_open()  : React notifie l'ouverture (opened), fin du lancement ;
+    - on_editor_close() : React notifie la fermeture (closed) ;
+    - _launch_editor()  : port pris, editor_window.start() qui retourne ou qui lève (closed).
 
     __init__ construit la fenêtre (cachée), run() l'affiche et lance la boucle principale.
     """
@@ -140,16 +145,9 @@ class ControlPanel:
         self._icon_path = icon_path
 
         # --- État de l'éditeur (modifié aussi par les événements de React, depuis un thread d'Eel) ---
-        self._editor_open = False
-        # Lancement demandé, en attente du signal de React (on_editor_open) : évite un second lancement
-        self._editor_starting = False
+        self._editor_state = EditorState()
         # Fermeture de l'éditeur demandée, en attente de sa confirmation : ignore un second clic sur Quitter
         self._closing = False
-        # Timestamp de la dernière activité éditeur détectée
-        self._last_editor_activity: float | None = None
-        # Dossier du document courant (style Arduino : mémorise le dernier save/open)
-        # Ex: "C:/.../PromptoDYS/MonDoc" → dialogue de sauvegarde pré-rempli
-        self._current_document_path: str | None = None
 
         # --- État du traitement IA ---
         # Jeton d'annulation du traitement IA en cours, None si aucun traitement en cours
@@ -190,33 +188,30 @@ class ControlPanel:
 
     def on_editor_open(self) -> None:
         """React signale que l'éditeur est prêt"""
-        self._editor_open = True
-        self._editor_starting = False  # Le lancement est terminé : l'éditeur est prêt
-        self._last_editor_activity = time.time()  # Marquer l'activité
+        self._editor_state.opened()
         self._in_ui_thread(lambda: self._status_label.config(text="✅ Éditeur ouvert"))
 
     def on_editor_close(self) -> None:
         """React signale la fermeture de l'éditeur"""
-        self._editor_open = False
-        self._last_editor_activity = None  # Réinitialiser le timestamp
+        self._editor_state.closed()
         self._in_ui_thread(lambda: self._status_label.config(text="🔴 Éditeur fermé"))
 
     # --- Boutons ---
 
     def _open_editor(self) -> None:
         """Lance l'éditeur dans un thread séparé"""
-        if self._editor_open:
+        if self._editor_state.is_open:
             _logger.info("📝 L'éditeur est déjà ouvert")
             self._status_label.config(text="✅ L'éditeur est déjà ouvert")
             return
 
-        if self._editor_starting:
+        if self._editor_state.is_starting:
             _logger.info("📝 L'éditeur est déjà en cours d'ouverture")
             self._status_label.config(text="⏳ Ouverture de l'éditeur en cours, veuillez patienter")
             return
 
-        # Levé dès le clic : un second clic pendant l'attente du port ou de Chrome ne relance rien
-        self._editor_starting = True
+        # Dès le clic : un second clic pendant l'attente du port ou de Chrome ne relance rien
+        self._editor_state.start_requested()
         _logger.info("📝 Action: Lancement de l'éditeur...")
         self._status_label.config(text="⏳ Ouverture de l'éditeur en cours, veuillez patienter")
         self._root.update()
@@ -242,7 +237,7 @@ class ControlPanel:
         # la page de l'autre programme. On n'ouvre alors aucune fenêtre.
         if not self._editor_window.wait_for_free_port():
             _logger.info(f"❌ Le port {port} est utilisé par un autre programme : éditeur non ouvert")
-            self._editor_starting = False
+            self._editor_state.closed()
             self._show_launch_failure(
                 f"❌ Port {port} déjà utilisé par un autre programme",
                 f"Un autre programme utilise le port {port},\n"
@@ -256,8 +251,7 @@ class ControlPanel:
             self._editor_window.start()
         except Exception as e:
             _logger.info(f"❌ Erreur fallback lancement éditeur: {e}")
-            self._editor_open = False
-            self._editor_starting = False
+            self._editor_state.closed()
             self._show_launch_failure(
                 "❌ Échec de l'ouverture de l'éditeur (voir les logs)",
                 "L'éditeur n'a pas pu s'ouvrir.\n\n"
@@ -267,15 +261,15 @@ class ControlPanel:
             )
             return
 
-        # Quand l'éditeur se ferme, on met à jour le statut
+        # Quand l'éditeur se ferme, on met à jour le statut. L'état est remis à « fermé » même si
+        # React n'a jamais signalé l'ouverture, ou n'a pas signalé la fermeture (plantage de Chrome)
         self._in_ui_thread(lambda: self._status_label.config(text="🔴 Éditeur fermé"))
-        self._editor_open = False
-        self._editor_starting = False  # Si React n'a jamais signalé l'ouverture
+        self._editor_state.closed()
 
     def _save_document(self) -> None:
         """Sauvegarde le document — toujours en mode "Enregistrer sous" (dialogue à chaque fois).
         Si un document est déjà ouvert, le dialogue pré-remplit le nom et le dossier courant."""
-        if not self._editor_open:
+        if not self._editor_state.is_open:
             messagebox.showwarning(
                 "PromptoDYS - Éditeur requis",
                 "L'éditeur n'est pas ouvert.\n\nVeuillez d'abord ouvrir l'éditeur\navant de sauvegarder.",
@@ -285,12 +279,12 @@ class ControlPanel:
             return
 
         _logger.info(
-            f"🔍 DEBUG btn_sauvegarder: editeur_lance={self._editor_open}, "
-            f"current_document_path={self._current_document_path}"
+            f"🔍 DEBUG btn_sauvegarder: editeur_lance={self._editor_state.is_open}, "
+            f"current_document_path={self._editor_state.document_path}"
         )
 
         # Toujours afficher le dialogue — pré-rempli si document déjà ouvert/sauvegardé
-        current_path = self._current_document_path
+        current_path = self._editor_state.document_path
         initial_dir = os.path.dirname(current_path) if current_path else self._documents_dir
         initial_name = os.path.basename(current_path) if current_path else "nouveau_document"
 
@@ -330,7 +324,7 @@ class ControlPanel:
             _logger.info(f"🔍 DEBUG run_save: doc_name='{doc_name}', save_dir='{save_dir}'")
             result = documents.save_document(self._editor, self._store, save_dir, doc_name)
             if result:
-                self._current_document_path = result
+                self._editor_state.document_path = result
                 self._in_ui_thread(lambda: self._status_label.config(text=f"✅ '{doc_name}' sauvegardé !"))
                 _logger.info(f"✅ Document sauvegardé dans: {result}")
             else:
@@ -356,7 +350,7 @@ class ControlPanel:
             return
 
         # 2. Si l'éditeur n'est pas ouvert, le lancer automatiquement
-        need_wait = not self._editor_open
+        need_wait = not self._editor_state.is_open
         if need_wait:
             _logger.info("📂 Éditeur non ouvert → lancement automatique avant ouverture du document...")
             self._status_label.config(text="⏳ Lancement de l'éditeur...")
@@ -369,28 +363,24 @@ class ControlPanel:
         # 3. Attendre que l'éditeur soit prêt, puis charger le document
         def run_load() -> None:
             if need_wait:
-                # Attendre le signal de React (on_editor_open → _last_editor_activity)
-                timeout = 30
-                waited = 0
+                # Attendre le signal de React (on_editor_open)
                 _logger.info("⏳ Attente du signal React on_editor_open()...")
-                while self._last_editor_activity is None and waited < timeout:
-                    time.sleep(0.5)
-                    waited += 0.5
-
-                if self._last_editor_activity is None:
-                    _logger.info("❌ Timeout: React n'a pas signalé on_editor_open() dans les 30 secondes")
+                if not self._editor_state.wait_until_open(EDITOR_READY_TIMEOUT_S):
+                    _logger.info(
+                        f"❌ Timeout: React n'a pas signalé on_editor_open() dans les {EDITOR_READY_TIMEOUT_S} secondes"
+                    )
                     self._in_ui_thread(lambda: self._status_label.config(text="❌ Éditeur non prêt (timeout)"))
                     return
 
                 # Petit délai pour laisser React finir l'initialisation complète des composants
-                time.sleep(1.5)
+                time.sleep(REACT_SETTLE_DELAY_S)
 
             _logger.info("✅ Éditeur prêt, chargement du document...")
 
             result = documents.open_document(self._editor, self._store, selected_path)
             if result:
                 # Mémoriser le dossier du document ouvert (comme Arduino retient le sketch ouvert)
-                self._current_document_path = result
+                self._editor_state.document_path = result
                 doc_name = os.path.basename(result)
                 _logger.info(f"📌 Document courant: {result}")
                 self._in_ui_thread(lambda: self._status_label.config(text=f"✅ '{doc_name}' ouvert !"))
@@ -418,7 +408,7 @@ class ControlPanel:
         _logger.info("\n🔍 VÉRIFICATION PRÉ-TRAITEMENT IA...")
 
         # VÉRIFICATION 2: Éditeur ouvert
-        if not self._editor_open:
+        if not self._editor_state.is_open:
             _logger.info("⚠️ L'éditeur n'est pas ouvert !")
             messagebox.showwarning(
                 "PromptoDYS - Éditeur requis",
@@ -499,7 +489,7 @@ class ControlPanel:
     def _close_editor_then_quit(self) -> None:
         """
         Demande à l'éditeur React de fermer sa fenêtre (closeEditor), attend sa confirmation
-        (on_editor_close ou retour de editor_window.start() remettent _editor_open à False), puis quitte.
+        (on_editor_close ou retour de editor_window.start() marquent l'éditeur fermé), puis quitte.
         Sous Windows, Chrome s'arrête avec sa dernière fenêtre. Au-delà du délai, on quitte quand même.
         """
         _logger.info("📝 Fermeture de l'éditeur...")
@@ -514,8 +504,9 @@ class ControlPanel:
         # Au-delà, on quitte sans attendre la confirmation de l'éditeur
         close_deadline = time.time() + CLOSE_EDITOR_TIMEOUT_S
 
+        # Sondage par root.after et non Event.wait : on est sur le thread de l'interface, qu'il ne faut pas bloquer
         def wait_for_close() -> None:
-            if not self._editor_open:
+            if not self._editor_state.is_open:
                 _logger.info("✅ Éditeur fermé")
                 self._quit()
             elif time.time() >= close_deadline:
@@ -534,7 +525,7 @@ class ControlPanel:
         if self._closing:
             return  # Fermeture de l'éditeur déjà demandée, en attente de sa confirmation
 
-        if self._editor_open:
+        if self._editor_state.is_open:
             result = messagebox.askyesno(
                 "PromptoDYS - Éditeur ouvert",
                 "L'éditeur est ouvert.\n\n"

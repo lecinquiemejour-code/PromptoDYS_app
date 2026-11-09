@@ -10,17 +10,40 @@ _quit() n'est jamais exécuté : il détruirait la fenêtre en pleine boucle et 
 a besoin pour arrêter un test bloqué sous Windows.
 """
 
+import os
 import threading
 import time
 from pathlib import Path
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 
 import pytest
 
+import promptodys.presentation.control_panel as panel_module
+from promptodys.domain import ports
 from promptodys.presentation.control_panel import ControlPanel
 
 ICON = str(Path(__file__).parents[2] / "assets" / "prompto.png")
 READY = "🤖 Traiter la prise de note"
+
+
+class _Editor:
+    """Éditeur simulé : enregistre les documents qu'on lui envoie."""
+
+    def __init__(self):
+        self.written = []
+
+    def write_document(self, document):
+        self.written.append(document)
+        return True
+
+
+class _Store:
+    """Rangement simulé : tout chemin désigne le même document, rangé dans le dossier du chemin."""
+
+    document = ports.Document(markdown="# Ma note")
+
+    def load(self, path):
+        return self.document, os.path.dirname(path)
 
 
 class _Window:
@@ -75,11 +98,12 @@ class _Processing:
 
 @pytest.fixture
 def panel(tmp_path):
-    """Panneau construit (fenêtre cachée) ; renvoie (panneau, fenêtre de l'éditeur, traitement)."""
+    """Panneau construit (fenêtre cachée) ; renvoie (panneau, fenêtre de l'éditeur, traitement).
+    L'éditeur et le rangement simulés sont joignables par control_panel._editor et control_panel._store."""
     window, processing = _Window(), _Processing()
     control_panel = ControlPanel(
-        editor=object(),
-        store=object(),
+        editor=_Editor(),
+        store=_Store(),
         editor_window=window,
         process_note=processing,
         documents_dir=str(tmp_path),
@@ -126,12 +150,12 @@ def test_react_events_update_state_and_status(panel):
 
     control_panel.on_editor_open()
     control_panel._root.update()
-    assert control_panel._editor_open
+    assert control_panel._editor_state.is_open
     assert _status(control_panel) == "✅ Éditeur ouvert"
 
     control_panel.on_editor_close()
     control_panel._root.update()
-    assert not control_panel._editor_open
+    assert not control_panel._editor_state.is_open
     assert _status(control_panel) == "🔴 Éditeur fermé"
 
 
@@ -158,8 +182,8 @@ def test_second_click_on_open_editor_launches_nothing(panel):
         control_panel,
         lambda: (
             _status(control_panel) == "🔴 Éditeur fermé"
-            and not control_panel._editor_open
-            and not control_panel._editor_starting
+            and not control_panel._editor_state.is_open
+            and not control_panel._editor_state.is_starting
         ),
     )
 
@@ -176,7 +200,59 @@ def test_busy_port_opens_no_editor(panel, monkeypatch):
 
     assert window.starts == 0
     assert _status(control_panel) == "❌ Port 8080 déjà utilisé par un autre programme"
-    assert not control_panel._editor_starting
+    assert not control_panel._editor_state.is_starting
+
+
+# --- Ouverture d'un document ---
+
+
+def test_open_document_launches_editor_then_loads_it(panel, tmp_path, monkeypatch):
+    """Éditeur fermé : « Ouvrir » lance l'éditeur, attend le signal de React, puis charge le document."""
+    control_panel, window, _ = panel
+    document_dir = tmp_path / "MonDoc"
+    monkeypatch.setattr(filedialog, "askopenfilename", lambda **kwargs: str(document_dir / "MonDoc.md"))
+    monkeypatch.setattr(panel_module, "REACT_SETTLE_DELAY_S", 0)
+
+    control_panel._open_document()
+    _run_loop(control_panel, window.started.is_set)
+    assert control_panel._editor.written == []  # Rien n'est envoyé avant le signal de React
+
+    control_panel.on_editor_open()
+    _run_loop(control_panel, lambda: _status(control_panel) == "✅ 'MonDoc' ouvert !")
+    assert control_panel._editor.written == [_Store.document]
+    assert control_panel._editor_state.document_path == str(document_dir)
+    assert window.starts == 1
+
+    # Fermeture de Chrome dans le test : le thread de lancement ne doit pas survivre à la fenêtre Tk
+    window.release()
+    _run_loop(control_panel, lambda: not control_panel._editor_state.is_open)
+
+
+def test_open_document_after_chrome_crash_waits_for_react(panel, tmp_path, monkeypatch):
+    """Chrome fermé sans signal de React (plantage) : « Ouvrir » attend de nouveau le signal de React,
+    et sans lui n'envoie rien à l'éditeur."""
+    control_panel, window, _ = panel
+    monkeypatch.setattr(filedialog, "askopenfilename", lambda **kwargs: str(tmp_path / "MonDoc" / "MonDoc.md"))
+    monkeypatch.setattr(panel_module, "REACT_SETTLE_DELAY_S", 0)
+    monkeypatch.setattr(panel_module, "EDITOR_READY_TIMEOUT_S", 0.2)
+
+    # Premier éditeur : ouvert, puis Chrome se ferme sans on_editor_close
+    control_panel._open_editor()
+    _run_loop(control_panel, window.started.is_set)
+    control_panel.on_editor_open()
+    window.release()
+    _run_loop(control_panel, lambda: not control_panel._editor_state.is_open)
+
+    # Le nouvel éditeur ne signale jamais son ouverture
+    control_panel._open_document()
+    _run_loop(
+        control_panel,
+        lambda: (
+            _status(control_panel) == "❌ Éditeur non prêt (timeout)" and not control_panel._editor_state.is_starting
+        ),
+    )
+    assert control_panel._editor.written == []
+    assert window.starts == 2
 
 
 # --- Traitement IA ---
