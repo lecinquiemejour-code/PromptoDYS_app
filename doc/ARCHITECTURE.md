@@ -332,7 +332,7 @@ Le résultat est `dist/PromptoDYS.exe`. Voir aussi [README_ANTIVIRUS.md](../READ
 | [promptodys/domain/](../promptodys/domain/) | Couche domaine : règles métier, cas d'usage et ports (voir [§2](#organisation-du-code-python)) |
 | [promptodys/infrastructure/](../promptodys/infrastructure/) | Couche infrastructure : adaptateurs Eel, Gemini, disque et PDF, configuration |
 | [promptodys/presentation/](../promptodys/presentation/) | Couche présentation : panneau de contrôle Tkinter |
-| `tests/` | Tests pytest : `tests/domain/` pour la couche domaine (avec de faux adaptateurs), `tests/infrastructure/` pour les adaptateurs (Eel et Gemini simulés, vrai disque dans un dossier temporaire), `tests/presentation/` pour la logique du panneau (`PanelController`, avec une vue, un éditeur, un rangement, une fenêtre et un traitement simulés) et pour l'état de l'éditeur (aucun test ne crée de fenêtre Tk), `tests/test_app.py` pour l'assemblage du traitement IA |
+| `tests/` | Tests pytest : `tests/domain/` pour la couche domaine (avec de faux adaptateurs), `tests/infrastructure/` pour les adaptateurs (Eel et Gemini simulés, vrai disque dans un dossier temporaire), `tests/presentation/` pour la logique du panneau (`PanelController`, avec une vue, un éditeur, un `DocumentStore`, une fenêtre et un traitement simulés) et pour l'état de l'éditeur (aucun test ne crée de fenêtre Tk), `tests/test_app.py` pour l'assemblage du traitement IA |
 | [promptodys.prompt](../promptodys.prompt) | Template du prompt envoyé à Gemini |
 | `GeminiKey.txt` | Clé API, **ignoré par git**, à créer depuis [GeminiKey.txt.template](../GeminiKey.txt.template) |
 | [LISEZMOI.txt](../LISEZMOI.txt) | Notice d'installation pour l'utilisateur final, livrée dans le zip de release |

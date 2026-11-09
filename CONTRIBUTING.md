@@ -460,9 +460,9 @@ uv run pytest
 | `domain/test_report.py` | Contenu Markdown du rapport |
 | `domain/test_documents.py` | Chemin de sauvegarde (assainissement du nom, anti-récursion), cas d'usage sauvegarder et ouvrir |
 | `domain/test_processing.py` | Cas d'usage du traitement IA : succès, abandon, erreurs de l'IA |
-| `domain/conftest.py` | Faux éditeur, faux modèle d'IA et faux rangement, partagés par les tests du domaine |
+| `domain/conftest.py` | Faux éditeur, faux modèle d'IA et faux `DocumentStore`, partagés par les tests du domaine |
 | `infrastructure/test_config.py` | Chemins, clé API, modèle de prompt, dossier de l'éditeur |
-| `infrastructure/test_disk_document_store.py` | Rangement des documents sur un vrai disque (dossier temporaire) |
+| `infrastructure/test_disk_document_store.py` | `DiskDocumentStore` sur un vrai disque (dossier temporaire) |
 | `infrastructure/test_eel_editor.py` | Adaptateur `EelEditor` et `EelWindow` (Eel simulé), événements de React, port du serveur |
 | `infrastructure/test_gemini_model.py` | Adaptateur `GeminiModel` (Gemini simulé) |
 | `infrastructure/test_pdf_report.py` | Rapport PDF ReportLab |

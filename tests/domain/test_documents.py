@@ -85,7 +85,7 @@ def test_prepare_save_path_logs_each_level_climbed(caplog):
 
 
 def test_save_document_passes_editor_document_to_store(fake_editor, fake_store, document):
-    """Le document de l'éditeur est transmis tel quel au rangement, qui renvoie le dossier."""
+    """Le document de l'éditeur est transmis tel quel au DocumentStore, qui renvoie le dossier."""
     store = fake_store(save_result="/docs/cours")
     assert save_document(fake_editor(document=document), store, "/docs", "cours") == "/docs/cours"
     assert store.saved == [(document, "/docs", "cours")]

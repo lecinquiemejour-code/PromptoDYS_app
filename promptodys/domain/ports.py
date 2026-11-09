@@ -81,7 +81,7 @@ class AIModel(Protocol):
 
 
 class DocumentStore(Protocol):
-    """Rangement des documents, « façon Arduino » : <dossier>/<nom>/<nom>.md et images/."""
+    """Enregistre et ouvre les documents, « façon Arduino » : <dossier>/<nom>/<nom>.md et images/."""
 
     def save(self, document: Document, directory: str, name: str) -> str | None:
         """Enregistre le document dans directory/name. Renvoie le dossier du document, None en cas d'erreur."""

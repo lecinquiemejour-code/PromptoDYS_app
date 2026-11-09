@@ -1,4 +1,4 @@
-"""Logique du panneau de contrôle (PanelController), avec une vue, un éditeur, un rangement, une fenêtre
+"""Logique du panneau de contrôle (PanelController), avec une vue, un éditeur, un DocumentStore, une fenêtre
 de l'éditeur et un traitement simulés. Aucune fenêtre Tk : plusieurs Tk dans un même processus échouent
 au hasard sur la CI Windows.
 
@@ -106,7 +106,7 @@ class _Editor:
 
 
 class _Store:
-    """Rangement simulé : tout chemin désigne le même document, rangé dans le dossier du chemin."""
+    """DocumentStore simulé : tout chemin désigne le même document, rangé dans le dossier du chemin."""
 
     document = ports.Document(markdown="# Ma note")
 
