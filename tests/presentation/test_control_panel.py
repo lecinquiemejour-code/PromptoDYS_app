@@ -8,6 +8,9 @@ et une TclError est une vraie erreur.
 _quit() n'est jamais exécuté : il détruirait la fenêtre en pleine boucle et terminerait le processus
 (os._exit). Les tests le remplacent sur le panneau, sans toucher à os._exit, dont pytest-timeout
 a besoin pour arrêter un test bloqué sous Windows.
+
+Les interpréteurs Tcl des panneaux détruits restent en vie jusqu'à la fin des tests (_KEPT_INTERPRETERS) :
+sous Windows, créer un Tk après la suppression d'un interpréteur a fait échouer le chargement du thème sv_ttk.
 """
 
 import os
@@ -24,6 +27,12 @@ from promptodys.presentation.control_panel import ControlPanel
 
 ICON = str(Path(__file__).parents[2] / "assets" / "prompto.png")
 READY = "🤖 Traiter la prise de note"
+
+# Interpréteurs Tcl des panneaux détruits, gardés en vie jusqu'à la sortie du processus. Sous Windows (CI), créer
+# un Tk après la suppression d'un interpréteur a fait échouer le source de sv_ttk : « couldn't read file
+# .../sv_ttk/theme/sprites_light.tcl: no such file or directory », alors que le fichier existe.
+# L'application n'est pas concernée : elle ne crée qu'un Tk, qu'elle ne supprime pas avant de quitter.
+_KEPT_INTERPRETERS = []
 
 
 class _Editor:
@@ -127,6 +136,7 @@ def panel(tmp_path):
     window.release()  # Ne pas laisser un thread bloqué dans start()
     processing.finish()
     control_panel._root.destroy()
+    _KEPT_INTERPRETERS.append(control_panel._root.tk)  # Fenêtre détruite, interpréteur gardé (voir plus haut)
 
 
 def _run_loop(panel, condition, timeout=3.0):
