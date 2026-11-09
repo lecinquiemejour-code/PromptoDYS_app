@@ -448,7 +448,7 @@ Voir migration guide dans docs/MIGRATION.md"
 
 ## 🧪 Tests
 
-Les tests automatisés utilisent [pytest](https://docs.pytest.org/), installé avec les dépendances de dev. Ils sont dans le dossier `tests/` et se lancent sans réseau ni écran. Le panneau Tk lui-même n'a pas de tests automatisés : sous Windows (CI), créer plusieurs fenêtres Tk dans un même processus n'est pas fiable (lectures de fichiers Tcl de sv_ttk qui échouent au hasard). Son état de l'éditeur est testé sans Tk (`presentation/test_editor_state.py`) :
+Les tests automatisés utilisent [pytest](https://docs.pytest.org/), installé avec les dépendances de dev. Ils sont dans le dossier `tests/` et se lancent sans réseau ni écran. Aucun test ne crée de fenêtre Tk : sous Windows (CI), créer plusieurs fenêtres Tk dans un même processus n'est pas fiable (lectures de fichiers Tcl de sv_ttk qui échouent au hasard). La logique du panneau (`PanelController`) et l'état de l'éditeur (`EditorState`) se testent donc sans Tk, avec une vue simulée ; seule la vue Tk (`ControlPanel` : widgets, dialogues) n'a pas de tests automatisés :
 
 ```bash
 uv run pytest
@@ -460,12 +460,14 @@ uv run pytest
 | `domain/test_report.py` | Contenu Markdown du rapport |
 | `domain/test_documents.py` | Chemin de sauvegarde (assainissement du nom, anti-récursion), cas d'usage sauvegarder et ouvrir |
 | `domain/test_processing.py` | Cas d'usage du traitement IA : succès, abandon, erreurs de l'IA |
-| `domain/conftest.py` | Faux éditeur, faux modèle d'IA et faux rangement, partagés par les tests du domaine |
+| `domain/conftest.py` | Faux éditeur, faux modèle d'IA et faux `DocumentStore`, partagés par les tests du domaine |
 | `infrastructure/test_config.py` | Chemins, clé API, modèle de prompt, dossier de l'éditeur |
-| `infrastructure/test_disk_document_store.py` | Rangement des documents sur un vrai disque (dossier temporaire) |
+| `infrastructure/test_disk_document_store.py` | `DiskDocumentStore` sur un vrai disque (dossier temporaire) |
 | `infrastructure/test_eel_editor.py` | Adaptateur `EelEditor` et `EelWindow` (Eel simulé), événements de React, port du serveur |
 | `infrastructure/test_gemini_model.py` | Adaptateur `GeminiModel` (Gemini simulé) |
 | `infrastructure/test_pdf_report.py` | Rapport PDF ReportLab |
+| `presentation/test_editor_state.py` | État de l'éditeur : transitions, jeton de lancement, modifications refusées hors du thread de l'interface, attente de l'ouverture |
+| `presentation/test_panel_controller.py` | Logique du panneau, avec une vue, un éditeur, une fenêtre et un traitement simulés : double clic, port occupé, ouverture et sauvegarde d'un document, traitement IA et son abandon, fermeture |
 | `test_app.py` | Assemblage du traitement IA, `run_processing()` (étapes, rapport, abandon) avec Gemini, l'éditeur et le PDF simulés |
 | `test_import.py` | Importer `askGeminiPrompto.py`, une couche ou le module d'assemblage ne crée aucun dossier (ni fenêtre, pour la présentation) |
 | `test_logs.py` | Les logs du paquet arrivent dans la console et le rapport |

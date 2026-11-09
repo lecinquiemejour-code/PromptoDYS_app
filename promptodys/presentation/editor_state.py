@@ -3,7 +3,7 @@ document courant.
 
 C'est un état de l'interface : seul le thread de l'interface le modifie. Les signaux de React
 (threads d'Eel) et les fins de lancement ou de sauvegarde (threads du panneau) lui sont transmis
-par ControlPanel._in_ui_thread(). Les autres threads peuvent seulement attendre l'ouverture
+par PanelController._in_ui_thread(). Les autres threads peuvent seulement attendre l'ouverture
 de l'éditeur (wait_until_open). N'importe que threading : se teste sans fenêtre Tk.
 """
 

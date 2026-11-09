@@ -1,4 +1,4 @@
-"""Rangement des documents sur le disque, « façon Arduino » : adaptateur du port DocumentStore."""
+"""Adaptateur du port DocumentStore : enregistre et ouvre les documents sur le disque, « façon Arduino »."""
 
 import mimetypes
 import os

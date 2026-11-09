@@ -51,7 +51,7 @@ class FakeModel:
 
 
 class FakeStore:
-    """Rangement en mémoire : saved garde (document, dossier, nom) de chaque enregistrement."""
+    """DocumentStore en mémoire : saved garde (document, dossier, nom) de chaque enregistrement."""
 
     def __init__(self, loaded=None, save_result="/docs/note"):
         self.loaded = loaded

@@ -64,6 +64,14 @@ type = "forbidden"
 source_modules = ["promptodys.presentation"]
 forbidden_modules = ["promptodys.infrastructure", "eel", "google", "reportlab"]
 
+# La logique du panneau et l'état de l'éditeur se testent sans fenêtre Tk (plusieurs Tk par processus
+# échouent au hasard sur la CI Windows) : ils doivent le rester
+[[tool.importlinter.contracts]]
+name = "la logique du panneau n'importe pas Tk"
+type = "forbidden"
+source_modules = ["promptodys.presentation.panel_controller", "promptodys.presentation.editor_state"]
+forbidden_modules = ["tkinter", "sv_ttk"]
+
 [[tool.importlinter.contracts]]
 name = "infrastructure n'importe pas presentation"
 type = "forbidden"

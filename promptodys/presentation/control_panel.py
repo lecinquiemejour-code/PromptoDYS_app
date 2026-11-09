@@ -1,12 +1,11 @@
-"""Panneau de contrôle Tkinter (thème Sun Valley) : ouvrir l'éditeur, sauvegarder et ouvrir un document,
-lancer ou abandonner le traitement IA, voir les rapports, quitter.
+"""Panneau de contrôle Tkinter (thème Sun Valley) : la fenêtre, ses boutons, sa barre de statut et sa console.
 
-- ControlPanel : la fenêtre et ses boutons ; l'état de l'éditeur est un EditorState (editor_state.py) ;
-- EditorWindow : ce que le panneau attend de la fenêtre de l'éditeur (EelWindow dans l'infrastructure) ;
+- ControlPanel : la vue Tk ; la logique (boutons, signaux de React, threads, état) est dans PanelController
+  (panel_controller.py), qui pilote la fenêtre par les méthodes de PanelView ;
 - RedirectText : affiche stdout et stderr dans la console du panneau.
 
-Le panneau reçoit toutes ses dépendances de main() : il n'importe ni l'infrastructure, ni eel, google
-ou reportlab (contrat import-linter).
+Le panneau reçoit toutes ses dépendances de main(), son contrôleur compris (set_controller) : il n'importe
+ni l'infrastructure, ni eel, google ou reportlab (contrat import-linter).
 """
 
 import contextlib
@@ -14,26 +13,15 @@ import logging
 import os
 import subprocess  # Pour ouvrir le dossier reports
 import sys
-import threading
-import time
 import tkinter as tk
 from collections.abc import Callable
 from tkinter import filedialog, messagebox, ttk
-from typing import Protocol
 
 import sv_ttk  # Thème Sun Valley (Windows 11 look)
 
-from promptodys.domain import documents, ports
-from promptodys.presentation.editor_state import EditorState
+from promptodys.presentation.panel_controller import PanelController
 
 _logger = logging.getLogger(__name__)
-
-# Délai maximum d'attente de la fermeture de l'éditeur avant de quitter quand même
-CLOSE_EDITOR_TIMEOUT_S = 3
-# Délai maximum d'attente du signal de React (on_editor_open) avant d'ouvrir un document
-EDITOR_READY_TIMEOUT_S = 30
-# Après le signal de React, laisse l'éditeur finir d'initialiser ses composants
-REACT_SETTLE_DELAY_S = 1.5
 
 
 # Classe pour rediriger stdout vers la GUI
@@ -63,24 +51,6 @@ class RedirectText:
         if self.terminal:
             with contextlib.suppress(Exception):
                 self.terminal.flush()
-
-
-class EditorWindow(Protocol):
-    """Fenêtre de l'éditeur, ouverte et fermée par le panneau (EelWindow dans l'infrastructure)"""
-
-    port: int
-
-    def wait_for_free_port(self) -> bool:
-        """Attend que le port de l'éditeur se libère, faux s'il reste occupé"""
-        ...
-
-    def start(self) -> None:
-        """Ouvre l'éditeur et bloque jusqu'à sa fermeture ; lève une exception en cas d'échec"""
-        ...
-
-    def close(self) -> None:
-        """Demande la fermeture de l'éditeur ; lève une exception si la demande n'a pas pu partir"""
-        ...
 
 
 def _on_button_enter(btn: tk.Button) -> None:
@@ -116,54 +86,103 @@ class ControlPanel:
     Panneau de contrôle avec Tkinter + sv_ttk (thème Windows 11) : ouvrir l'éditeur, sauvegarder
     et ouvrir un document, lancer ou abandonner le traitement IA, voir les rapports, quitter.
 
-    L'état de l'éditeur (_editor_state, voir EditorState) est géré exclusivement par les événements
-    de React et par le retour de editor_window.start(), et modifié uniquement par le thread de
-    l'interface (les autres threads passent par _in_ui_thread) :
-    - _open_editor()    : lancement demandé (start_requested), qui reçoit son jeton ;
-    - on_editor_open()  : React notifie l'ouverture (opened), fin du lancement ;
-    - on_editor_close() : React notifie la fermeture (closed) ;
-    - _launch_editor()  : port pris, editor_window.start() qui retourne ou qui lève (launch_ended),
-                          sans effet si un autre lancement a été demandé depuis.
+    C'est la vue : les boutons sont transmis au PanelController, qui la pilote en retour par les
+    méthodes de PanelView (show_status, set_processing, dialogues, after, quit...).
 
-    __init__ construit la fenêtre (cachée), run() l'affiche et lance la boucle principale.
+    __init__ construit la fenêtre (cachée). main() crée ensuite le contrôleur et le donne au panneau
+    avec set_controller(). run() affiche la fenêtre et lance la boucle principale.
     """
 
-    def __init__(
-        self,
-        editor: ports.Editor,
-        store: ports.DocumentStore,
-        editor_window: EditorWindow,
-        process_note: Callable[[threading.Event], bool],
-        documents_dir: str,
-        reports_dir: str,
-        icon_path: str,
-    ) -> None:
-        self._editor = editor
-        self._store = store
-        self._editor_window = editor_window
-        self._process_note = process_note
-        self._documents_dir = documents_dir
+    # Donné par set_controller(), avant run() ; les boutons le lisent au moment du clic
+    _controller: PanelController
+
+    def __init__(self, reports_dir: str, icon_path: str) -> None:
         self._reports_dir = reports_dir
         self._icon_path = icon_path
-
-        # --- État de l'éditeur (modifié par le thread de l'interface seulement, qui construit le panneau) ---
-        self._editor_state = EditorState()
-        # Fermeture de l'éditeur demandée, en attente de sa confirmation : ignore un second clic sur Quitter
-        self._closing = False
-
-        # --- État du traitement IA ---
-        # Jeton d'annulation du traitement IA en cours, None si aucun traitement en cours
-        self._cancel_event: threading.Event | None = None
 
         _logger.info("🖥️ Démarrage du panneau de contrôle GUI...")
         self._build()
 
-    # --- Accès au thread de l'interface ---
+    def set_controller(self, controller: PanelController) -> None:
+        """Garde le contrôleur auquel les boutons transmettent les clics"""
+        self._controller = controller
 
-    def _in_ui_thread(self, fn: Callable[[], object]) -> None:
-        """Fait exécuter fn par le thread de l'interface : seul passage autorisé depuis les autres threads
-        (Tkinter n'est pas thread-safe). La file d'attente prévue par R7 ne changera que cette méthode."""
-        self._root.after(0, fn)
+    # --- Clics des boutons, transmis au contrôleur ---
+    # Des méthodes, et non command=self._controller.xxx : _build() est appelé avant set_controller(),
+    # le contrôleur est donc lu au moment du clic
+
+    def _on_open_editor(self) -> None:
+        self._controller.open_editor()
+
+    def _on_save_document(self) -> None:
+        self._controller.save_document()
+
+    def _on_open_document(self) -> None:
+        self._controller.open_document()
+
+    def _on_toggle_processing(self) -> None:
+        self._controller.toggle_processing()
+
+    def _on_closing(self) -> None:
+        """Bouton Quitter et croix de la fenêtre"""
+        self._controller.on_closing()
+
+    # --- PanelView : ce que le contrôleur demande à la fenêtre ---
+
+    def show_status(self, text: str) -> None:
+        self._status_label.config(text=text)
+
+    def set_processing(self, running: bool) -> None:
+        if running:
+            self._btn_ai.configure(text="⛔ Abandonner le traitement")
+        else:
+            self._btn_ai.configure(text="🤖 Traiter la prise de note", state="normal")
+
+    def clear_console(self) -> None:
+        # Par la même file que les logs (root.after) : les messages déjà en attente s'affichent avant l'effacement
+        self._append_to_console("", clear=True)
+
+    def refresh(self) -> None:
+        self._root.update()
+
+    def show_error(self, title: str, message: str) -> None:
+        messagebox.showerror(title, message)
+
+    def show_warning(self, title: str, message: str) -> None:
+        messagebox.showwarning(title, message, icon="warning")
+
+    def ask_yes_no(self, title: str, message: str) -> bool:
+        return messagebox.askyesno(title, message, icon="warning")
+
+    def ask_open_path(self, initial_dir: str) -> str:
+        return filedialog.askopenfilename(
+            title="Ouvrir un document PromptoDYS",
+            initialdir=initial_dir,
+            filetypes=[
+                ("Documents Markdown", "*.md"),
+                ("Tous les fichiers", "*.*"),
+            ],
+        )
+
+    def ask_save_path(self, initial_dir: str, initial_name: str) -> str:
+        return filedialog.asksaveasfilename(
+            title="Enregistrer le document PromptoDYS...",
+            initialdir=initial_dir,
+            initialfile=initial_name,
+            defaultextension="",
+            filetypes=[("Tous les fichiers", "*.*")],
+        )
+
+    def after(self, delay_ms: int, fn: Callable[[], object]) -> None:
+        self._root.after(delay_ms, fn)
+
+    def quit(self) -> None:
+        """Ferme le panneau de contrôle et termine le processus"""
+        _logger.info("👋 Fermeture de l'application...")
+        self._root.destroy()
+        os._exit(0)  # Force la fermeture complète
+
+    # --- Console ---
 
     def _append_to_console(self, text: str, clear: bool = False) -> None:
         """Met à jour la zone de texte des logs, depuis n'importe quel thread"""
@@ -176,7 +195,7 @@ class ControlPanel:
             self._console.see("end")  # Auto-scroll
             self._console.configure(state="disabled")
 
-        self._in_ui_thread(_update)
+        self.after(0, _update)
 
     def _write_to_console(self, msg: str) -> None:
         """Reçoit ce qui est écrit sur stdout et stderr (voir RedirectText)"""
@@ -186,303 +205,7 @@ class ControlPanel:
         elif msg == "\n":
             self._append_to_console("\n")
 
-    # --- Événements de React (appelés depuis un thread d'Eel) ---
-
-    def on_editor_open(self) -> None:
-        """React signale que l'éditeur est prêt. État et statut sont mis à jour par le thread de l'interface"""
-
-        def _opened() -> None:
-            self._editor_state.opened()
-            self._status_label.config(text="✅ Éditeur ouvert")
-
-        self._in_ui_thread(_opened)
-
-    def on_editor_close(self) -> None:
-        """React signale la fermeture de l'éditeur. État et statut sont mis à jour par le thread de l'interface"""
-
-        def _closed() -> None:
-            self._editor_state.closed()
-            self._status_label.config(text="🔴 Éditeur fermé")
-
-        self._in_ui_thread(_closed)
-
-    # --- Boutons ---
-
-    def _open_editor(self) -> None:
-        """Lance l'éditeur dans un thread séparé"""
-        if self._editor_state.is_open:
-            _logger.info("📝 L'éditeur est déjà ouvert")
-            self._status_label.config(text="✅ L'éditeur est déjà ouvert")
-            return
-
-        if self._editor_state.is_starting:
-            _logger.info("📝 L'éditeur est déjà en cours d'ouverture")
-            self._status_label.config(text="⏳ Ouverture de l'éditeur en cours, veuillez patienter")
-            return
-
-        # Dès le clic : un second clic pendant l'attente du port ou de Chrome ne relance rien
-        launch = self._editor_state.start_requested()
-        _logger.info("📝 Action: Lancement de l'éditeur...")
-        self._status_label.config(text="⏳ Ouverture de l'éditeur en cours, veuillez patienter")
-        self._root.update()
-
-        # Lancer dans un thread pour ne pas bloquer la GUI
-        thread = threading.Thread(target=self._launch_editor, args=(launch,), daemon=True)
-        thread.start()
-        # « ✅ Éditeur ouvert » est affiché par on_editor_open(), quand React signale que l'éditeur est prêt
-
-    def _end_launch(self, launch: object, status: str, error: str | None = None) -> None:
-        """Fin du lancement launch (fenêtre fermée ou jamais ouverte) : état, statut et, en cas d'échec,
-        popup, par le thread de l'interface. Ignorée si un autre lancement a été demandé depuis :
-        elle décrirait une fenêtre qui n'est plus celle de l'élève."""
-
-        def _end() -> None:
-            if not self._editor_state.launch_ended(launch):
-                return
-            self._status_label.config(text=status)
-            if error is not None:
-                messagebox.showerror("PromptoDYS - Éditeur non ouvert", error)
-
-        self._in_ui_thread(_end)
-
-    def _launch_editor(self, launch: object) -> None:
-        """Ouvre l'éditeur (thread dédié) et attend sa fermeture. launch : jeton de ce lancement"""
-        port = self._editor_window.port
-        # Vérifier le port avant d'ouvrir Chrome : s'il est pris, Chrome afficherait
-        # la page de l'autre programme. On n'ouvre alors aucune fenêtre.
-        if not self._editor_window.wait_for_free_port():
-            _logger.info(f"❌ Le port {port} est utilisé par un autre programme : éditeur non ouvert")
-            self._end_launch(
-                launch,
-                f"❌ Port {port} déjà utilisé par un autre programme",
-                f"Un autre programme utilise le port {port},\n"
-                "nécessaire à l'éditeur.\n\n"
-                "Fermez les autres programmes ouverts,\n"
-                "ou redémarrez l'ordinateur, puis réessayez.",
-            )
-            return
-        try:
-            # Bloque jusqu'à la fermeture de l'éditeur (mode de secours compris)
-            self._editor_window.start()
-        except Exception as e:
-            _logger.info(f"❌ Erreur fallback lancement éditeur: {e}")
-            self._end_launch(
-                launch,
-                "❌ Échec de l'ouverture de l'éditeur (voir les logs)",
-                "L'éditeur n'a pas pu s'ouvrir.\n\n"
-                "Vérifiez que Google Chrome est installé,\n"
-                "puis réessayez.\n\n"
-                "Le détail de l'erreur est dans la console.",
-            )
-            return
-
-        # Quand l'éditeur se ferme, on met à jour le statut. L'état est remis à « fermé » même si
-        # React n'a jamais signalé l'ouverture, ou n'a pas signalé la fermeture (plantage de Chrome)
-        self._end_launch(launch, "🔴 Éditeur fermé")
-
-    def _save_document(self) -> None:
-        """Sauvegarde le document — toujours en mode "Enregistrer sous" (dialogue à chaque fois).
-        Si un document est déjà ouvert, le dialogue pré-remplit le nom et le dossier courant."""
-        if not self._editor_state.is_open:
-            messagebox.showwarning(
-                "PromptoDYS - Éditeur requis",
-                "L'éditeur n'est pas ouvert.\n\nVeuillez d'abord ouvrir l'éditeur\navant de sauvegarder.",
-                icon="warning",
-            )
-            self._status_label.config(text="⚠️ Éditeur non ouvert")
-            return
-
-        _logger.info(
-            f"🔍 DEBUG btn_sauvegarder: editeur_lance={self._editor_state.is_open}, "
-            f"current_document_path={self._editor_state.document_path}"
-        )
-
-        # Toujours afficher le dialogue — pré-rempli si document déjà ouvert/sauvegardé
-        current_path = self._editor_state.document_path
-        initial_dir = os.path.dirname(current_path) if current_path else self._documents_dir
-        initial_name = os.path.basename(current_path) if current_path else "nouveau_document"
-
-        # Le dialogue se rouvre tant que le nom saisi est vide après assainissement
-        while True:
-            selected = filedialog.asksaveasfilename(
-                title="Enregistrer le document PromptoDYS...",
-                initialdir=initial_dir,
-                initialfile=initial_name,
-                defaultextension="",
-                filetypes=[("Tous les fichiers", "*.*")],
-            )
-            if not selected:
-                _logger.info("💾 Sauvegarde annulée par l'utilisateur")
-                return
-
-            save_dir, doc_name = documents.prepare_save_path(selected)
-            if doc_name:
-                break
-
-            _logger.info(f"⚠️ Nom de document invalide: '{os.path.basename(selected)}'")
-            messagebox.showwarning(
-                "PromptoDYS - Nom invalide",
-                "Le nom du document est vide\n"
-                "ou commence par un point.\n\n"
-                "Veuillez saisir un nom\n"
-                "(lettres ou chiffres).",
-                icon="warning",
-            )
-            initial_dir = os.path.dirname(selected)
-            initial_name = "nouveau_document"
-
-        self._status_label.config(text="⏳ Sauvegarde en cours...")
-        self._root.update()
-
-        def run_save() -> None:
-            _logger.info(f"🔍 DEBUG run_save: doc_name='{doc_name}', save_dir='{save_dir}'")
-            result = documents.save_document(self._editor, self._store, save_dir, doc_name)
-            if result:
-
-                def _saved() -> None:
-                    self._editor_state.document_path = result
-                    self._status_label.config(text=f"✅ '{doc_name}' sauvegardé !")
-
-                self._in_ui_thread(_saved)
-                _logger.info(f"✅ Document sauvegardé dans: {result}")
-            else:
-                self._in_ui_thread(lambda: self._status_label.config(text="❌ Erreur de sauvegarde"))
-
-        thread = threading.Thread(target=run_save, daemon=True)
-        thread.start()
-
-    def _open_document(self) -> None:
-        """Ouvre un document complet (texte + images) via filedialog — accepte dossier ou fichier .md
-        Si l'éditeur n'est pas lancé, il est ouvert automatiquement avant le chargement."""
-        # 1. Choisir le fichier AVANT de lancer l'éditeur (le filedialog est indépendant)
-        selected_path = filedialog.askopenfilename(
-            title="Ouvrir un document PromptoDYS",
-            initialdir=self._documents_dir,
-            filetypes=[
-                ("Documents Markdown", "*.md"),
-                ("Tous les fichiers", "*.*"),
-            ],
-        )
-        if not selected_path:
-            _logger.info("📂 Ouverture annulée par l'utilisateur")
-            return
-
-        # 2. Si l'éditeur n'est pas ouvert, le lancer automatiquement
-        need_wait = not self._editor_state.is_open
-        if need_wait:
-            _logger.info("📂 Éditeur non ouvert → lancement automatique avant ouverture du document...")
-            self._status_label.config(text="⏳ Lancement de l'éditeur...")
-            self._root.update()
-            self._open_editor()
-
-        self._status_label.config(text="⏳ Ouverture en cours...")
-        self._root.update()
-
-        # 3. Attendre que l'éditeur soit prêt, puis charger le document
-        def run_load() -> None:
-            if need_wait:
-                # Attendre le signal de React (on_editor_open)
-                _logger.info("⏳ Attente du signal React on_editor_open()...")
-                if not self._editor_state.wait_until_open(EDITOR_READY_TIMEOUT_S):
-                    _logger.info(
-                        f"❌ Timeout: React n'a pas signalé on_editor_open() dans les {EDITOR_READY_TIMEOUT_S} secondes"
-                    )
-                    self._in_ui_thread(lambda: self._status_label.config(text="❌ Éditeur non prêt (timeout)"))
-                    return
-
-                # Petit délai pour laisser React finir l'initialisation complète des composants
-                time.sleep(REACT_SETTLE_DELAY_S)
-
-            _logger.info("✅ Éditeur prêt, chargement du document...")
-
-            result = documents.open_document(self._editor, self._store, selected_path)
-            if result:
-                doc_name = os.path.basename(result)
-                _logger.info(f"📌 Document courant: {result}")
-
-                def _opened() -> None:
-                    # Mémoriser le dossier du document ouvert (comme Arduino retient le sketch ouvert)
-                    self._editor_state.document_path = result
-                    self._status_label.config(text=f"✅ '{doc_name}' ouvert !")
-
-                self._in_ui_thread(_opened)
-            else:
-                self._in_ui_thread(lambda: self._status_label.config(text="❌ Erreur d'ouverture"))
-
-        thread = threading.Thread(target=run_load, daemon=True)
-        thread.start()
-
-    def _toggle_processing(self) -> None:
-        """Lance le traitement IA Gemini ou demande l'abandon"""
-        # SI DÉJÀ EN COURS -> ABANDON IMMÉDIAT
-        # Le thread de traitement ne peut pas être interrompu s'il attend Gemini :
-        # on déclenche son jeton et on libère l'interface sans l'attendre.
-        # S'il se réveille plus tard, il voit son jeton déclenché et s'arrête sans rien écrire.
-        if self._cancel_event is not None:
-            _logger.info("\n🚫 ABANDON: Traitement IA arrêté par l'utilisateur.")
-            self._cancel_event.set()
-            self._cancel_event = None
-            self._btn_ai.configure(text="🤖 Traiter la prise de note", state="normal")
-            self._status_label.config(text="🚫 Traitement annulé")
-            return
-
-        # VÉRIFICATION 1: Connexion internet - SUPPRIMÉE
-        _logger.info("\n🔍 VÉRIFICATION PRÉ-TRAITEMENT IA...")
-
-        # VÉRIFICATION 2: Éditeur ouvert
-        if not self._editor_state.is_open:
-            _logger.info("⚠️ L'éditeur n'est pas ouvert !")
-            messagebox.showwarning(
-                "PromptoDYS - Éditeur requis",
-                "L'éditeur n'est pas ouvert.\n\nVeuillez d'abord ouvrir l'éditeur\navant de lancer le traitement IA.",
-                icon="warning",
-            )
-            self._status_label.config(text="⚠️ Éditeur non ouvert")
-            return
-
-        _logger.info("🤖 Action: Lancement du traitement IA...")
-        self._status_label.config(text="⏳ Traitement IA en cours...")
-
-        # Nouveau jeton d'annulation, propre à ce traitement. Il est enregistré AVANT root.update()
-        # et le thread, pour qu'un second clic soit traité comme une demande d'abandon
-        cancel = threading.Event()
-        self._cancel_event = cancel
-
-        # Mise à jour du bouton en mode "Abandon"
-        self._btn_ai.configure(text="⛔ Abandonner le traitement")
-        self._root.update()
-
-        # Nouveau traitement : console vidée AVANT le premier log du traitement. L'effacement passe
-        # par la même file que l'affichage (root.after) : les logs du thread s'afficheront après lui
-        self._append_to_console("", clear=True)
-
-        def finish(success: bool) -> None:
-            """Fin du traitement, exécutée sur le thread principal (via root.after)"""
-            # Traitement abandonné (et peut-être remplacé par un autre) : l'interface est déjà à jour
-            if self._cancel_event is not cancel:
-                return
-            self._cancel_event = None
-            _logger.info("🔄 FIN: Réinitialisation du bouton de contrôle")
-            self._btn_ai.configure(text="🤖 Traiter la prise de note", state="normal")
-            if success:
-                self._status_label.config(text="✅ Traitement IA terminé !")
-            else:
-                self._status_label.config(text="❌ Échec du traitement IA (voir les logs)")
-
-        # Lancer le traitement dans un thread pour ne pas bloquer la GUI
-        # Ce thread ne modifie aucune variable d'état : il confie la fin au thread principal
-        def run_processing() -> None:
-            success = False
-            try:
-                success = self._process_note(cancel)
-            except Exception as e:
-                if not cancel.is_set():
-                    _logger.info(f"❌ Erreur critique IA: {e}")
-            finally:
-                self._in_ui_thread(lambda: finish(success))
-
-        thread = threading.Thread(target=run_processing, daemon=True)
-        thread.start()
+    # --- Bouton sans état ---
 
     def _open_reports_folder(self) -> None:
         """Ouvre le dossier des rapports PDF dans l'explorateur Windows"""
@@ -495,76 +218,10 @@ class ControlPanel:
         # Ouvrir le dossier dans l'explorateur Windows
         try:
             subprocess.Popen(f'explorer "{reports_path}"')
-            self._status_label.config(text="📂 Dossier reports ouvert")
+            self.show_status("📂 Dossier reports ouvert")
         except Exception as e:
-            self._status_label.config(text=f"❌ Erreur ouverture: {str(e)[:20]}")
+            self.show_status(f"❌ Erreur ouverture: {str(e)[:20]}")
             _logger.info(f"❌ Erreur ouverture dossier: {e}")
-
-    # --- Fermeture ---
-
-    def _quit(self) -> None:
-        """Ferme le panneau de contrôle et termine le processus"""
-        _logger.info("👋 Fermeture de l'application...")
-        self._root.destroy()
-        os._exit(0)  # Force la fermeture complète
-
-    def _close_editor_then_quit(self) -> None:
-        """
-        Demande à l'éditeur React de fermer sa fenêtre (closeEditor), attend sa confirmation
-        (on_editor_close ou retour de editor_window.start() marquent l'éditeur fermé), puis quitte.
-        Sous Windows, Chrome s'arrête avec sa dernière fenêtre. Au-delà du délai, on quitte quand même.
-        """
-        _logger.info("📝 Fermeture de l'éditeur...")
-        try:
-            self._editor_window.close()
-        except Exception as e:
-            # Bundle sans closeEditor, ou connexion déjà fermée
-            _logger.info(f"⚠️ Impossible de demander la fermeture de l'éditeur : {e}")
-            self._quit()
-            return
-
-        # Au-delà, on quitte sans attendre la confirmation de l'éditeur
-        close_deadline = time.time() + CLOSE_EDITOR_TIMEOUT_S
-
-        # Sondage par root.after et non Event.wait : on est sur le thread de l'interface, qu'il ne faut pas bloquer
-        def wait_for_close() -> None:
-            if not self._editor_state.is_open:
-                _logger.info("✅ Éditeur fermé")
-                self._quit()
-            elif time.time() >= close_deadline:
-                _logger.info("⚠️ L'éditeur n'a pas confirmé sa fermeture : fermeture de l'application quand même")
-                self._quit()
-            else:
-                self._root.after(100, wait_for_close)
-
-        self._root.after(100, wait_for_close)
-
-    def on_closing(self) -> None:
-        """
-        Intercepte la fermeture de la fenêtre GUI (X ou bouton Quitter).
-        Si l'éditeur est ouvert, demande confirmation puis le ferme avant de quitter.
-        """
-        if self._closing:
-            return  # Fermeture de l'éditeur déjà demandée, en attente de sa confirmation
-
-        if self._editor_state.is_open:
-            result = messagebox.askyesno(
-                "PromptoDYS - Éditeur ouvert",
-                "L'éditeur est ouvert.\n\n"
-                "Fermer l'application fermera aussi l'éditeur.\n"
-                "Pensez à sauvegarder votre document.\n\n"
-                "Voulez-vous continuer ?",
-                icon="warning",
-            )
-            if not result:
-                _logger.info("⚠️ Fermeture annulée")
-                return
-            self._closing = True
-            self._close_editor_then_quit()
-            return
-
-        # Pas d'éditeur ouvert, fermeture immédiate
-        self._quit()
 
     # --- Défilement de la fenêtre ---
 
@@ -619,7 +276,7 @@ class ControlPanel:
         root.resizable(True, True)  # Fenêtre redimensionnable
 
         # Intercepter la fermeture de la fenêtre (X rouge)
-        root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
         # --- Icône de la fenêtre ---
         try:
@@ -687,7 +344,7 @@ class ControlPanel:
         btn1 = tk.Button(
             main_frame,
             text="📝 Ouvrir l'Éditeur",
-            command=self._open_editor,
+            command=self._on_open_editor,
             font=("Segoe UI", 16, "bold"),
             bg="#FFFFFF",  # Fond blanc
             fg="#1F1F1F",  # Texte noir
@@ -718,7 +375,7 @@ class ControlPanel:
         btn_save = tk.Button(
             doc_frame,
             text="💾 Sauvegarder",
-            command=self._save_document,
+            command=self._on_save_document,
             font=("Segoe UI", 13, "bold"),
             bg="#FFFFFF",
             fg="#1F1F1F",
@@ -740,7 +397,7 @@ class ControlPanel:
         btn_open = tk.Button(
             doc_frame,
             text="📂 Ouvrir",
-            command=self._open_document,
+            command=self._on_open_document,
             font=("Segoe UI", 13, "bold"),
             bg="#FFFFFF",
             fg="#1F1F1F",
@@ -762,7 +419,7 @@ class ControlPanel:
         btn_ai = tk.Button(
             main_frame,
             text="🤖 Traiter la prise de note",
-            command=self._toggle_processing,
+            command=self._on_toggle_processing,
             font=("Segoe UI", 16, "bold"),
             bg="#FFFFFF",
             fg="#1F1F1F",
@@ -843,7 +500,7 @@ class ControlPanel:
         btn_quit = tk.Button(
             main_frame,
             text="❌ Quitter",
-            command=self.on_closing,
+            command=self._on_closing,
             font=("Segoe UI", 14),
             bg="#F5F5F5",
             fg="#666666",
@@ -877,6 +534,9 @@ class ControlPanel:
     def run(self) -> None:
         """Redirige stdout et stderr vers la console du panneau, affiche la fenêtre
         et lance la boucle principale (bloquant)"""
+        if getattr(self, "_controller", None) is None:
+            raise RuntimeError("ControlPanel.run() appelé avant set_controller()")
+
         # --- Redirection de stdout ET stderr vers la GUI ---
         # Rediriger stdout (prints normaux)
         sys.stdout = RedirectText(self._write_to_console, is_stderr=False)

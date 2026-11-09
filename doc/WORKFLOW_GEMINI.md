@@ -2,7 +2,7 @@
 
 > Document de référence sur le cœur de PromptoDYS : comment une note d'élève part de l'éditeur, est corrigée par Google Gemini, revient dans l'éditeur et finit archivée en PDF.
 >
-> Dernière mise à jour : 09/11/2026. Code concerné : le cas d'usage `process_note()` de [promptodys/domain/processing.py](../promptodys/domain/processing.py) et les règles de [promptodys/domain/note.py](../promptodys/domain/note.py), appelés par `run_processing()` dans [promptodys/app.py](../promptodys/app.py), le bouton du panneau de [promptodys/presentation/control_panel.py](../promptodys/presentation/control_panel.py), les adaptateurs de [promptodys/infrastructure/](../promptodys/infrastructure/), et le template [promptodys.prompt](../promptodys.prompt). Pour la vue d'ensemble des deux projets, voir [ARCHITECTURE.md](ARCHITECTURE.md).
+> Dernière mise à jour : 09/11/2026. Code concerné : le cas d'usage `process_note()` de [promptodys/domain/processing.py](../promptodys/domain/processing.py) et les règles de [promptodys/domain/note.py](../promptodys/domain/note.py), appelés par `run_processing()` dans [promptodys/app.py](../promptodys/app.py), le bouton du panneau de [promptodys/presentation/panel_controller.py](../promptodys/presentation/panel_controller.py), les adaptateurs de [promptodys/infrastructure/](../promptodys/infrastructure/), et le template [promptodys.prompt](../promptodys.prompt). Pour la vue d'ensemble des deux projets, voir [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
@@ -59,7 +59,7 @@ flowchart TD
 
 ## 2. Déclenchement et cycle de vie du bouton
 
-Le bouton **Traiter la prise de note** a deux rôles selon l'état : lancer le traitement, ou l'abandonner s'il est en cours. L'état repose sur un jeton d'annulation (`threading.Event`) propre à chaque traitement. Le bouton est géré par `ControlPanel._toggle_processing()` ([control_panel.py](../promptodys/presentation/control_panel.py)) ; le panneau reçoit `run_processing`, avec l'éditeur déjà fixé, sous le nom `process_note`.
+Le bouton **Traiter la prise de note** a deux rôles selon l'état : lancer le traitement, ou l'abandonner s'il est en cours. L'état repose sur un jeton d'annulation (`threading.Event`) propre à chaque traitement. Le bouton est géré par `PanelController.toggle_processing()` ([panel_controller.py](../promptodys/presentation/panel_controller.py)) ; le panneau reçoit `run_processing`, avec l'éditeur déjà fixé, sous le nom `process_note`.
 
 | Élément | Rôle |
 |---|---|

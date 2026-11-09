@@ -150,9 +150,9 @@ def wait_for_free_port(port: int, timeout: float = 5.0) -> bool:
 
 
 class EelWindow:
-    """Fenêtre de l'éditeur, telle que le panneau de contrôle la manipule (EditorWindow de presentation).
-    N'hérite pas du Protocol : l'infrastructure n'importe pas presentation, la compatibilité est
-    vérifiée par pyright à l'assemblage (promptodys.app)."""
+    """Fenêtre de l'éditeur, telle que le panneau de contrôle la manipule
+    (EditorWindow de presentation.panel_controller). N'hérite pas du Protocol : l'infrastructure
+    n'importe pas presentation, la compatibilité est vérifiée par pyright à l'assemblage (promptodys.app)."""
 
     def __init__(self, port: int, chrome_profile_dir: str) -> None:
         self.port = port
