@@ -19,6 +19,7 @@ from datetime import datetime
 from promptodys.domain import ports, processing
 from promptodys.infrastructure import config, disk_document_store, eel_editor, gemini_model, pdf_report
 from promptodys.presentation.control_panel import ControlPanel
+from promptodys.presentation.panel_controller import PanelController
 
 # --- Journalisation provisoire (remplacée par les handlers de logging avec R7) ---
 
@@ -155,19 +156,25 @@ def main() -> None:
     eel_editor.init(web_folder)
     log_message("✅ Eel initialisé, prêt à lancer l'éditeur")
 
-    # Construire le panneau de contrôle, puis lui transmettre les événements de React
+    # Construire le panneau de contrôle (la vue) et son contrôleur, puis transmettre au contrôleur
+    # les clics du panneau et les événements de React. Le contrôleur est construit ici, sur le thread
+    # de l'interface : c'est le seul autorisé à modifier son état.
     log_message("🖥️ Lancement du panneau de contrôle...")
-    editor = eel_editor.EelEditor()
     panel = ControlPanel(
+        reports_dir=config.REPORTS_DIR,
+        icon_path=os.path.join(config.RESOURCES_DIR, "assets", "prompto.png"),
+    )
+    editor = eel_editor.EelEditor()
+    controller = PanelController(
+        view=panel,
         editor=editor,
         store=disk_document_store.DiskDocumentStore(),
         editor_window=eel_editor.EelWindow(config.EEL_PORT, config.CHROME_PROFILE_DIR),
         process_note=functools.partial(run_processing, editor),
         documents_dir=config.PROMPTO_DOCS_DIR,
-        reports_dir=config.REPORTS_DIR,
-        icon_path=os.path.join(config.RESOURCES_DIR, "assets", "prompto.png"),
     )
-    eel_editor.set_event_handlers(panel.on_editor_open, panel.on_editor_close)
+    panel.set_controller(controller)
+    eel_editor.set_event_handlers(controller.on_editor_open, controller.on_editor_close)
 
     # Lancer la GUI de contrôle (BLOQUANT - boucle principale)
     panel.run()

@@ -4,8 +4,8 @@
   (panel_controller.py), qui pilote la fenêtre par les méthodes de PanelView ;
 - RedirectText : affiche stdout et stderr dans la console du panneau.
 
-Le panneau reçoit toutes ses dépendances de main() : il n'importe ni l'infrastructure, ni eel, google
-ou reportlab (contrat import-linter).
+Le panneau reçoit toutes ses dépendances de main(), son contrôleur compris (set_controller) : il n'importe
+ni l'infrastructure, ni eel, google ou reportlab (contrat import-linter).
 """
 
 import contextlib
@@ -13,15 +13,13 @@ import logging
 import os
 import subprocess  # Pour ouvrir le dossier reports
 import sys
-import threading
 import tkinter as tk
 from collections.abc import Callable
 from tkinter import filedialog, messagebox, ttk
 
 import sv_ttk  # Thème Sun Valley (Windows 11 look)
 
-from promptodys.domain import ports
-from promptodys.presentation.panel_controller import EditorWindow, PanelController
+from promptodys.presentation.panel_controller import PanelController
 
 _logger = logging.getLogger(__name__)
 
@@ -88,47 +86,46 @@ class ControlPanel:
     Panneau de contrôle avec Tkinter + sv_ttk (thème Windows 11) : ouvrir l'éditeur, sauvegarder
     et ouvrir un document, lancer ou abandonner le traitement IA, voir les rapports, quitter.
 
-    C'est la vue : les boutons et les signaux de React sont transmis à son PanelController, qui la pilote
-    en retour par les méthodes de PanelView (show_status, set_processing, dialogues, after, quit...).
+    C'est la vue : les boutons sont transmis au PanelController, qui la pilote en retour par les
+    méthodes de PanelView (show_status, set_processing, dialogues, after, quit...).
 
-    __init__ construit la fenêtre (cachée), run() l'affiche et lance la boucle principale.
+    __init__ construit la fenêtre (cachée). main() crée ensuite le contrôleur et le donne au panneau
+    avec set_controller(). run() affiche la fenêtre et lance la boucle principale.
     """
 
-    def __init__(
-        self,
-        editor: ports.Editor,
-        store: ports.DocumentStore,
-        editor_window: EditorWindow,
-        process_note: Callable[[threading.Event], bool],
-        documents_dir: str,
-        reports_dir: str,
-        icon_path: str,
-    ) -> None:
+    # Donné par set_controller(), avant run() ; les boutons le lisent au moment du clic
+    _controller: PanelController
+
+    def __init__(self, reports_dir: str, icon_path: str) -> None:
         self._reports_dir = reports_dir
         self._icon_path = icon_path
-
-        # Construit par le thread de l'interface, comme le panneau : seul autorisé à modifier son état
-        self._controller = PanelController(
-            view=self,
-            editor=editor,
-            store=store,
-            editor_window=editor_window,
-            process_note=process_note,
-            documents_dir=documents_dir,
-        )
 
         _logger.info("🖥️ Démarrage du panneau de contrôle GUI...")
         self._build()
 
-    # --- Événements de React (appelés depuis un thread d'Eel), transmis au contrôleur ---
+    def set_controller(self, controller: PanelController) -> None:
+        """Garde le contrôleur auquel les boutons transmettent les clics"""
+        self._controller = controller
 
-    def on_editor_open(self) -> None:
-        """React signale que l'éditeur est prêt"""
-        self._controller.on_editor_open()
+    # --- Clics des boutons, transmis au contrôleur ---
+    # Des méthodes, et non command=self._controller.xxx : _build() est appelé avant set_controller(),
+    # le contrôleur est donc lu au moment du clic
 
-    def on_editor_close(self) -> None:
-        """React signale la fermeture de l'éditeur"""
-        self._controller.on_editor_close()
+    def _on_open_editor(self) -> None:
+        self._controller.open_editor()
+
+    def _on_save_document(self) -> None:
+        self._controller.save_document()
+
+    def _on_open_document(self) -> None:
+        self._controller.open_document()
+
+    def _on_toggle_processing(self) -> None:
+        self._controller.toggle_processing()
+
+    def _on_closing(self) -> None:
+        """Bouton Quitter et croix de la fenêtre"""
+        self._controller.on_closing()
 
     # --- PanelView : ce que le contrôleur demande à la fenêtre ---
 
@@ -279,7 +276,7 @@ class ControlPanel:
         root.resizable(True, True)  # Fenêtre redimensionnable
 
         # Intercepter la fermeture de la fenêtre (X rouge)
-        root.protocol("WM_DELETE_WINDOW", self._controller.on_closing)
+        root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
         # --- Icône de la fenêtre ---
         try:
@@ -347,7 +344,7 @@ class ControlPanel:
         btn1 = tk.Button(
             main_frame,
             text="📝 Ouvrir l'Éditeur",
-            command=self._controller.open_editor,
+            command=self._on_open_editor,
             font=("Segoe UI", 16, "bold"),
             bg="#FFFFFF",  # Fond blanc
             fg="#1F1F1F",  # Texte noir
@@ -378,7 +375,7 @@ class ControlPanel:
         btn_save = tk.Button(
             doc_frame,
             text="💾 Sauvegarder",
-            command=self._controller.save_document,
+            command=self._on_save_document,
             font=("Segoe UI", 13, "bold"),
             bg="#FFFFFF",
             fg="#1F1F1F",
@@ -400,7 +397,7 @@ class ControlPanel:
         btn_open = tk.Button(
             doc_frame,
             text="📂 Ouvrir",
-            command=self._controller.open_document,
+            command=self._on_open_document,
             font=("Segoe UI", 13, "bold"),
             bg="#FFFFFF",
             fg="#1F1F1F",
@@ -422,7 +419,7 @@ class ControlPanel:
         btn_ai = tk.Button(
             main_frame,
             text="🤖 Traiter la prise de note",
-            command=self._controller.toggle_processing,
+            command=self._on_toggle_processing,
             font=("Segoe UI", 16, "bold"),
             bg="#FFFFFF",
             fg="#1F1F1F",
@@ -503,7 +500,7 @@ class ControlPanel:
         btn_quit = tk.Button(
             main_frame,
             text="❌ Quitter",
-            command=self._controller.on_closing,
+            command=self._on_closing,
             font=("Segoe UI", 14),
             bg="#F5F5F5",
             fg="#666666",
@@ -537,6 +534,9 @@ class ControlPanel:
     def run(self) -> None:
         """Redirige stdout et stderr vers la console du panneau, affiche la fenêtre
         et lance la boucle principale (bloquant)"""
+        if getattr(self, "_controller", None) is None:
+            raise RuntimeError("ControlPanel.run() appelé avant set_controller()")
+
         # --- Redirection de stdout ET stderr vers la GUI ---
         # Rediriger stdout (prints normaux)
         sys.stdout = RedirectText(self._write_to_console, is_stderr=False)
