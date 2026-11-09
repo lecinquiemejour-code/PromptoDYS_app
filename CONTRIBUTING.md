@@ -448,7 +448,7 @@ Voir migration guide dans docs/MIGRATION.md"
 
 ## 🧪 Tests
 
-Les tests automatisés utilisent [pytest](https://docs.pytest.org/), installé avec les dépendances de dev. Ils sont dans le dossier `tests/` et se lancent sans réseau. Seuls les tests du panneau (`tests/presentation/`) ont besoin d'un écran : ils créent des fenêtres Tk cachées, et sont sautés si aucun écran n'est disponible :
+Les tests automatisés utilisent [pytest](https://docs.pytest.org/), installé avec les dépendances de dev. Ils sont dans le dossier `tests/` et se lancent sans réseau ni écran. Le panneau Tk lui-même n'a pas de tests automatisés : sous Windows (CI), créer plusieurs fenêtres Tk dans un même processus n'est pas fiable (lectures de fichiers Tcl de sv_ttk qui échouent au hasard). Son état de l'éditeur est testé sans Tk (`presentation/test_editor_state.py`) :
 
 ```bash
 uv run pytest
@@ -466,7 +466,6 @@ uv run pytest
 | `infrastructure/test_eel_editor.py` | Adaptateur `EelEditor` et `EelWindow` (Eel simulé), événements de React, port du serveur |
 | `infrastructure/test_gemini_model.py` | Adaptateur `GeminiModel` (Gemini simulé) |
 | `infrastructure/test_pdf_report.py` | Rapport PDF ReportLab |
-| `presentation/test_control_panel.py` | Panneau de contrôle (fenêtre cachée) : état de l'éditeur, double clic, abandon du traitement, fermeture, avec éditeur, fenêtre et traitement simulés |
 | `test_app.py` | Assemblage du traitement IA, `run_processing()` (étapes, rapport, abandon) avec Gemini, l'éditeur et le PDF simulés |
 | `test_import.py` | Importer `askGeminiPrompto.py`, une couche ou le module d'assemblage ne crée aucun dossier (ni fenêtre, pour la présentation) |
 | `test_logs.py` | Les logs du paquet arrivent dans la console et le rapport |
