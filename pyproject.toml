@@ -70,9 +70,14 @@ type = "forbidden"
 source_modules = ["promptodys.infrastructure"]
 forbidden_modules = ["promptodys.presentation"]
 
+[[tool.importlinter.contracts]]
+name = "aucune couche n'importe l'assemblage (promptodys.app)"
+type = "forbidden"
+source_modules = ["promptodys.domain", "promptodys.infrastructure", "promptodys.presentation"]
+forbidden_modules = ["promptodys.app"]
+
 [tool.pyright]
-# Le paquet seulement : askGeminiPrompto.py et les tests ne sont pas annotés.
-# Chaque couche entre dans la vérification quand elle sort du monolithe.
+# Le paquet seulement : askGeminiPrompto.py (simple enveloppe de promptodys.app.main) et les tests ne sont pas annotés.
 # Lancé par uv run, qui active .venv : pyright y trouve l'interpréteur et les bibliothèques.
 include = ["promptodys"]
 typeCheckingMode = "standard"
