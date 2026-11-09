@@ -109,11 +109,12 @@ L'application ouvre un panneau de contrôle, depuis lequel on lance l'éditeur M
 
 ```
 PromptoDYS/
-├── askGeminiPrompto.py       # Script principal (point d'entrée)
-├── promptodys/               # Paquet découpé en couches (en cours de migration)
+├── askGeminiPrompto.py       # Point d'entrée (enveloppe de promptodys.app.main)
+├── promptodys/               # Code de l'application, en trois couches
+│   ├── app.py                # Assemblage des couches (main) et traitement IA
 │   ├── domain/               # Règles métier, cas d'usage et ports, sans Tk, Eel ni Gemini
-│   ├── infrastructure/       # Adaptateurs Gemini, Eel, disque, PDF (à venir)
-│   └── presentation/         # Panneau de contrôle Tkinter (à venir)
+│   ├── infrastructure/       # Adaptateurs Gemini, Eel, disque, PDF, configuration
+│   └── presentation/         # Panneau de contrôle Tkinter
 ├── tests/                    # Tests pytest
 ├── pyproject.toml            # Dépendances directes et configuration uv
 ├── uv.lock                   # Versions figées de toutes les dépendances (généré par uv)

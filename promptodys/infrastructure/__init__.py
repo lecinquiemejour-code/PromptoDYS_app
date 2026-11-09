@@ -1,4 +1,4 @@
-"""Adaptateurs vers Gemini, Eel, le disque et le PDF.
+"""Adaptateurs vers Gemini, Eel, le disque et le PDF, et configuration de l'application.
 
-Vide pour l'instant : les adaptateurs sont encore dans askGeminiPrompto.py (R5, étape 2).
+N'importe pas la présentation (contrat import-linter).
 """

@@ -2,7 +2,7 @@
 
 > Document de référence sur le cœur de PromptoDYS : comment une note d'élève part de l'éditeur, est corrigée par Google Gemini, revient dans l'éditeur et finit archivée en PDF.
 >
-> Dernière mise à jour : 03/11/2026. Code concerné : le cas d'usage `process_note()` de [promptodys/domain/processing.py](../promptodys/domain/processing.py) et les règles de [promptodys/domain/note.py](../promptodys/domain/note.py), appelés par `traitement_gemini()` dans [askGeminiPrompto.py](../askGeminiPrompto.py), les adaptateurs de [promptodys/infrastructure/](../promptodys/infrastructure/), et le template [promptodys.prompt](../promptodys.prompt). Pour la vue d'ensemble des deux projets, voir [ARCHITECTURE.md](ARCHITECTURE.md).
+> Dernière mise à jour : 09/11/2026. Code concerné : le cas d'usage `process_note()` de [promptodys/domain/processing.py](../promptodys/domain/processing.py) et les règles de [promptodys/domain/note.py](../promptodys/domain/note.py), appelés par `run_processing()` dans [promptodys/app.py](../promptodys/app.py), le bouton du panneau de [promptodys/presentation/control_panel.py](../promptodys/presentation/control_panel.py), les adaptateurs de [promptodys/infrastructure/](../promptodys/infrastructure/), et le template [promptodys.prompt](../promptodys.prompt). Pour la vue d'ensemble des deux projets, voir [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
@@ -29,7 +29,7 @@ Le traitement suit neuf étapes numérotées, visibles telles quelles dans les l
 
 Le code est réparti en deux niveaux :
 
-- **`traitement_gemini()`** ([askGeminiPrompto.py](../askGeminiPrompto.py)) fait ce qui dépend de l'infrastructure : étapes 1 (client Gemini, [gemini_model.py](../promptodys/infrastructure/gemini_model.py)), 2 (lecture de `promptodys.prompt`, [config.py](../promptodys/infrastructure/config.py)) et 9 (rapport PDF, [pdf_report.py](../promptodys/infrastructure/pdf_report.py)).
+- **`run_processing()`** ([promptodys/app.py](../promptodys/app.py), le module d'assemblage) fait ce qui dépend de l'infrastructure : étapes 1 (client Gemini, [gemini_model.py](../promptodys/infrastructure/gemini_model.py)), 2 (lecture de `promptodys.prompt`, [config.py](../promptodys/infrastructure/config.py)) et 9 (rapport PDF, [pdf_report.py](../promptodys/infrastructure/pdf_report.py)).
 - **`process_note()`** ([promptodys/domain/processing.py](../promptodys/domain/processing.py)), le cas d'usage du domaine, fait les étapes 3 à 8. Il ne connaît ni Eel, ni Gemini, ni Tkinter : il reçoit l'éditeur et le modèle d'IA par leurs ports (`ports.Editor`, `ports.AIModel`), et renvoie un `ProcessingResult` dont le statut vaut `COMPLETED`, `FAILED` ou `CANCELLED`.
 
 ```mermaid
@@ -59,13 +59,13 @@ flowchart TD
 
 ## 2. Déclenchement et cycle de vie du bouton
 
-Le bouton **Traiter la prise de note** a deux rôles selon l'état : lancer le traitement, ou l'abandonner s'il est en cours. L'état repose sur un jeton d'annulation (`threading.Event`) propre à chaque traitement.
+Le bouton **Traiter la prise de note** a deux rôles selon l'état : lancer le traitement, ou l'abandonner s'il est en cours. L'état repose sur un jeton d'annulation (`threading.Event`) propre à chaque traitement. Le bouton est géré par `ControlPanel._toggle_processing()` ([control_panel.py](../promptodys/presentation/control_panel.py)) ; le panneau reçoit `run_processing`, avec l'éditeur déjà fixé, sous le nom `process_note`.
 
 | Élément | Rôle |
 |---|---|
-| `annulation` | Jeton créé à chaque lancement et passé à `traitement_gemini(annulation)`. Le thread de traitement ne lit que celui-là |
-| `annulation_en_cours` | Variable globale : jeton du traitement en cours, `None` s'il n'y en a pas. Lue et modifiée uniquement par le thread principal |
-| `terminer_traitement(success)` | Fin du traitement, exécutée sur le thread principal : remet le bouton à zéro et affiche « terminé » ou « échec » |
+| `cancel` | Jeton créé à chaque lancement et passé à `run_processing(editor, cancel)`. Le thread de traitement ne lit que celui-là |
+| `_cancel_event` | Attribut du panneau : jeton du traitement en cours, `None` s'il n'y en a pas. Lu et modifié uniquement par le thread principal |
+| `finish(success)` | Fin du traitement, exécutée sur le thread principal : remet le bouton à zéro et affiche « terminé » ou « échec » |
 
 ```mermaid
 stateDiagram-v2
@@ -73,12 +73,12 @@ stateDiagram-v2
     Pret --> EnCours : clic, éditeur ouvert<br/>(nouveau jeton)
     Pret --> Pret : clic, éditeur fermé<br/>(message d'avertissement)
     EnCours --> Pret : clic "Abandonner"<br/>(jeton déclenché, immédiat)
-    EnCours --> Pret : traitement terminé ou échec<br/>(terminer_traitement)
+    EnCours --> Pret : traitement terminé ou échec<br/>(finish)
 ```
 
-**Pourquoi un thread séparé :** Tkinter fige la fenêtre si une opération longue tourne dans la boucle principale. Le traitement s'exécute donc dans un thread, et toute mise à jour de l'interface passe par `root.after(0, ...)` pour revenir sur le thread principal. Le thread de traitement ne modifie aucune variable d'état : il confie la fin du traitement à `terminer_traitement`.
+**Pourquoi un thread séparé :** Tkinter fige la fenêtre si une opération longue tourne dans la boucle principale. Le traitement s'exécute donc dans un thread, et toute mise à jour de l'interface passe par `_in_ui_thread()` (aujourd'hui `root.after(0, ...)`) pour revenir sur le thread principal. Le thread de traitement ne modifie aucune variable d'état : il confie la fin du traitement à `finish`.
 
-**L'abandon immédiat :** un thread qui attend une réponse de Gemini ne peut pas être interrompu. Au clic sur « Abandonner », le thread principal déclenche donc le jeton du traitement, remet `annulation_en_cours` à `None` et libère le bouton sans attendre le thread. Si ce thread se réveille plus tard, il voit son jeton déclenché et s'arrête sans injecter dans l'éditeur ni écrire de PDF. À sa fin, `terminer_traitement` constate qu'il n'est plus le traitement en cours et ne touche pas à l'interface, même si un nouveau traitement a été lancé entre-temps.
+**L'abandon immédiat :** un thread qui attend une réponse de Gemini ne peut pas être interrompu. Au clic sur « Abandonner », le thread principal déclenche donc le jeton du traitement, remet `_cancel_event` à `None` et libère le bouton sans attendre le thread. Si ce thread se réveille plus tard, il voit son jeton déclenché et s'arrête sans injecter dans l'éditeur ni écrire de PDF. À sa fin, `finish` constate qu'il n'est plus le traitement en cours et ne touche pas à l'interface, même si un nouveau traitement a été lancé entre-temps.
 
 **Limite :** si la connexion meurt sans prévenir, le thread abandonné reste bloqué jusqu'à la fermeture de l'application. Il est `daemon`, inactif, et n'écrit plus rien.
 
@@ -184,7 +184,7 @@ sequenceDiagram
     else jeton intact
         TK->>TK: étapes 6 à 9
     end
-    TK->>MAIN: root.after → terminer_traitement(success)
+    TK->>MAIN: root.after → finish(success)
 ```
 
 Deux accumulateurs distincts sont remplis pendant le streaming :
@@ -192,7 +192,7 @@ Deux accumulateurs distincts sont remplis pendant le streaming :
 - **`answer`** : uniquement le texte de réponse, sans les réflexions. C'est lui qui sera analysé pour extraire la note.
 - **`ai_stream`** : réflexions et réponse mélangées, dans l'ordre d'arrivée. C'est lui qui sera archivé dans le PDF (champ `ai_stream` du `ProcessingResult`).
 
-**Si l'abandon est détecté**, au début d'un morceau ou à la sortie du flux (abandon pendant l'attente du dernier morceau), `process_note()` renvoie le statut `CANCELLED` et `traitement_gemini()` renvoie `False`, sans injecter ni écrire de PDF : le contenu de l'éditeur reste inchangé. Le bouton, lui, a déjà été libéré au moment du clic (voir [§2](#2-déclenchement-et-cycle-de-vie-du-bouton)). Dans les autres cas, succès ou erreur, `terminer_traitement` remet le bouton à l'état Prêt.
+**Si l'abandon est détecté**, au début d'un morceau ou à la sortie du flux (abandon pendant l'attente du dernier morceau), `process_note()` renvoie le statut `CANCELLED` et `run_processing()` renvoie `False`, sans injecter ni écrire de PDF : le contenu de l'éditeur reste inchangé. Le bouton, lui, a déjà été libéré au moment du clic (voir [§2](#2-déclenchement-et-cycle-de-vie-du-bouton)). Dans les autres cas, succès ou erreur, `finish` remet le bouton à l'état Prêt.
 
 ---
 
@@ -360,7 +360,7 @@ Si la génération du PDF échoue, le traitement n'est pas considéré comme rat
 | Échec d'injection dans l'éditeur | Exception Eel | Message d'échec, le PDF est quand même généré |
 | Échec de génération PDF | Exception ReportLab | Message, la note reste dans l'éditeur |
 
-Hors abandon, c'est `terminer_traitement`, sur le thread principal, qui remet le bouton à l'état Prêt et affiche « ✅ Traitement IA terminé ! » ou « ❌ Échec du traitement IA (voir les logs) ». Aucune exception ne remonte jusqu'à Tkinter.
+Hors abandon, c'est `finish`, sur le thread principal, qui remet le bouton à l'état Prêt et affiche « ✅ Traitement IA terminé ! » ou « ❌ Échec du traitement IA (voir les logs) ». Aucune exception ne remonte jusqu'à Tkinter.
 
 ---
 
@@ -373,7 +373,7 @@ flowchart LR
     DOM["Domaine et infrastructure :<br/>_logger.info(msg), module logging"] --> BRIDGE["LogMessageHandler<br/>pont provisoire"]
     BRIDGE --> LM
     LM["log_message(msg)"] --> PRINT["print()"]
-    LM --> LIST["logs_complets[]<br/>liste en mémoire"]
+    LM --> LIST["report_logs[]<br/>liste en mémoire"]
     PRINT --> REDIR["RedirectText<br/>stdout et stderr détournés"]
     REDIR --> TERM["Console système<br/>si disponible"]
     REDIR --> GUI["Zone Console / Logs<br/>du panneau Tkinter"]
@@ -381,11 +381,11 @@ flowchart LR
     DOM --> STEPS["ProcessingResult.step_logs<br/>étapes 3 et 4"] --> PDF
 ```
 
-- **Le domaine et l'infrastructure** (`promptodys/`) journalisent avec le module standard `logging` (`_logger = logging.getLogger(__name__)`), sans connaître la console ni le rapport. Exception provisoire : les traces détaillées de `EelEditor` et `DiskDocumentStore` passent encore par `print()`, donc vont à la console sans entrer dans le rapport.
-- **`LogMessageHandler`**, installé par `configure_logger()` au démarrage, renvoie chaque message du logger `promptodys` vers `log_message()`, message seul, sans niveau ni heure.
-- **`log_message()`** écrit dans la console et ajoute à la liste `logs_complets`.
-- **`RedirectText`** détourne `sys.stdout` et `sys.stderr` vers la zone de texte Tkinter, en gardant une copie vers la vraie console. Les exceptions non prévues apparaissent donc aussi dans l'interface.
-- **`logs_complets`** et la console sont vidés au tout début de chaque traitement. Le PDF reçoit les logs de préparation : une copie de `logs_complets` prise après l'étape 2, puis les logs des étapes 3 et 4 renvoyés par `process_note()` dans `step_logs`. La section 3 du rapport contient donc la préparation, pas le streaming, qui a sa propre section.
+- **Les trois couches** (`promptodys/`) journalisent avec le module standard `logging` (`_logger = logging.getLogger(__name__)`), sans connaître la console ni le rapport. Exception provisoire : les traces détaillées de `EelEditor` et `DiskDocumentStore` passent encore par `print()`, donc vont à la console sans entrer dans le rapport.
+- **`LogMessageHandler`**, installé par `configure_logger()` au démarrage (tous deux dans [promptodys/app.py](../promptodys/app.py)), renvoie chaque message du logger `promptodys` vers `log_message()`, message seul, sans niveau ni heure.
+- **`log_message()`** écrit dans la console et ajoute à la liste `report_logs`. `run_processing()` l'appelle directement pour ses étapes 1, 2 et 9.
+- **`RedirectText`** ([control_panel.py](../promptodys/presentation/control_panel.py)), installé par `ControlPanel.run()`, détourne `sys.stdout` et `sys.stderr` vers la zone de texte Tkinter, en gardant une copie vers la vraie console. Les exceptions non prévues apparaissent donc aussi dans l'interface.
+- **La console et `report_logs`** sont vidés au tout début de chaque traitement : la console par le panneau, juste avant de lancer le thread (par la même file `root.after` que l'affichage des logs), `report_logs` par `run_processing()` avant son premier log. Le PDF reçoit les logs de préparation : une copie de `report_logs` prise après l'étape 2, puis les logs des étapes 3 et 4 renvoyés par `process_note()` dans `step_logs`. La section 3 du rapport contient donc la préparation, pas le streaming, qui a sa propre section.
 
 ---
 

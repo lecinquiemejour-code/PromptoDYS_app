@@ -2,7 +2,7 @@
 
 > Document de référence pour comprendre comment les deux projets (application Python et éditeur React) coopèrent, du clic de l'élève jusqu'au rapport PDF.
 >
-> Dernière mise à jour : 03/11/2026. Les schémas sont en Mermaid et se rendent directement dans GitHub, VS Code et la plupart des visionneuses Markdown.
+> Dernière mise à jour : 09/11/2026. Les schémas sont en Mermaid et se rendent directement dans GitHub, VS Code et la plupart des visionneuses Markdown.
 
 ---
 
@@ -40,7 +40,7 @@ Python et l'éditeur ne partagent pas de mémoire : ils se parlent par un tuyau 
 
 ```mermaid
 flowchart LR
-    subgraph PY["Processus Python : askGeminiPrompto.py + paquet promptodys/"]
+    subgraph PY["Processus Python : paquet promptodys/"]
         TK["Panneau de contrôle Tkinter<br/>Ouvrir l'éditeur, Sauvegarder, Ouvrir,<br/>Traiter la note, Voir les rapports"]
         EEL["Serveur Eel<br/>port 8080<br/>sert build_web/ et fait le pont"]
         IA["Module Gemini<br/>prompt + streaming"]
@@ -71,22 +71,25 @@ flowchart LR
 
 ### Rôle de chaque acteur
 
-- **Panneau Tkinter** ([askGeminiPrompto.py](../askGeminiPrompto.py), fonction `gui_control_panel`) : chef d'orchestre. Cinq boutons, une barre de statut, une console de logs. Chaque action longue tourne dans un thread séparé pour ne pas figer la fenêtre.
+- **Panneau Tkinter** ([promptodys/presentation/control_panel.py](../promptodys/presentation/control_panel.py), classe `ControlPanel`) : chef d'orchestre. Cinq boutons, une barre de statut, une console de logs. Chaque action longue tourne dans un thread séparé pour ne pas figer la fenêtre ; ces threads ne touchent à l'interface que par `_in_ui_thread()`.
 - **Serveur Eel** : préparé par `eel_editor.init(build_web)` au démarrage, puis lancé par `eel_editor.start(...)` quand on clique sur Ouvrir l'éditeur ([promptodys/infrastructure/eel_editor.py](../promptodys/infrastructure/eel_editor.py)). Il sert les fichiers statiques de l'éditeur et maintient le WebSocket.
 - **Éditeur React** : zone d'édition WYSIWYG, barre d'outils, thème DYS, lecture vocale, formules MathJax. Il fonctionne aussi seul dans un navigateur, sans Python.
 - **Stockage navigateur** : les images insérées sont copiées en IndexedDB, le brouillon et le thème en localStorage. Cela survit à un rafraîchissement de page.
 
 ### Organisation du code Python
 
-Le code Python sort progressivement du fichier unique [askGeminiPrompto.py](../askGeminiPrompto.py) pour un paquet `promptodys/` en trois couches (voir [RECOMMANDATIONS.md](RECOMMANDATIONS.md), priorité 3). La règle de dépendance `presentation → domain ← infrastructure` est vérifiée par import-linter (`uv run lint-imports`, et en CI).
+Le code Python est dans le paquet `promptodys/`, en trois couches et un module d'assemblage (voir [RECOMMANDATIONS.md](RECOMMANDATIONS.md), priorité 3). La règle de dépendance `presentation → domain ← infrastructure` est vérifiée par import-linter (`uv run lint-imports`, et en CI), ainsi qu'une quatrième règle : aucune couche n'importe le module d'assemblage.
 
 | Couche | Contenu | État |
 |---|---|---|
 | `promptodys/domain/` | Règles métier et cas d'usage, sans Tk, Eel, Gemini ni reportlab : `note.py` (prompt, extraction de la réponse, note d'origine), `report.py` (contenu du rapport), `documents.py` (chemins de sauvegarde, cas d'usage sauvegarder et ouvrir), `processing.py` (cas d'usage du traitement IA), `ports.py` (ports `Editor`, `AIModel`, `DocumentStore` et données échangées) | Fait |
 | `promptodys/infrastructure/` | Adaptateurs des ports et accès au monde extérieur : `eel_editor.py` (adaptateur `EelEditor`, fenêtre de l'éditeur, événements de React, port du serveur), `gemini_model.py` (`GeminiModel`, client Gemini), `disk_document_store.py` (`DiskDocumentStore`), `pdf_report.py` (rapport PDF ReportLab), `config.py` (modèle Gemini, chemins, port, clé API, modèle de prompt) | Fait |
-| `promptodys/presentation/` | Panneau de contrôle Tkinter | Vide : le panneau est encore dans `askGeminiPrompto.py` |
+| `promptodys/presentation/` | `control_panel.py` : panneau de contrôle Tkinter (`ControlPanel`), `EditorWindow` (ce que le panneau attend de la fenêtre de l'éditeur), `RedirectText` (stdout et stderr vers la console du panneau). N'importe ni l'infrastructure, ni Eel, Gemini ou reportlab | Fait |
+| `promptodys/app.py` | Assemblage, hors des couches : `main()`, `run_processing()` (traitement IA, étapes 1, 2 et 9), journalisation provisoire | Fait |
 
-Les adaptateurs héritent explicitement de leur port (`class EelEditor(ports.Editor)`), et pyright vérifie leur conformité. `askGeminiPrompto.py` les passe aux cas d'usage du domaine. Les signaux d'ouverture et de fermeture envoyés par React arrivent dans `eel_editor`, qui les transmet aux fonctions enregistrées par `main()` avec `set_event_handlers()` : l'infrastructure ne touche jamais à l'interface.
+Le point d'entrée est `main()` dans [promptodys/app.py](../promptodys/app.py). On le lance par `uv run python askGeminiPrompto.py`, enveloppe gardée pour [PromptoDYS.spec](../PromptoDYS.spec), la release et la documentation, ou par `uv run python -m promptodys`.
+
+Les adaptateurs héritent explicitement de leur port (`class EelEditor(ports.Editor)`), et pyright vérifie leur conformité. `main()` les instancie et les passe au panneau, qui les transmet aux cas d'usage du domaine. La fenêtre de l'éditeur arrive au panneau sous la forme d'un `EelWindow`, que pyright confronte au Protocol `EditorWindow` de la présentation sans que l'infrastructure ait à l'importer. Les signaux d'ouverture et de fermeture envoyés par React arrivent dans `eel_editor`, qui les transmet à `ControlPanel.on_editor_open()` et `on_editor_close()`, enregistrées par `main()` avec `set_event_handlers()` : l'infrastructure ne touche jamais à l'interface.
 
 ---
 
@@ -186,7 +189,7 @@ sequenceDiagram
 
 ### Les étapes dans le code Python
 
-Le traitement suit neuf étapes numérotées dans ses logs. La fonction `traitement_gemini()` de [askGeminiPrompto.py](../askGeminiPrompto.py) fait les étapes qui dépendent de l'infrastructure (1, 2 et 9). Elle confie les étapes 3 à 8 au cas d'usage `process_note()` de [promptodys/domain/processing.py](../promptodys/domain/processing.py), qui renvoie un résultat sans toucher à l'interface.
+Le traitement suit neuf étapes numérotées dans ses logs. La fonction `run_processing()` de [promptodys/app.py](../promptodys/app.py) fait les étapes qui dépendent de l'infrastructure (1, 2 et 9). Elle confie les étapes 3 à 8 au cas d'usage `process_note()` de [promptodys/domain/processing.py](../promptodys/domain/processing.py), qui renvoie un résultat sans toucher à l'interface.
 
 1. Initialisation du client Gemini (clé lue dans `GeminiKey.txt`) et de sa configuration : modèle `GEMINI_MODEL` (`gemini-3.8-flash`) et niveau de réflexion `GEMINI_THINKING_LEVEL` (`LOW`), deux constantes en tête de [promptodys/infrastructure/config.py](../promptodys/infrastructure/config.py).
 2. Lecture du template [promptodys.prompt](../promptodys.prompt).
@@ -285,7 +288,7 @@ flowchart LR
 
     subgraph APP["Dépôt PromptoDYS_app"]
         WEB["build_web/<br/>bundle React compilé"]
-        PYS["askGeminiPrompto.py<br/>promptodys/<br/>promptodys.prompt<br/>assets/prompto.png"]
+        PYS["askGeminiPrompto.py (enveloppe)<br/>promptodys/<br/>promptodys.prompt<br/>assets/prompto.png"]
         SPEC["PromptoDYS.spec<br/>PyInstaller"]
         EXE["dist/PromptoDYS.exe<br/>tout embarqué"]
         WEB --> SPEC
@@ -305,7 +308,7 @@ flowchart LR
 
 ### Procédure pour produire l'exécutable
 
-**Voie recommandée : l'intégration continue.** Le workflow [release-windows.yml](../.github/workflows/release-windows.yml) builde l'exe sur un runner Windows GitHub, quel que soit le système du développeur. Un tag `v*` publie la Release (voir [CONTRIBUTING.md](../CONTRIBUTING.md#publier-une-version)), un lancement manuel produit un artefact de test. Le workflow [ci.yml](../.github/workflows/ci.yml) relance ruff, import-linter, pytest et le build à chaque push, sur toutes les branches, sans rien publier.
+**Voie recommandée : l'intégration continue.** Le workflow [release-windows.yml](../.github/workflows/release-windows.yml) builde l'exe sur un runner Windows GitHub, quel que soit le système du développeur. Un tag `v*` publie la Release (voir [CONTRIBUTING.md](../CONTRIBUTING.md#publier-une-version)), un lancement manuel produit un artefact de test. Le workflow [ci.yml](../.github/workflows/ci.yml) relance ruff, import-linter, pyright, pytest et le build à chaque push, sur toutes les branches, sans rien publier.
 
 **Build en local**, qui ne donne un `.exe` que sur Windows (PyInstaller produit un exécutable pour le système qui le lance) :
 
@@ -324,10 +327,12 @@ Le résultat est `dist/PromptoDYS.exe`. Voir aussi [README_ANTIVIRUS.md](../READ
 
 | Fichier | Rôle |
 |---|---|
-| [askGeminiPrompto.py](../askGeminiPrompto.py) | Point d'entrée et code pas encore découpé : GUI, journalisation, `traitement_gemini()`, assemblage des couches dans `main()` |
+| [askGeminiPrompto.py](../askGeminiPrompto.py) | Point d'entrée historique : simple enveloppe de `promptodys.app.main()` |
+| [promptodys/app.py](../promptodys/app.py) | Assemblage des couches dans `main()`, traitement IA `run_processing()`, journalisation provisoire |
 | [promptodys/domain/](../promptodys/domain/) | Couche domaine : règles métier, cas d'usage et ports (voir [§2](#organisation-du-code-python)) |
 | [promptodys/infrastructure/](../promptodys/infrastructure/) | Couche infrastructure : adaptateurs Eel, Gemini, disque et PDF, configuration |
-| `tests/` | Tests pytest, dont `tests/domain/` pour la couche domaine (avec de faux adaptateurs) et `tests/infrastructure/` pour les adaptateurs (Eel et Gemini simulés, vrai disque dans un dossier temporaire) |
+| [promptodys/presentation/](../promptodys/presentation/) | Couche présentation : panneau de contrôle Tkinter |
+| `tests/` | Tests pytest : `tests/domain/` pour la couche domaine (avec de faux adaptateurs), `tests/infrastructure/` pour les adaptateurs (Eel et Gemini simulés, vrai disque dans un dossier temporaire), `tests/presentation/` pour le panneau (fenêtre cachée, éditeur, fenêtre et traitement simulés), `tests/test_app.py` pour l'assemblage du traitement IA |
 | [promptodys.prompt](../promptodys.prompt) | Template du prompt envoyé à Gemini |
 | `GeminiKey.txt` | Clé API, **ignoré par git**, à créer depuis [GeminiKey.txt.template](../GeminiKey.txt.template) |
 | [LISEZMOI.txt](../LISEZMOI.txt) | Notice d'installation pour l'utilisateur final, livrée dans le zip de release |

@@ -168,7 +168,7 @@ uv run ruff format       # formatage, après le lint (voir Standards de code)
 uv run lint-imports      # dépendances entre couches (voir Standards de code)
 uv run pyright           # types du paquet promptodys/ (voir Standards de code)
 uv run pytest            # tests automatisés (voir Tests)
-uv run python askGeminiPrompto.py
+uv run python askGeminiPrompto.py   # ou : uv run python -m promptodys
 
 # Si vous modifiez les dépendances :
 uv add <paquet>
@@ -182,7 +182,7 @@ uv add <paquet>
 | Je viens de cloner, ou de faire un `git pull` | `uv sync --locked` |
 | Je modifie les dépendances | `uv add <paquet>` / `uv remove <paquet>`, ou `uv sync` après avoir édité `pyproject.toml` |
 | Je mets à jour une dépendance | `uv lock --upgrade-package <paquet>` puis `uv sync` |
-| Je lance l'application | `uv run python askGeminiPrompto.py` |
+| Je lance l'application | `uv run python askGeminiPrompto.py` (ou `uv run python -m promptodys`) |
 | Je vérifie le code (lint) | `uv run ruff check` |
 | Je formate le code (après le lint) | `uv run ruff format` |
 | Je vérifie les dépendances entre couches | `uv run lint-imports` |
@@ -344,7 +344,7 @@ Quelques signalements anciens restent à traiter (`except:` nus, espaces sur des
 
 ### Dépendances entre couches avec import-linter
 
-Le paquet `promptodys/` est découpé en trois couches : `domain` (règles métier et cas d'usage), `infrastructure` (Gemini, Eel, disque, PDF) et `presentation` (panneau Tkinter). La règle de dépendance est `presentation → domain ← infrastructure` : le domaine n'importe ni les autres couches, ni Tk, Eel, Gemini ou reportlab, et la présentation n'importe pas l'infrastructure. Seul le point d'entrée assemble les couches.
+Le paquet `promptodys/` est découpé en trois couches : `domain` (règles métier et cas d'usage), `infrastructure` (Gemini, Eel, disque, PDF) et `presentation` (panneau Tkinter). La règle de dépendance est `presentation → domain ← infrastructure` : le domaine n'importe ni les autres couches, ni Tk, Eel, Gemini ou reportlab, et la présentation n'importe pas l'infrastructure. Seul le module d'assemblage `promptodys/app.py` (fonction `main()`) relie les couches, et aucune couche ne l'importe. Quand la présentation a besoin d'un service technique (ouvrir la fenêtre de l'éditeur, lancer le traitement), elle déclare ce qu'elle attend, comme le `Protocol` `EditorWindow` ou un paramètre `Callable`, et `main()` lui passe l'implémentation.
 
 [import-linter](https://import-linter.readthedocs.io/) vérifie cette règle à partir des contrats de la section `[tool.importlinter]` de `pyproject.toml` :
 
@@ -362,7 +362,7 @@ La CI échoue si un contrat est rompu. Si vous en rencontrez un, déplacez le co
 |---|---|---|
 | `promptodys/domain/` | `strict` | Code entièrement annoté, sans bibliothèque tierce : chaque paramètre, retour et conteneur doit avoir un type connu |
 | reste de `promptodys/` | `standard` | Les couches infrastructure et présentation dépendent de bibliothèques mal typées (Eel, google-genai) |
-| `askGeminiPrompto.py`, `tests/` | non vérifiés | Pas encore annotés ; le code entre dans le périmètre en sortant du monolithe |
+| `askGeminiPrompto.py`, `tests/` | non vérifiés | `askGeminiPrompto.py` n'est plus qu'une enveloppe de `promptodys.app.main()` ; les tests ne sont pas annotés |
 
 ```bash
 uv run pyright   # signale les erreurs de type du paquet promptodys/
@@ -377,9 +377,9 @@ En mode strict, les conteneurs vides doivent porter leur type : `field(default_f
 1. **Indentation** : 4 espaces (pas de tabs)
 2. **Longueur de ligne** : Maximum 120 caractères (vérifié par ruff)
 3. **Noms de variables** : `snake_case` pour Python, `camelCase` pour JavaScript
-4. **Noms de fonctions** : Descriptifs ; en anglais dans le paquet `promptodys/` (modules, classes, fonctions), messages, docstrings et commentaires en français. Le code encore dans `askGeminiPrompto.py` garde ses noms français jusqu'à son déplacement
+4. **Noms de fonctions** : Descriptifs ; en anglais dans le paquet `promptodys/` (modules, classes, fonctions, attributs), messages, docstrings et commentaires en français
 5. **Commentaires** : Expliquer le "pourquoi", pas le "quoi"
-6. **Logs** : Utiliser `log_message()` avec emojis pour la lisibilité dans `askGeminiPrompto.py`. Dans le paquet `promptodys/`, utiliser le module `logging` avec un logger privé au module, `_logger = logging.getLogger(__name__)`, et les mêmes préfixes à emojis : `main()` les renvoie vers la console et le rapport
+6. **Logs** : utiliser le module `logging` avec un logger privé au module, `_logger = logging.getLogger(__name__)`, et des préfixes à emojis pour la lisibilité : `main()` les renvoie vers la console et le rapport. `log_message()`, provisoire, ne sert plus que dans `promptodys/app.py`, jusqu'à R7
 7. **Imports du paquet** : importer le module, pas ses fonctions : `from promptodys.domain import note`, puis `note.extract_note_content(...)`. L'appel montre d'où vient la fonction, et un test peut la remplacer avec `monkeypatch.setattr(note, ...)`. Seuls les tests d'un module importent directement les fonctions qu'ils testent
 8. **Noms privés** : préfixer par `_` ce qui ne sert qu'au module (`_logger`, regex compilées comme `_BOLD_MARKER_PATTERN`). Une regex compilée porte le suffixe `_PATTERN`
 9. **Ports du domaine** : un adaptateur hérite explicitement du `Protocol` qu'il implémente (`class EelEditor(ports.Editor)`). Les faux des tests n'en héritent pas : une méthode manquante y lève `AttributeError` dès son appel
@@ -388,11 +388,11 @@ En mode strict, les conteneurs vides doivent porter leur type : `field(default_f
 
 ```python
 # Format standard
-log_message("🔧 ÉTAPE: Description de l'étape...")
-log_message("✅ SUCCÈS: Opération réussie")
-log_message("❌ ÉCHEC: Erreur détectée")
-log_message("⚠️ ATTENTION: Avertissement important")
-log_message("💡 INFO: Information complémentaire")
+_logger.info("🔧 ÉTAPE: Description de l'étape...")
+_logger.info("✅ SUCCÈS: Opération réussie")
+_logger.info("❌ ÉCHEC: Erreur détectée")
+_logger.info("⚠️ ATTENTION: Avertissement important")
+_logger.info("💡 INFO: Information complémentaire")
 ```
 
 ---
@@ -448,7 +448,7 @@ Voir migration guide dans docs/MIGRATION.md"
 
 ## 🧪 Tests
 
-Les tests automatisés utilisent [pytest](https://docs.pytest.org/), installé avec les dépendances de dev. Ils sont dans le dossier `tests/` et se lancent sans réseau ni interface graphique :
+Les tests automatisés utilisent [pytest](https://docs.pytest.org/), installé avec les dépendances de dev. Ils sont dans le dossier `tests/` et se lancent sans réseau. Seuls les tests du panneau (`tests/presentation/`) ont besoin d'un écran : ils créent des fenêtres Tk cachées, et sont sautés si aucun écran n'est disponible :
 
 ```bash
 uv run pytest
@@ -461,12 +461,15 @@ uv run pytest
 | `domain/test_documents.py` | Chemin de sauvegarde (assainissement du nom, anti-récursion), cas d'usage sauvegarder et ouvrir |
 | `domain/test_processing.py` | Cas d'usage du traitement IA : succès, abandon, erreurs de l'IA |
 | `domain/conftest.py` | Faux éditeur, faux modèle d'IA et faux rangement, partagés par les tests du domaine |
-| `test_adaptateurs.py` | Adaptateurs de `askGeminiPrompto.py` : disque réel (dossier temporaire), Eel et Gemini simulés |
-| `test_traitement.py` | Assemblage du traitement IA (étapes, rapport, abandon) avec Gemini, l'éditeur et le PDF simulés |
-| `test_import.py` | Importer le module ou la couche domaine ne crée aucun dossier |
-| `test_logs.py` | Les logs du domaine arrivent dans la console et le rapport |
-| `test_port.py` | Disponibilité du port de l'éditeur |
-| `test_rapport.py` | Nettoyage HTML du contenu pour le rapport PDF |
+| `infrastructure/test_config.py` | Chemins, clé API, modèle de prompt, dossier de l'éditeur |
+| `infrastructure/test_disk_document_store.py` | Rangement des documents sur un vrai disque (dossier temporaire) |
+| `infrastructure/test_eel_editor.py` | Adaptateur `EelEditor` et `EelWindow` (Eel simulé), événements de React, port du serveur |
+| `infrastructure/test_gemini_model.py` | Adaptateur `GeminiModel` (Gemini simulé) |
+| `infrastructure/test_pdf_report.py` | Rapport PDF ReportLab |
+| `presentation/test_control_panel.py` | Panneau de contrôle (fenêtre cachée) : état de l'éditeur, double clic, abandon du traitement, fermeture, avec éditeur, fenêtre et traitement simulés |
+| `test_app.py` | Assemblage du traitement IA, `run_processing()` (étapes, rapport, abandon) avec Gemini, l'éditeur et le PDF simulés |
+| `test_import.py` | Importer `askGeminiPrompto.py`, une couche ou le module d'assemblage ne crée aucun dossier (ni fenêtre, pour la présentation) |
+| `test_logs.py` | Les logs du paquet arrivent dans la console et le rapport |
 
 `pyproject.toml` (section `[tool.pytest.ini_options]`) rend `askGeminiPrompto.py` et le paquet `promptodys/` importables depuis `tests/`, et pytest-timeout fait échouer au bout de 10 s un test qui boucle, au lieu de figer pytest.
 

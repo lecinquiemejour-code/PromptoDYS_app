@@ -191,12 +191,12 @@ Les adaptateurs ont rejoint `infrastructure/` à l'étape 2 (voir plus bas). Le 
 
 Écarts aux règles ci-dessus, décidés pendant la migration :
 - **Trois ports au lieu de deux** : `Editor`, `AIModel` et `DocumentStore`. Sans port de rangement, sauvegarder et ouvrir n'auraient pas pu devenir des cas d'usage testables.
-- **`Protocol` hérités explicitement** : `class EelEditor(ports.Editor)`. Le lien se lit dans le code. Comme les méthodes des ports ne sont pas marquées `@abstractmethod`, rien n'oblige un adaptateur à toutes les redéfinir : une méthode oubliée hérite du corps vide du Protocol (`...`) et renvoie `None` au lieu de lever une erreur. Les faux des tests n'héritent pas des ports. Depuis l'étape 2, pyright vérifie les adaptateurs (voir R10) : une méthode à la signature incompatible avec son port est signalée sur la classe. Une méthode oubliée n'est signalée qu'à l'instanciation (« Cannot instantiate abstract class »), et les adaptateurs sont instanciés dans `askGeminiPrompto.py`, hors du périmètre de pyright : ce second contrôle jouera quand `main()` entrera dans le paquet, à l'étape 3.
+- **`Protocol` hérités explicitement** : `class EelEditor(ports.Editor)`. Le lien se lit dans le code. Comme les méthodes des ports ne sont pas marquées `@abstractmethod`, rien n'oblige un adaptateur à toutes les redéfinir : une méthode oubliée hérite du corps vide du Protocol (`...`) et renvoie `None` au lieu de lever une erreur. Les faux des tests n'héritent pas des ports. Depuis l'étape 2, pyright vérifie les adaptateurs (voir R10) : une méthode à la signature incompatible avec son port est signalée sur la classe. Une méthode oubliée n'est signalée qu'à l'instanciation (« Cannot instantiate abstract class ») : depuis l'étape 3, les adaptateurs sont instanciés dans `promptodys/app.py`, dans le périmètre de pyright, et ce second contrôle joue aussi.
 - **Journalisation du domaine avec `logging`** (`_logger = logging.getLogger(__name__)`), plutôt qu'une fonction de log injectée. Un handler provisoire, `LogMessageHandler`, renvoie ces messages vers `log_message` jusqu'à R7.
 - **Imports de modules** : `from promptodys.domain import note`, puis `note.extract_note_content(...)`.
 - **Étapes renumérotées** : 1 client et configuration, 2 modèle de prompt, 3 lecture de l'éditeur, 4 prompt, 5 flux, 6 extraction, 7 injection, 8 jetons, 9 PDF. Les étapes 1, 2 et 9 dépendent de l'infrastructure et restent dans `traitement_gemini()`.
 
-La règle des noms anglais s'applique au nouveau code. Le code encore dans `askGeminiPrompto.py` garde ses noms français jusqu'à son déplacement.
+La règle des noms anglais s'applique au nouveau code. Le code encore dans `askGeminiPrompto.py` garde ses noms français jusqu'à son déplacement. Depuis l'étape 3, tout le code est dans le paquet et suit cette règle.
 
 ✅ Étape 2 (`infrastructure/`) faite, un commit par module. `promptodys/infrastructure/` contient :
 - `config.py` : constantes `GEMINI_MODEL` et `GEMINI_THINKING_LEVEL` (toujours en tête de fichier), chemins (`APP_DIR`, `REPORTS_DIR`, `PROMPTO_DOCS_DIR`, `CHROME_PROFILE_DIR`, `RESOURCES_DIR`), `EEL_PORT`, lecture de la clé API et du modèle de prompt, recherche de `build_web/`. Aucun dossier n'est créé à l'import (M12) ;
@@ -208,11 +208,29 @@ La règle des noms anglais s'applique au nouveau code. Le code encore dans `askG
 Écarts aux règles ci-dessus, décidés pendant la migration :
 - **Un module porte le nom de son adaptateur** (`disk_document_store.py` pour `DiskDocumentStore`, `gemini_model.py` pour `GeminiModel`) ; `config.py` et `pdf_report.py`, qui n'implémentent pas de port, portent le nom de leur rôle. Cela évite aussi un second module `documents`, déjà pris par le domaine.
 - **Tout ce qui touche à Eel est dans `eel_editor.py`**, y compris `eel.init`, `eel.start` et `closeEditor`, que l'ordre de migration ne citait pas : sans cela, `presentation` n'aurait pas pu se passer d'`eel` à l'étape 3.
-- **Événements de React par fonctions de rappel** : `on_editor_open` et `on_editor_close` gardent leur nom et restent synchrones, mais ne touchent plus l'interface. Elles appellent les fonctions enregistrées par `set_event_handlers()`, que `main()` relie à `_editeur_ouvert()` et `_editeur_ferme()`. L'objet d'état de l'éditeur (priorité 4) les remplacera.
+- **Événements de React par fonctions de rappel** : `on_editor_open` et `on_editor_close` gardent leur nom et restent synchrones, mais ne touchent plus l'interface. Elles appellent les fonctions enregistrées par `set_event_handlers()`, que `main()` relie à `_editeur_ouvert()` et `_editeur_ferme()`. Depuis l'étape 3, ce sont les méthodes `on_editor_open()` et `on_editor_close()` du panneau.
 - **Journalisation** : les modules d'infrastructure utilisent `logging`, comme le domaine, pour les messages qui allaient dans `log_message`. Les `print()` de `EelEditor` et `DiskDocumentStore` (traces détaillées et `🔍 DEBUG`) restent des `print()` jusqu'à R7, pour ne pas les faire entrer dans le rapport PDF.
 - **La balise `[TEXTE]` est déclarée une seule fois**, dans le domaine (`note.TEXT_PLACEHOLDER`) : `build_prompt()` la remplace, `config.read_prompt_template()` vérifie sa présence.
 
 Le build PyInstaller embarque bien les modules du sous-paquet, sans modification de [PromptoDYS.spec](../PromptoDYS.spec). Pour l'étape 3 : l'icône et le logo du panneau sont cherchés avec `os.path.dirname(__file__)`, à remplacer par `config.RESOURCES_DIR` transmis par `main()`, puisque `presentation` n'importe pas `infrastructure`.
+
+✅ Étape 3 (`presentation/`) faite. Le paquet est complet :
+- `presentation/control_panel.py` : `ControlPanel` (l'ancienne fonction `gui_control_panel()`), `EditorWindow` et `RedirectText`. Le panneau reçoit toutes ses dépendances de `main()` : l'éditeur et le rangement (ports du domaine), la fenêtre de l'éditeur, le traitement IA, les dossiers et le chemin de l'icône. Il n'importe que `tkinter`, `sv_ttk` et le domaine ;
+- `app.py` : module d'assemblage, avec `main()`, `run_processing()` (étapes 1, 2 et 9 du traitement IA, autour de `process_note()`) et la journalisation provisoire (`report_logs`, `log_message`, `LogMessageHandler`, `configure_logger`) ;
+- `__main__.py` : lancement par `python -m promptodys` ;
+- `askGeminiPrompto.py` : enveloppe de 15 lignes, toujours citée par [PromptoDYS.spec](../PromptoDYS.spec), la release et les docs.
+
+Le panneau est testé dans `tests/presentation/test_control_panel.py`, avec une fenêtre cachée et un éditeur, une fenêtre et un traitement simulés. L'icône est passée par `main()` (`icon_path`, construit depuis `config.RESOURCES_DIR`) ; un build PyInstaller l'a bien chargée depuis la copie embarquée.
+
+Écarts aux règles ci-dessus, décidés pendant la migration :
+- **Un module d'assemblage `app.py` en plus de `__main__.py`** : `main()` et `run_processing()` doivent pouvoir être importés par les tests, ce que `__main__.py` ne permet pas proprement. `__main__.py` ne fait qu'appeler `main()`. `app.py` est hors des trois couches, et un quatrième contrat import-linter interdit à toute couche de l'importer.
+- **Un `Protocol` de plus, `EditorWindow`, déclaré dans la présentation** : ouvrir et fermer la fenêtre de l'éditeur est un besoin du panneau, pas du domaine. `EelWindow` (dans `eel_editor.py`) le satisfait sans en hériter, puisque l'infrastructure n'importe pas la présentation ; pyright vérifie la compatibilité à l'appel de `ControlPanel(...)` dans `main()`. Le traitement est passé comme un simple `Callable` : `functools.partial(run_processing, editor)`.
+- **R6 commencée** : les globales deviennent des attributs de `ControlPanel` (`_editor_open`, `_editor_starting`, `_closing`, `_cancel_event`, `_current_document_path`, `_last_editor_activity`). Il n'y a pas encore d'objet d'état de l'éditeur séparé (voir priorité 4).
+- **R7 commencée** : le panneau journalise avec `logging`, et `log_message()` ne sert plus que dans `app.py`. Tous les `root.after` venant d'autres threads passent par `ControlPanel._in_ui_thread()`, seul endroit à changer pour la file d'attente de R7. La console est vidée par le panneau au lancement d'un traitement, par la même file `root.after` que les logs, et non plus par le traitement.
+- **Construction et boucle séparées** : `ControlPanel(...)` construit la fenêtre, cachée ; `run()` redirige stdout et stderr, affiche la fenêtre et lance la boucle. Les tests construisent le panneau sans boucle ni redirection.
+- **Réglage DPI** : `if sys.platform == "win32"` au lieu d'un `try/except ImportError`, ce que pyright comprend.
+
+Les traces `🔍 DEBUG` du bouton « Sauvegarder » citent encore d'anciens noms de variables (`btn_sauvegarder`, `editeur_lance`) : elles seront supprimées ou passées au niveau `DEBUG` avec R7.
 
 ---
 
@@ -220,9 +238,9 @@ Le build PyInstaller embarque bien les modules du sous-paquet, sans modification
 
 Les dix `global` disparaissent au fil du découpage, mais il faut décider par quoi les remplacer.
 
-- **Un objet d'état de l'éditeur** : ouvert ou non, `threading.Event` « prêt », document courant. Il remplace `editeur_lance`, `last_editor_activity` et `current_document_path`, et il est partagé entre la GUI et les rappels d'Eel.
+- **Un objet d'état de l'éditeur** : ouvert ou non, `threading.Event` « prêt », document courant. Il remplace `editeur_lance`, `last_editor_activity` et `current_document_path`, et il est partagé entre la GUI et les rappels d'Eel. À faire : depuis R5 étape 3, cet état est porté par des attributs de `ControlPanel` (`_editor_open`, `_editor_starting`, `_last_editor_activity`, `_current_document_path`), modifiés à la fois par les boutons et par les événements de React.
 - **`abandon_ia` devient un `threading.Event`** : fait avec B6. `abandon_ia` et `traitement_en_cours` sont remplacées par un jeton d'annulation propre à chaque traitement, et par `annulation_en_cours`, le jeton du traitement en cours. Reste l'attente active du signal React (`time.sleep(0.5)` en boucle, [l. 1313](../askGeminiPrompto.py#L1313)), qui doit devenir `Event.wait(timeout=30)`.
-- **`PanneauControle` dans `presentation/`** : widgets et gestionnaires de boutons deviennent attributs et méthodes. Les six fonctions imbriquées de `gui_control_panel` ([l. 1143](../askGeminiPrompto.py#L1143)) se comportent déjà ainsi, par closures sur `root`, `status_label` et `btn_ia`. Il remplace `root_global`, `status_label_global` et `streaming_text_global` (`btn_ia_global` a déjà disparu avec B2). `annulation_en_cours`, utilisée uniquement par le thread principal, y devient un attribut.
+- ✅ **`PanneauControle` dans `presentation/`** (fait avec R5 étape 3, sous le nom `ControlPanel`) : widgets et gestionnaires de boutons deviennent attributs et méthodes. Les six fonctions imbriquées de `gui_control_panel` ([l. 1143](../askGeminiPrompto.py#L1143)) se comportent déjà ainsi, par closures sur `root`, `status_label` et `btn_ia`. Il remplace `root_global`, `status_label_global` et `streaming_text_global` (`btn_ia_global` a déjà disparu avec B2). `annulation_en_cours`, utilisée uniquement par le thread principal, y devient un attribut.
 - **La logique métier reste en fonctions**, testables sans Tk.
 
 **À éviter** : une classe `PromptoApp` qui regrouperait GUI, Gemini, PDF et fichiers. Ce serait le même monolithe déplacé dans une classe. L'option 3 de la revue (§9) est écartée pour cette raison, et parce qu'elle suppose de tout réécrire d'un coup. Des classes qui portent un état localisé sont en revanche bienvenues.
@@ -231,7 +249,7 @@ Les dix `global` disparaissent au fil du découpage, mais il faut décider par q
 
 ## 8. Priorité 5 : moderniser les idiomes
 
-**R7. Journalisation.** `print`, `log_message`, `logs_complets` et `RedirectText` ([l. 88](../askGeminiPrompto.py#L88)) font quatre fois le même travail. Les remplacer par le module `logging`, avec trois handlers : un fichier avec rotation (A5), la console Tkinter via une `queue.Queue` lue par `root.after` (règle aussi M9 et M10), et un handler mémoire qui alimente le rapport PDF. Supprimer ou passer en niveau `DEBUG` les traces `🔍 DEBUG` de `save_document` ([l. 254-272](../askGeminiPrompto.py#L254-L272)) et `load_document` ([l. 398-415](../askGeminiPrompto.py#L398-L415)).
+**R7. Journalisation.** `print`, `log_message`, `logs_complets` et `RedirectText` ([l. 88](../askGeminiPrompto.py#L88)) font quatre fois le même travail. Depuis R5 étape 3, `log_message` et `report_logs` (l'ancien `logs_complets`) sont dans `promptodys/app.py`, `RedirectText` dans `promptodys/presentation/control_panel.py`, et les appels à `root.after` venant d'autres threads passent tous par `ControlPanel._in_ui_thread()`. Les remplacer par le module `logging`, avec trois handlers : un fichier avec rotation (A5), la console Tkinter via une `queue.Queue` lue par `root.after` (règle aussi M9 et M10), et un handler mémoire qui alimente le rapport PDF. Supprimer ou passer en niveau `DEBUG` les traces `🔍 DEBUG` de `save_document` ([l. 254-272](../askGeminiPrompto.py#L254-L272)) et `load_document` ([l. 398-415](../askGeminiPrompto.py#L398-L415)).
 
 **R8. Rapport PDF.** Aujourd'hui le programme génère du Markdown ([l. 476-533](../askGeminiPrompto.py#L476-L533)) puis le reparse avec des expressions régulières ([l. 536-684](../askGeminiPrompto.py#L536-L684)) pour obtenir des éléments ReportLab. Construire directement les éléments depuis les données supprime le reparsage, la liste fixe d'émojis et le carré noir du constat M8. Avec une police Unicode (OpenDyslexic ou Lexend, déjà dans `build_web/fonts/`), les rapports deviennent lisibles par le public cible (A1).
 
@@ -241,11 +259,11 @@ Les dix `global` disparaissent au fil du découpage, mais il faut décider par q
 
 **R10. Python moderne.**
 - `pathlib.Path` à la place de `os.path`.
-- Annotations de type. pyright est en place (`[tool.pyright]` de `pyproject.toml`, lancé en CI) : mode strict sur `promptodys/domain/`, standard sur le reste du paquet, donc sur `promptodys/infrastructure/`. `askGeminiPrompto.py` et les tests restent hors périmètre jusqu'à leur découpage.
+- Annotations de type. pyright est en place (`[tool.pyright]` de `pyproject.toml`, lancé en CI) : mode strict sur `promptodys/domain/`, standard sur le reste du paquet (`infrastructure/`, `presentation/`, `app.py`). Restent hors périmètre `askGeminiPrompto.py`, devenu une simple enveloppe, et les tests.
 - `dataclass` pour les données échangées avec l'éditeur et pour le résultat du traitement.
 - Imports en tête de fichier (`sys` est réimporté [l. 134](../askGeminiPrompto.py#L134), `traceback` dans deux fonctions).
 - **Portabilité** : `subprocess.Popen('explorer …')` ([l. 1413](../askGeminiPrompto.py#L1413)) ne fonctionne que sous Windows ; utiliser `os.startfile`, `open` ou `xdg-open` selon la plateforme (le développement se fait aussi sous macOS).
-- Mettre à jour la docstring d'en-tête, qui cite encore `build/index.html` et une « interface console » (M1).
+- ✅ Mettre à jour la docstring d'en-tête, qui cite encore `build/index.html` et une « interface console » (M1) : réécrite avec R5 étape 3.
 
 ---
 
