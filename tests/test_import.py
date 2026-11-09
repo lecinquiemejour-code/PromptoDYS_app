@@ -1,6 +1,7 @@
 import importlib
 import os
 import sys
+import tkinter
 
 import eel
 
@@ -44,5 +45,34 @@ def test_infrastructure_import_creates_no_folder(monkeypatch):
 
     for module in ("config", "disk_document_store", "pdf_report", "gemini_model", "eel_editor"):
         importlib.import_module(f"promptodys.infrastructure.{module}")
+
+    assert [chemin for chemin in dossiers_crees if "PromptoDYS" in str(chemin)] == []
+
+
+def test_presentation_import_creates_no_folder_nor_window(monkeypatch):
+    """Importer la couche présentation ne doit rien écrire sur le disque ni créer de fenêtre Tk."""
+    dossiers_crees = []
+    monkeypatch.setattr(os, "makedirs", lambda chemin, *args, **kwargs: dossiers_crees.append(chemin))
+    for nom in [nom for nom in sys.modules if nom.startswith("promptodys")]:
+        monkeypatch.delitem(sys.modules, nom)
+    fenetres = []
+    monkeypatch.setattr(tkinter, "Tk", lambda *args, **kwargs: fenetres.append(args))
+
+    importlib.import_module("promptodys.presentation.control_panel")
+
+    assert dossiers_crees == []
+    assert fenetres == []
+
+
+def test_app_import_creates_no_folder(monkeypatch):
+    """Importer le module d'assemblage ne doit rien écrire sur le disque : tout se fait dans main()."""
+    dossiers_crees = []
+    monkeypatch.setattr(os, "makedirs", lambda chemin, *args, **kwargs: dossiers_crees.append(chemin))
+    for nom in [nom for nom in sys.modules if nom.startswith("promptodys")]:
+        monkeypatch.delitem(sys.modules, nom)
+    # Eel refuse d'exposer deux fois la même fonction : registre vierge le temps du réimport de eel_editor
+    monkeypatch.setattr(eel, "_exposed_functions", {})
+
+    importlib.import_module("promptodys.app")
 
     assert [chemin for chemin in dossiers_crees if "PromptoDYS" in str(chemin)] == []
