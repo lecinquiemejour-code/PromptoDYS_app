@@ -1,4 +1,4 @@
-"""Panneau de contrôle Tkinter.
+"""Panneau de contrôle Tkinter (control_panel.py).
 
-Vide pour l'instant : le panneau est encore dans askGeminiPrompto.py (R5, étape 3).
+N'importe ni l'infrastructure, ni eel, google ou reportlab : main() lui transmet ses dépendances.
 """
