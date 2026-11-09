@@ -2,14 +2,16 @@
 
 Les fenêtres restent cachées (run() n'est jamais appelé). Les threads du panneau passent par root.after,
 que Tkinter refuse hors de la boucle principale : _run_loop() la fait tourner le temps nécessaire.
-Sans écran (TclError à la création de la fenêtre), les tests sont sautés.
+Aucun test n'est sauté : la CI (Windows) et les postes de développement savent créer une fenêtre Tk,
+et une TclError est une vraie erreur.
+
+_quit() n'est jamais exécuté : il détruirait la fenêtre en pleine boucle et terminerait le processus
+(os._exit). Les tests le remplacent sur le panneau, sans toucher à os._exit, dont pytest-timeout
+a besoin pour arrêter un test bloqué sous Windows.
 """
 
-import contextlib
-import os
 import threading
 import time
-import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox
 
@@ -75,23 +77,19 @@ class _Processing:
 def panel(tmp_path):
     """Panneau construit (fenêtre cachée) ; renvoie (panneau, fenêtre de l'éditeur, traitement)."""
     window, processing = _Window(), _Processing()
-    try:
-        control_panel = ControlPanel(
-            editor=object(),
-            store=object(),
-            editor_window=window,
-            process_note=processing,
-            documents_dir=str(tmp_path),
-            reports_dir=str(tmp_path / "reports"),
-            icon_path=ICON,
-        )
-    except tk.TclError as e:
-        pytest.skip(f"Pas d'écran pour Tkinter : {e}")
+    control_panel = ControlPanel(
+        editor=object(),
+        store=object(),
+        editor_window=window,
+        process_note=processing,
+        documents_dir=str(tmp_path),
+        reports_dir=str(tmp_path / "reports"),
+        icon_path=ICON,
+    )
     yield control_panel, window, processing
     window.release()  # Ne pas laisser un thread bloqué dans start()
     processing.finish()
-    with contextlib.suppress(tk.TclError):
-        control_panel._root.destroy()
+    control_panel._root.destroy()
 
 
 def _run_loop(panel, condition, timeout=3.0):
@@ -254,9 +252,9 @@ def test_second_click_on_processing_cancels_it(panel):
 def test_closing_with_open_editor_closes_it_then_quits(panel, monkeypatch):
     """Avec l'éditeur ouvert, quitter (après confirmation) ferme l'éditeur, attend sa confirmation, puis quitte."""
     control_panel, window, _ = panel
-    exits = []
+    quits = []
     monkeypatch.setattr(messagebox, "askyesno", lambda *args, **kwargs: True)
-    monkeypatch.setattr(os, "_exit", exits.append)
+    monkeypatch.setattr(control_panel, "_quit", lambda: quits.append(True))
     control_panel.on_editor_open()
 
     control_panel.on_closing()
@@ -264,18 +262,18 @@ def test_closing_with_open_editor_closes_it_then_quits(panel, monkeypatch):
     assert window.closes == 1
 
     control_panel.on_editor_close()  # React confirme la fermeture
-    _run_loop(control_panel, lambda: exits == [0])
+    _run_loop(control_panel, lambda: quits == [True])
 
 
 def test_closing_cancelled_keeps_the_application_open(panel, monkeypatch):
     """Si l'élève renonce à quitter, l'éditeur n'est pas fermé."""
     control_panel, window, _ = panel
-    exits = []
+    quits = []
     monkeypatch.setattr(messagebox, "askyesno", lambda *args, **kwargs: False)
-    monkeypatch.setattr(os, "_exit", exits.append)
+    monkeypatch.setattr(control_panel, "_quit", lambda: quits.append(True))
     control_panel.on_editor_open()
 
     control_panel.on_closing()
 
     assert window.closes == 0
-    assert exits == []
+    assert quits == []
