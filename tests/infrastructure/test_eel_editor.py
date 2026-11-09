@@ -127,3 +127,22 @@ def test_wait_for_free_port_gives_up_after_timeout():
         serveur.bind(("localhost", 0))
         serveur.listen()
         assert not eel_editor.wait_for_free_port(serveur.getsockname()[1], timeout=1.0)
+
+
+# --- EelWindow ---
+
+
+def test_eel_window_delegates_to_module_functions(monkeypatch):
+    """EelWindow transmet son port et son profil Chrome aux fonctions du module."""
+    calls = []
+    monkeypatch.setattr(eel_editor, "wait_for_free_port", lambda port: calls.append(("wait", port)) or True)
+    monkeypatch.setattr(eel_editor, "start", lambda port, profile: calls.append(("start", port, profile)))
+    monkeypatch.setattr(eel_editor, "close", lambda: calls.append(("close",)))
+    window = eel_editor.EelWindow(8123, "/profil")
+
+    assert window.port == 8123
+    assert window.wait_for_free_port()
+    window.start()
+    window.close()
+
+    assert calls == [("wait", 8123), ("start", 8123, "/profil"), ("close",)]

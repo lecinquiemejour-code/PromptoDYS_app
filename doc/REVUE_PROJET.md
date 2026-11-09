@@ -236,7 +236,7 @@ Python expose `on_editor_open()` et `on_editor_close()` pour que l'éditeur Reac
 - `psutil` est dans `requirements.txt` mais plus dans le code (l'ancienne détection par processus a été retirée).
 - La docstring d'en-tête parle de `PromptoDYS.py` et de `build/index.html`, qui n'existent pas.
 
-**Statut : 🟡 partiellement résolu.** Les trois imports morts ont été retirés, ainsi que la dépendance `markdown` (`pyproject.toml`, `uv.lock`, `hiddenimports` du spec). `psutil` a disparu avec `requirements.txt` (voir D2). La docstring d'en-tête ne cite plus `PromptoDYS.py`, mais mentionne toujours `build/index.html` (le dossier est `build_web/`) et une « Interface console » qui n'existe plus.
+**Statut : ✅ résolu.** Les trois imports morts ont été retirés, ainsi que la dépendance `markdown` (`pyproject.toml`, `uv.lock`, `hiddenimports` du spec). `psutil` a disparu avec `requirements.txt` (voir D2). La docstring d'en-tête ne cite plus `PromptoDYS.py`, mais mentionnait toujours `build/index.html` (le dossier est `build_web/`) et une « Interface console » qui n'existe plus. Elle a été réécrite quand `askGeminiPrompto.py` est devenu une simple enveloppe de `promptodys.app.main()` (R5, étape 3) : elle ne décrit plus que le point d'entrée et la façon de lancer l'application.
 
 ### M2. Code mort
 
@@ -267,6 +267,8 @@ Ce n'est pas un bug, mais c'est ce qui a rendu B1 et B2 possibles : l'état du b
 | `bridge_eel.py` | `get_markdown`, `set_markdown`, `on_editor_open/close`, `find_web_folder` | 132 à 455 |
 | `gui.py` | `gui_control_panel` et ses boutons, `RedirectText` | 1146 à 1752 |
 | `askGeminiPrompto.py` | `main()` seulement | 1755 à 1784 |
+
+**Statut : ✅ résolu, par couches plutôt que par le tableau ci-dessus** (R5 de [RECOMMANDATIONS.md](RECOMMANDATIONS.md)). Le code est dans le paquet `promptodys/` : `domain/` (règles et cas d'usage), `infrastructure/` (Gemini, Eel, disque, PDF, configuration), `presentation/` (panneau Tkinter) et le module d'assemblage `app.py` (`main()`, traitement IA). `askGeminiPrompto.py` n'est plus qu'une enveloppe de 15 lignes. `gui_control_panel()` est devenue la classe `ControlPanel`, dont les gestionnaires de boutons sont des méthodes. Les `global` ont disparu : l'état de l'éditeur et du traitement est porté par des attributs du panneau, et `logs_complets` est devenue `report_logs` dans `app.py`. `traitement_gemini()` est réparti entre `process_note()` (domaine, étapes 3 à 8) et `run_processing()` (assemblage, étapes 1, 2 et 9). Reste, pour R6 : regrouper l'état de l'éditeur dans un objet dédié et remplacer l'attente active du signal de React par `Event.wait`.
 
 ### M5. Les dix premiers caractères de la clé API sont écrits dans les logs et archivés dans le PDF
 
@@ -500,10 +502,10 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | B7 | ✅ Résolu | `--disable-web-security` inutile (retiré) | Trivial | 1 |
 | B8 | ✅ Résolu | Nom de document vide accepté, boucle infinie à la racine d'un disque (nom vide refusé, boucle bornée) | Faible | 1 |
 | B9 | ✅ Résolu | L'éditeur ne signalait jamais son ouverture : « Ouvrir » avec l'éditeur fermé échouait après 30 s (signal ajouté dans l'éditeur React) | Faible | 1 |
-| M1 | 🟡 Partiellement résolu | Imports et dépendances inutilisés (retirés ; docstring d'en-tête encore obsolète) | Trivial | 1 |
+| M1 | ✅ Résolu | Imports et dépendances inutilisés (retirés ; docstring d'en-tête réécrite) | Trivial | 1 |
 | M2 | ✅ Résolu | Code mort (menu console, historique, `web_folder_global`) | Trivial | 1 |
 | M3 | ✅ Résolu | `except:` nus, f-strings vides (`except` ciblés, `ruff check` propre) | Trivial | 1 |
-| M4 | 🟡 Mineur | Fichier monolithique, douze globales | Moyen | 3 |
+| M4 | ✅ Résolu | Fichier monolithique, douze globales (paquet en trois couches, plus de `global`) | Moyen | 3 |
 | M5 | 🟡 Partiellement résolu | Extrait de clé dans les logs et le PDF (raccourci aux 4 derniers caractères) | Trivial | 1 |
 | M6 | ✅ Résolu | Nom d'image non assaini (`basename`, nom inutilisable ignoré) | Trivial | 1 |
 | M7 | 🟡 Mineur | Double avertissement NOTE | Trivial | 1 |
