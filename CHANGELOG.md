@@ -10,6 +10,17 @@ et la numérotation suit le sens du [Semantic Versioning](https://semver.org/lan
 
 ## [Non publié]
 
+### Prévu
+- Tests d'intégration
+- Support export DOCX
+- Mode offline avec cache local
+- Tableau de bord statistiques élèves
+- Interface professeurs
+
+---
+
+## [1.3.0b3] - 2026-11-17
+
 ### Ajouté
 - Tests automatisés avec pytest (`uv run pytest`) : import du module sans effet de bord, extraction de la note et du débrief, ajout de la note d'origine, nettoyage HTML pour le rapport PDF, chemins de sauvegarde. pytest-timeout fait échouer au bout de 10 s un test qui boucle
 - Lint avec ruff (`uv run ruff check`), installé dans le groupe `dev` et configuré dans `pyproject.toml` : règles `F`, `E`, `W`, `B`, `UP` et `SIM`, lignes de 120 caractères au plus. Le code a été mis en conformité (corrections automatiques sûres, ordre des imports, lignes trop longues, `except:` nus). `uv run ruff check` ne signale plus rien
@@ -19,7 +30,7 @@ et la numérotation suit le sens du [Semantic Versioning](https://semver.org/lan
 - Workflow GitHub Actions d'intégration continue (`.github/workflows/ci.yml`) : à chaque push, sur toutes les branches, lint ruff, tests pytest et build de l'exécutable Windows, avec un résumé en haut de chaque exécution (signalements ruff par règle, tests en échec, résultat du build). Badge d'état de `master` dans le README
 
 ### Modifié
-- Interne : les règles métier et les cas d'usage (traitement IA, sauvegarde, ouverture) sont sortis de `askGeminiPrompto.py` dans la couche `promptodys/domain/`, testée sans Tkinter, Chrome ni réseau. Le traitement IA renvoie un résultat au lieu de piloter l'interface
+- Interne : les règles métier et les cas d'usage (traitement IA, sauvegarde, ouverture) sont sortis de `askGeminiPrompto.py` dans la couche `promptodys/domain/`, testée sans Tkinter, Chrome ni réseau. Le traitement IA renvoie un résultat au lieu de piloter l'interface. L'accès à Gemini, au disque, au rapport PDF et à Eel est regroupé dans la couche `promptodys/infrastructure/`. Le panneau de contrôle est dans la couche `promptodys/presentation/`, sa logique dans un `PanelController` sans Tkinter, et le point d'entrée dans `promptodys/app.py`
 - Les étapes du traitement IA sont renumérotées de 1 à 9 dans la console et le rapport PDF : 1 client et configuration Gemini, 2 modèle de prompt, 3 lecture de l'éditeur, 4 prompt, 5 flux, 6 extraction, 7 injection, 8 jetons, 9 rapport PDF
 - L'abandon du traitement IA est immédiat, même si Gemini ne répond plus : l'interface est libérée sans attendre la fin de l'appel, et un traitement abandonné s'arrête avant l'injection dans l'éditeur et le rapport PDF
 - Le statut affiché en fin de traitement IA indique « terminé », « annulé » ou « échec » selon le résultat
@@ -42,13 +53,6 @@ et la numérotation suit le sens du [Semantic Versioning](https://semver.org/lan
 - Trois anciennes versions de l'éditeur, inutilisées, étaient embarquées dans l'exécutable
 - Fermer le panneau de contrôle laissait l'éditeur ouvert, relié à une application qui n'existait plus. Après confirmation, l'éditeur est maintenant fermé lui aussi ; le texte en cours est retrouvé à sa prochaine ouverture
 - Quatre `except:` nus attrapaient aussi `KeyboardInterrupt` et `SystemExit` : un Ctrl+C reçu pendant l'écriture des logs était avalé. Ils n'attrapent plus que les exceptions ordinaires
-
-### Prévu
-- Tests d'intégration
-- Support export DOCX
-- Mode offline avec cache local
-- Tableau de bord statistiques élèves
-- Interface professeurs
 
 ---
 
