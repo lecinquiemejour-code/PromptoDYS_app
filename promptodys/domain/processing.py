@@ -98,12 +98,12 @@ def process_note(
     except Exception as e:
         if cancel.is_set():
             return _cancelled(result)
-        _logger.error(f"\n❌ ÉCHEC: Erreur inattendue: {e}")
+        _logger.error(f"\n❌ ÉCHEC: Erreur inattendue: {e}", exc_info=True)
         return result
 
     # Abandon par break dans la boucle, ou pendant l'attente du dernier morceau
     if cancel.is_set():
-        _logger.warning("⚠️ INFOS: Injection et sauvegarde PDF annulées.")
+        _logger.info("🚫 ABANDON: Injection et sauvegarde PDF annulées.")
         return _cancelled(result)
 
     result.ai_stream = ai_stream

@@ -62,14 +62,14 @@ def read_prompt_template() -> str | None:
         with open(PROMPT_TEMPLATE_FILE, encoding="utf-8") as f:
             template = f.read()
     except FileNotFoundError:
-        _logger.info("❌ ÉCHEC: Fichier promptodys.prompt introuvable")
+        _logger.error("❌ ÉCHEC: Fichier promptodys.prompt introuvable")
         return None
     except Exception as e:
-        _logger.info(f"❌ ÉCHEC: Erreur lecture promptodys.prompt: {e}")
+        _logger.error(f"❌ ÉCHEC: Erreur lecture promptodys.prompt: {e}")
         return None
 
     if note.TEXT_PLACEHOLDER not in template:
-        _logger.info(f"❌ ÉCHEC: Balise {note.TEXT_PLACEHOLDER} manquante dans promptodys.prompt")
+        _logger.error(f"❌ ÉCHEC: Balise {note.TEXT_PLACEHOLDER} manquante dans promptodys.prompt")
         return None
     return template
 
@@ -89,10 +89,10 @@ def find_web_folder() -> str | None:
     for folder in possible_folders:
         index_path = os.path.join(base_path, folder, "index.html")
         if os.path.exists(index_path):
-            print(f"✅ Dossier web trouvé: {folder}/")
+            _logger.info(f"✅ Dossier web trouvé: {folder}/")
             return os.path.join(base_path, folder)
 
-    print("⌐ Aucun index.html trouvé dans:", possible_folders)
+    _logger.error(f"❌ Aucun index.html trouvé dans: {possible_folders}")
     return None
 
 

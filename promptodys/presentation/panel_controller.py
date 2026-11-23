@@ -210,7 +210,7 @@ class PanelController:
         # Vérifier le port avant d'ouvrir Chrome : s'il est pris, Chrome afficherait
         # la page de l'autre programme. On n'ouvre alors aucune fenêtre.
         if not self._editor_window.wait_for_free_port():
-            _logger.info(f"❌ Le port {port} est utilisé par un autre programme : éditeur non ouvert")
+            _logger.error(f"❌ Le port {port} est utilisé par un autre programme : éditeur non ouvert")
             self._end_launch(
                 launch,
                 f"❌ Port {port} déjà utilisé par un autre programme",
@@ -224,7 +224,7 @@ class PanelController:
             # Bloque jusqu'à la fermeture de l'éditeur (mode de secours compris)
             self._editor_window.start()
         except Exception as e:
-            _logger.info(f"❌ Erreur fallback lancement éditeur: {e}")
+            _logger.error(f"❌ Échec de l'ouverture de l'éditeur, mode de secours compris : {e}")
             self._end_launch(
                 launch,
                 "❌ Échec de l'ouverture de l'éditeur (voir les logs)",
@@ -250,9 +250,9 @@ class PanelController:
             self._view.show_status("⚠️ Éditeur non ouvert")
             return
 
-        _logger.info(
-            f"🔍 DEBUG btn_sauvegarder: editeur_lance={self._editor_state.is_open}, "
-            f"current_document_path={self._editor_state.document_path}"
+        _logger.debug(
+            f"🔍 save_document: editor_open={self._editor_state.is_open}, "
+            f"document_path={self._editor_state.document_path}"
         )
 
         # Toujours afficher le dialogue — pré-rempli si document déjà ouvert/sauvegardé
@@ -271,7 +271,7 @@ class PanelController:
             if doc_name:
                 break
 
-            _logger.info(f"⚠️ Nom de document invalide: '{os.path.basename(selected)}'")
+            _logger.info(f"💾 Nom de document refusé (vide ou commençant par un point): '{os.path.basename(selected)}'")
             self._view.show_warning(
                 "PromptoDYS - Nom invalide",
                 "Le nom du document est vide\n"
@@ -286,7 +286,7 @@ class PanelController:
         self._view.refresh()
 
         def run_save() -> None:
-            _logger.info(f"🔍 DEBUG run_save: doc_name='{doc_name}', save_dir='{save_dir}'")
+            _logger.debug(f"🔍 run_save: doc_name='{doc_name}', save_dir='{save_dir}'")
             result = documents.save_document(self._editor, self._store, save_dir, doc_name)
             if result:
 
@@ -328,7 +328,7 @@ class PanelController:
                 # Attendre le signal de React (on_editor_open)
                 _logger.info("⏳ Attente du signal React on_editor_open()...")
                 if not self._editor_state.wait_until_open(EDITOR_READY_TIMEOUT_S):
-                    _logger.info(
+                    _logger.error(
                         f"❌ Timeout: React n'a pas signalé on_editor_open() dans les {EDITOR_READY_TIMEOUT_S} secondes"
                     )
                     self._in_ui_thread(lambda: self._view.show_status("❌ Éditeur non prêt (timeout)"))
@@ -375,7 +375,7 @@ class PanelController:
 
         # VÉRIFICATION 2: Éditeur ouvert
         if not self._editor_state.is_open:
-            _logger.info("⚠️ L'éditeur n'est pas ouvert !")
+            _logger.info("🤖 Traitement impossible : l'éditeur n'est pas ouvert")
             self._view.show_warning(
                 "PromptoDYS - Éditeur requis",
                 "L'éditeur n'est pas ouvert.\n\nVeuillez d'abord ouvrir l'éditeur\navant de lancer le traitement IA.",
@@ -420,7 +420,7 @@ class PanelController:
                 success = self._process_note(cancel)
             except Exception as e:
                 if not cancel.is_set():
-                    _logger.info(f"❌ Erreur critique IA: {e}")
+                    _logger.error(f"❌ Erreur critique IA: {e}", exc_info=True)
             finally:
                 self._in_ui_thread(lambda: finish(success))
 
@@ -440,7 +440,7 @@ class PanelController:
             self._editor_window.close()
         except Exception as e:
             # Bundle sans closeEditor, ou connexion déjà fermée
-            _logger.info(f"⚠️ Impossible de demander la fermeture de l'éditeur : {e}")
+            _logger.warning(f"⚠️ Impossible de demander la fermeture de l'éditeur : {e}")
             self._view.quit()
             return
 
@@ -453,7 +453,7 @@ class PanelController:
                 _logger.info("✅ Éditeur fermé")
                 self._view.quit()
             elif time.time() >= close_deadline:
-                _logger.info("⚠️ L'éditeur n'a pas confirmé sa fermeture : fermeture de l'application quand même")
+                _logger.warning("⚠️ L'éditeur n'a pas confirmé sa fermeture : fermeture de l'application quand même")
                 self._view.quit()
             else:
                 self._view.after(100, wait_for_close)
@@ -477,7 +477,7 @@ class PanelController:
                 "Voulez-vous continuer ?",
             )
             if not result:
-                _logger.info("⚠️ Fermeture annulée")
+                _logger.info("👋 Fermeture annulée")
                 return
             self._closing = True
             self._close_editor_then_quit()

@@ -217,7 +217,7 @@ class ControlPanel:
             self.show_status("📂 Dossier reports ouvert")
         except Exception as e:
             self.show_status(f"❌ Erreur ouverture: {str(e)[:20]}")
-            _logger.info(f"❌ Erreur ouverture dossier: {e}")
+            _logger.error(f"❌ Erreur ouverture dossier: {e}")
 
     # --- Défilement de la fenêtre ---
 
@@ -279,9 +279,9 @@ class ControlPanel:
         try:
             icon_image = tk.PhotoImage(file=self._icon_path)
             root.iconphoto(True, icon_image)
-            _logger.info(f"✅ Icône chargée: {self._icon_path}")
+            _logger.debug(f"🔍 Icône chargée: {self._icon_path}")
         except Exception as e:
-            _logger.info(f"⚠️ Icône non chargée: {e}")
+            _logger.warning(f"⚠️ Icône non chargée: {e}")
 
         # Appliquer le thème Sun Valley (mode clair)
         sv_ttk.set_theme("light")  # Thème clair Windows 11
@@ -325,9 +325,9 @@ class ControlPanel:
             self._logo = logo_image_title  # Garder une référence, sinon Tk efface l'image
             logo_label = ttk.Label(title_frame, image=logo_image_title)
             logo_label.pack(side="left", padx=(0, 15))
-            _logger.info("✅ Logo titre chargé")
+            _logger.debug("🔍 Logo titre chargé")
         except Exception as e:
-            _logger.info(f"⚠️ Logo titre non chargé: {e}")
+            _logger.warning(f"⚠️ Logo titre non chargé: {e}")
 
         title_label = ttk.Label(
             title_frame,

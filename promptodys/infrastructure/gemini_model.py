@@ -18,19 +18,19 @@ def create_client() -> genai.Client | None:
     try:
         api_key = config.read_api_key()
         if not api_key:
-            _logger.info("❌ ÉCHEC: Aucune clé API trouvée dans GeminiKey.txt")
+            _logger.error("❌ ÉCHEC: Aucune clé API trouvée dans GeminiKey.txt")
             return None
         if api_key == config.GEMINI_API_KEY_PLACEHOLDER:
-            _logger.info("❌ ÉCHEC: GeminiKey.txt contient encore la valeur du template, remplacez-la par votre clé")
+            _logger.error("❌ ÉCHEC: GeminiKey.txt contient encore la valeur du template, remplacez-la par votre clé")
             return None
         # Seuls les 4 derniers caractères : ce log est recopié dans les rapports PDF
         _logger.info(f"🔑 INFO: Clé API chargée (...{api_key[-4:]})")
         return genai.Client(api_key=api_key)
     except FileNotFoundError:
-        _logger.info(f"❌ ÉCHEC: Fichier GeminiKey.txt introuvable dans {config.APP_DIR}")
+        _logger.error(f"❌ ÉCHEC: Fichier GeminiKey.txt introuvable dans {config.APP_DIR}")
         return None
     except Exception as e:
-        _logger.info(f"❌ ÉCHEC: Erreur initialisation Gemini: {e}")
+        _logger.error(f"❌ ÉCHEC: Erreur initialisation Gemini: {e}")
         return None
 
 

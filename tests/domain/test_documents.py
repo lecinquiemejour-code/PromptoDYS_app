@@ -73,11 +73,11 @@ def test_prepare_save_path_strips_trailing_dots():
 
 
 def test_prepare_save_path_logs_each_level_climbed(caplog):
-    """Chaque niveau remonté par l'anti-récursion est signalé en avertissement."""
-    caplog.set_level(logging.INFO, logger="promptodys")
+    """Chaque niveau remonté par l'anti-récursion est tracé en DEBUG (comportement normal, pas une anomalie)."""
+    caplog.set_level(logging.DEBUG, logger="promptodys")
     prepare_save_path(os.path.join(DOCS, "equations", "equations", "equations.md"))
     assert len(caplog.records) == 2
-    assert all(record.levelno == logging.WARNING for record in caplog.records)
+    assert all(record.levelno == logging.DEBUG for record in caplog.records)
     assert "Anti-récursion" in caplog.messages[0]
 
 

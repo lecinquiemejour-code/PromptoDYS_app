@@ -31,8 +31,9 @@ line-length = 120
 
 [tool.ruff.lint]
 # F : erreurs (noms non définis, imports inutilisés), E/W : pycodestyle,
-# B : bugs probables (flake8-bugbear), UP : syntaxe Python moderne, SIM : simplifications
-select = ["F", "E", "W", "B", "UP", "SIM"]
+# B : bugs probables (flake8-bugbear), UP : syntaxe Python moderne, SIM : simplifications,
+# T20 : pas de print() (les messages passent par logging, voir promptodys/infrastructure/logs.py)
+select = ["F", "E", "W", "B", "UP", "SIM", "T20"]
 
 [tool.ruff.format]
 # CONTRIBUTING.md montre un exemple volontairement mal formaté (« ❌ MAUVAIS »)
