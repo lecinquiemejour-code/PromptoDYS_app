@@ -22,12 +22,13 @@ GEMINI_THINKING_LEVEL = types.ThinkingLevel.LOW
 
 # Dossier de l'application : celui de l'exe une fois packagé, la racine du dépôt en développement
 # (promptodys/infrastructure/config.py → trois niveaux plus haut).
-# GeminiKey.txt et reports/ y sont lus et écrits, quel que soit le dossier courant.
+# GeminiKey.txt, reports/ et logs/ y sont lus et écrits, quel que soit le dossier courant.
 if getattr(sys, "frozen", False):
     APP_DIR = os.path.dirname(sys.executable)
 else:
     APP_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REPORTS_DIR = os.path.join(APP_DIR, "reports")
+LOGS_DIR = os.path.join(APP_DIR, "logs")
 
 # Ressources livrées avec l'application : copie embarquée dans l'exe (sys._MEIPASS, dossier où
 # PyInstaller les décompresse), racine du dépôt en développement. Un fichier posé à côté de l'exe est ignoré.

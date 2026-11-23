@@ -60,7 +60,7 @@ class PanelView(Protocol):
         ...
 
     def clear_console(self) -> None:
-        """Vide la console, dans l'ordre des messages qui y sont déjà en attente"""
+        """Vide la console, logs encore en attente d'affichage compris"""
         ...
 
     def refresh(self) -> None:
@@ -142,7 +142,7 @@ class PanelController:
 
     def _in_ui_thread(self, fn: Callable[[], object]) -> None:
         """Fait exécuter fn par le thread de l'interface : seul passage autorisé depuis les autres threads
-        (Tkinter n'est pas thread-safe). La file d'attente prévue par R7 ne changera que cette méthode."""
+        (Tkinter n'est pas thread-safe). La file d'attente prévue pour M10 ne changera que cette méthode."""
         self._view.after(0, fn)
 
     # --- Événements de React (appelés depuis un thread d'Eel) ---
@@ -395,8 +395,8 @@ class PanelController:
         self._view.set_processing(True)
         self._view.refresh()
 
-        # Nouveau traitement : console vidée AVANT le premier log du traitement. L'effacement passe
-        # par la même file que l'affichage : les logs du thread s'afficheront après lui
+        # Nouveau traitement : console vidée AVANT le premier log du traitement (le thread n'est pas
+        # encore lancé : tous ses logs s'afficheront après l'effacement)
         self._view.clear_console()
 
         def finish(success: bool) -> None:

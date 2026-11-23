@@ -2,19 +2,19 @@
 
 - ControlPanel : la vue Tk ; la logique (boutons, signaux de React, threads, état) est dans PanelController
   (panel_controller.py), qui pilote la fenêtre par les méthodes de PanelView ;
-- RedirectText : affiche stdout et stderr dans la console du panneau.
 
 Le panneau reçoit toutes ses dépendances de main(), son contrôleur compris (set_controller) : il n'importe
 ni l'infrastructure, ni eel, google ou reportlab (contrat import-linter).
 """
 
-import contextlib
 import logging
 import os
+import queue
 import subprocess  # Pour ouvrir le dossier reports
 import sys
 import tkinter as tk
 from collections.abc import Callable
+from types import TracebackType
 from tkinter import filedialog, messagebox, ttk
 
 import sv_ttk  # Thème Sun Valley (Windows 11 look)
@@ -24,33 +24,10 @@ from promptodys.presentation.panel_controller import PanelController
 _logger = logging.getLogger(__name__)
 
 
-# Classe pour rediriger stdout vers la GUI
-# Classe pour rediriger stdout/stderr vers la GUI tout en gardant la console
-class RedirectText:
-    def __init__(self, text_widget_updater, is_stderr=False):
-        self.updater = text_widget_updater
-        self.is_stderr = is_stderr
-        # On garde une référence vers le VRAI stdout/stderr d'origine
-        if is_stderr:
-            self.terminal = sys.__stderr__
-        else:
-            self.terminal = sys.__stdout__
-
-    def write(self, message):
-        # Écrire dans la console réelle (si disponible)
-        if self.terminal:
-            with contextlib.suppress(Exception):
-                self.terminal.write(message)
-                self.terminal.flush()
-
-        # Mettre à jour la GUI (éviter de planter si la GUI est fermée)
-        with contextlib.suppress(Exception):
-            self.updater(message)
-
-    def flush(self):
-        if self.terminal:
-            with contextlib.suppress(Exception):
-                self.terminal.flush()
+# Console : la file des logs est relue toutes les 100 ms ; au-delà de 2 000 lignes,
+# les plus anciennes sont supprimées (la console ne grossit plus sans limite)
+LOG_POLL_INTERVAL_MS = 100
+CONSOLE_MAX_LINES = 2000
 
 
 def _on_button_enter(btn: tk.Button) -> None:
@@ -96,9 +73,11 @@ class ControlPanel:
     # Donné par set_controller(), avant run() ; les boutons le lisent au moment du clic
     _controller: PanelController
 
-    def __init__(self, reports_dir: str, icon_path: str) -> None:
+    def __init__(self, reports_dir: str, icon_path: str, log_queue: queue.Queue[logging.LogRecord]) -> None:
+        """log_queue : file où logging dépose les logs à afficher dans la console (voir logs.configure)"""
         self._reports_dir = reports_dir
         self._icon_path = icon_path
+        self._log_queue = log_queue
 
         _logger.info("🖥️ Démarrage du panneau de contrôle GUI...")
         self._build()
@@ -139,8 +118,11 @@ class ControlPanel:
             self._btn_ai.configure(text="🤖 Traiter la prise de note", state="normal")
 
     def clear_console(self) -> None:
-        # Par la même file que les logs (root.after) : les messages déjà en attente s'affichent avant l'effacement
-        self._append_to_console("", clear=True)
+        # Les logs encore dans la file sont antérieurs à l'effacement : ils sont écartés avec le reste
+        self._take_pending_logs()
+        self._console.configure(state="normal")
+        self._console.delete("1.0", "end")
+        self._console.configure(state="disabled")
 
     def refresh(self) -> None:
         self._root.update()
@@ -184,26 +166,40 @@ class ControlPanel:
 
     # --- Console ---
 
-    def _append_to_console(self, text: str, clear: bool = False) -> None:
-        """Met à jour la zone de texte des logs, depuis n'importe quel thread"""
+    def _poll_log_queue(self) -> None:
+        """Affiche les logs en attente, puis se reprogramme. Tourne sur le thread de l'interface :
+        les autres threads ne touchent jamais à la console, ils déposent leurs logs dans la file."""
+        self._show_pending_logs()
+        self._root.after(LOG_POLL_INTERVAL_MS, self._poll_log_queue)
 
-        def _update() -> None:
-            self._console.configure(state="normal")
-            if clear:
-                self._console.delete("1.0", "end")
-            self._console.insert("end", text)
-            self._console.see("end")  # Auto-scroll
-            self._console.configure(state="disabled")
+    def _take_pending_logs(self) -> list[str]:
+        messages: list[str] = []
+        while True:
+            try:
+                messages.append(self._log_queue.get_nowait().getMessage())
+            except queue.Empty:
+                return messages
 
-        self.after(0, _update)
+    def _show_pending_logs(self) -> None:
+        messages = self._take_pending_logs()
+        if not messages:
+            return
+        console = self._console
+        console.configure(state="normal")
+        console.insert("end", "".join(f"{message}\n" for message in messages))
+        # Le texte finit par un retour à la ligne : la dernière ligne, vide, ne compte pas
+        line_count = int(console.index("end-1c").split(".")[0]) - 1
+        excess = line_count - CONSOLE_MAX_LINES
+        if excess > 0:
+            console.delete("1.0", f"{excess + 1}.0")
+        console.see("end")  # Auto-scroll
+        console.configure(state="disabled")
 
-    def _write_to_console(self, msg: str) -> None:
-        """Reçoit ce qui est écrit sur stdout et stderr (voir RedirectText)"""
-        # Filtrer les messages vides
-        if msg and msg.strip():
-            self._append_to_console(msg)
-        elif msg == "\n":
-            self._append_to_console("\n")
+    def _log_callback_exception(
+        self, exc_type: type[BaseException], exc: BaseException, tb: TracebackType | None
+    ) -> None:
+        """Exception non rattrapée dans un rappel Tk (bouton, after) : loggée au lieu d'aller sur stderr"""
+        _logger.error(f"❌ Erreur inattendue : {exc_type.__name__}: {exc}", exc_info=(exc_type, exc, tb))
 
     # --- Bouton sans état ---
 
@@ -271,6 +267,7 @@ class ControlPanel:
         root = tk.Tk()
         root.withdraw()  # Cachée jusqu'à run(), une fois sa taille calculée
         self._root = root
+        root.report_callback_exception = self._log_callback_exception
         root.title("PromptoDYS - Panneau de Contrôle")
         root.configure(bg="#F3F3F3")  # Fond gris
         root.resizable(True, True)  # Fenêtre redimensionnable
@@ -532,21 +529,12 @@ class ControlPanel:
         root.minsize(largeur_ideale, hauteur)  # Taille minimale : rien de caché ni d'écrasé
 
     def run(self) -> None:
-        """Redirige stdout et stderr vers la console du panneau, affiche la fenêtre
-        et lance la boucle principale (bloquant)"""
+        """Affiche la fenêtre, commence à relire la file des logs et lance la boucle principale (bloquant)"""
         if getattr(self, "_controller", None) is None:
             raise RuntimeError("ControlPanel.run() appelé avant set_controller()")
 
-        # --- Redirection de stdout ET stderr vers la GUI ---
-        # Rediriger stdout (prints normaux)
-        sys.stdout = RedirectText(self._write_to_console, is_stderr=False)
-        # Rediriger stderr (erreurs, exceptions)
-        sys.stderr = RedirectText(self._write_to_console, is_stderr=True)
-
-        print("✅ Console et Erreurs redirigées vers la GUI")
-
         self._root.deiconify()  # Afficher la fenêtre à sa taille définitive
+        self._poll_log_queue()  # Les logs émis avant run() s'affichent dès le premier passage
 
-        # --- Lancer la boucle principale ---
-        print("✅ Panneau de contrôle GUI prêt !")
+        _logger.info("✅ Panneau de contrôle GUI prêt !")
         self._root.mainloop()

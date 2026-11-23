@@ -37,8 +37,6 @@ class ProcessingResult:
     # Réflexion (préfixée par 💭) et réponse de l'IA, telles que reçues
     ai_stream: str = ""
     token_stats: ports.AITokenStats = field(default_factory=ports.AITokenStats)
-    # Logs des étapes de préparation (avant l'envoi à l'IA), repris dans le rapport
-    step_logs: list[str] = field(default_factory=list[str])
 
 
 def process_note(
@@ -54,23 +52,16 @@ def process_note(
     cancel : jeton d'abandon, vérifié à chaque morceau de réponse. Un traitement abandonné
     s'arrête à la sortie du flux sans rien écrire dans l'éditeur.
     """
-    step_logs: list[str] = []
-
-    def log_step(message: str) -> None:
-        """Log d'une étape de préparation, gardé aussi pour le rapport."""
-        _logger.info(message)
-        step_logs.append(message)
-
     # 3. Lire le contenu de l'éditeur
-    log_step("\n📖 ÉTAPE 3: Lecture du contenu éditeur...")
+    _logger.info("\n📖 ÉTAPE 3: Lecture du contenu éditeur...")
     original_note = editor.read_markdown()
 
     # 4. Substituer [TEXTE] et [DATE]
-    log_step("\n🔗 ÉTAPE 4: Préparation du prompt final...")
+    _logger.info("\n🔗 ÉTAPE 4: Préparation du prompt final...")
     prompt = note.build_prompt(prompt_template, original_note, today)
-    log_step("✅ SUCCÈS: Prompt préparé (substitution [TEXTE] et [DATE] effectuée)")
+    _logger.info("✅ SUCCÈS: Prompt préparé (substitution [TEXTE] et [DATE] effectuée)")
 
-    result = ProcessingResult(status=ProcessingStatus.FAILED, original_note=original_note, step_logs=step_logs)
+    result = ProcessingResult(status=ProcessingStatus.FAILED, original_note=original_note)
 
     # 5. Envoi à l'IA et réception du flux
     _logger.info("\n🚀 ÉTAPE 5: Envoi à Gemini et traitement en cours...")
