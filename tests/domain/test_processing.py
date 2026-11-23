@@ -51,6 +51,15 @@ def test_process_note_logs_ai_stream_on_its_own_logger(fake_editor, fake_model, 
     assert not any("Note corrigée" in message for message in steps)
 
 
+def test_process_note_marks_answer_chunks_as_fragments(fake_editor, fake_model, caplog):
+    """Les morceaux de la réponse portent FRAGMENT (collés bout à bout dans la console), pas ceux de la réflexion."""
+    caplog.set_level(logging.INFO, logger="promptodys")
+    _process(fake_editor(markdown="Note"), fake_model(ANSWER))
+
+    stream = [r for r in caplog.records if r.name == STREAM_LOGGER_NAME]
+    assert [log_marks.is_fragment(r) for r in stream] == [False, True, True]
+
+
 def test_process_note_marks_steps_as_sections(fake_editor, fake_model, caplog):
     """Les titres d'étape portent la marque SECTION (ligne vide dans la console) au lieu d'un \\n."""
     caplog.set_level(logging.INFO, logger="promptodys")

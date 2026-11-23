@@ -86,7 +86,7 @@ def process_note(
                 _stream_logger.info(thinking_text)
                 ai_stream += thinking_text + "\n"
             else:
-                _stream_logger.info(chunk.text)
+                _stream_logger.info(chunk.text, extra=log_marks.FRAGMENT)
                 answer += chunk.text
                 ai_stream += chunk.text
     # Après un abandon, une erreur de connexion n'est pas un échec à signaler

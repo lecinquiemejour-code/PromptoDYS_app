@@ -120,7 +120,7 @@ class ControlPanel:
 
     def clear_console(self) -> None:
         # Les logs encore dans la file sont antérieurs à l'effacement : ils sont écartés avec le reste
-        self._take_pending_logs()
+        self._take_pending_text()
         self._console.configure(state="normal")
         self._console.delete("1.0", "end")
         self._console.configure(state="disabled")
@@ -173,27 +173,41 @@ class ControlPanel:
         self._show_pending_logs()
         self._root.after(LOG_POLL_INTERVAL_MS, self._poll_log_queue)
 
-    def _take_pending_logs(self) -> list[str]:
-        """Lignes à afficher pour les logs en attente. La mise en page est l'affaire de la console :
-        une ligne vide avant chaque message qui ouvre une partie (log_marks.SECTION)."""
-        lines: list[str] = []
+    def _take_pending_text(self) -> str:
+        """Texte à afficher pour les logs en attente. La mise en page est l'affaire de la console :
+        une ligne vide avant chaque message qui ouvre une partie (log_marks.SECTION), les morceaux
+        de la réponse de l'IA (log_marks.FRAGMENT) à la suite les uns des autres."""
+        text = ""
         while True:
             try:
                 record = self._log_queue.get_nowait()
             except queue.Empty:
-                return lines
-            blank_line = "\n" if log_marks.is_section(record) else ""
-            lines.append(f"{blank_line}{record.getMessage()}\n")
+                return text
+            message = record.getMessage()
+            if log_marks.is_fragment(record):
+                text += message
+                continue
+            # Après des fragments, la ligne est restée ouverte : on la termine. Le dernier caractère
+            # écrit est dans ce lot, sinon dans la console ("" ou "\n" : début de ligne)
+            last_char = text[-1:] or self._console.get("end-2c")
+            if last_char not in ("", "\n"):
+                text += "\n"
+            if log_marks.is_section(record):
+                text += "\n"
+            text += f"{message}\n"
 
     def _show_pending_logs(self) -> None:
-        lines = self._take_pending_logs()
-        if not lines:
+        text = self._take_pending_text()
+        if not text:
             return
         console = self._console
         console.configure(state="normal")
-        console.insert("end", "".join(lines))
-        # Le texte finit par un retour à la ligne : la dernière ligne, vide, ne compte pas
-        line_count = int(console.index("end-1c").split(".")[0]) - 1
+        console.insert("end", text)
+        # Position du dernier caractère écrit. Si le texte finit par un retour à la ligne, elle est
+        # en colonne 0 d'une dernière ligne vide, qui ne compte pas ; pendant le flux de l'IA, la
+        # dernière ligne est un fragment, qui compte
+        line, column = console.index("end-1c").split(".")
+        line_count = int(line) - (column == "0")
         excess = line_count - CONSOLE_MAX_LINES
         if excess > 0:
             console.delete("1.0", f"{excess + 1}.0")

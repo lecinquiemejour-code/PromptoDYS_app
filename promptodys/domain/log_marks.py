@@ -9,16 +9,27 @@ SECTION : le message ouvre une nouvelle partie (étape du traitement, démarrage
 La console du panneau et le rapport PDF insèrent une ligne vide avant lui ; le fichier de log
 l'écrit tel quel.
 
+FRAGMENT : le message est un morceau d'un texte reçu par bouts (la réponse de l'IA, découpée
+n'importe où). La console du panneau écrit les fragments à la suite, sans retour à la ligne ;
+le fichier de log écrit chaque morceau sur sa ligne.
+
 Dans le domaine pour que toutes les couches puissent l'importer.
 """
 
 import logging
 
 _SECTION_ATTRIBUTE = "section"
+_FRAGMENT_ATTRIBUTE = "fragment"
 
 SECTION: dict[str, object] = {_SECTION_ATTRIBUTE: True}
+FRAGMENT: dict[str, object] = {_FRAGMENT_ATTRIBUTE: True}
 
 
 def is_section(record: logging.LogRecord) -> bool:
     """Vrai si le message a été émis avec extra=SECTION"""
     return getattr(record, _SECTION_ATTRIBUTE, False) is True
+
+
+def is_fragment(record: logging.LogRecord) -> bool:
+    """Vrai si le message a été émis avec extra=FRAGMENT"""
+    return getattr(record, _FRAGMENT_ATTRIBUTE, False) is True
