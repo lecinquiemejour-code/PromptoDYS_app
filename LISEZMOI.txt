@@ -96,7 +96,8 @@ L'application ouvre un panneau de contrôle :
 4. « Sauvegarder » et « Ouvrir » : enregistrent et rouvrent une note.
 
 La zone Console / Logs, en bas du panneau, indique ce que fait l'application
-et affiche les erreurs.
+et affiche les erreurs. Tout est aussi enregistré, avec plus de détails, dans
+le fichier logs/promptodys.log, créé à côté de PromptoDYS.exe.
 
 
 7. EN CAS DE PROBLÈME
@@ -122,3 +123,5 @@ L'éditeur ne s'ouvre pas
 
 Autre problème : signalez-le sur
 https://github.com/lecinquiemejour-code/PromptoDYS_app/issues
+en joignant le fichier logs/promptodys.log (dossier logs, à côté de
+PromptoDYS.exe). Attention : ce fichier contient le texte des notes traitées.

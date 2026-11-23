@@ -10,6 +10,21 @@ et la numérotation suit le sens du [Semantic Versioning](https://semver.org/lan
 
 ## [Non publié]
 
+### Ajouté
+- Journal de l'application dans `logs/promptodys.log`, à côté de l'exécutable : tous les messages, y compris les détails de diagnostic et les erreurs avec leur origine (traceback). Au-delà de 1 Mo, le fichier est renommé et un nouveau commence ; les trois précédents sont gardés. C'est le fichier à joindre pour signaler un problème
+
+### Modifié
+- Les messages ont quatre niveaux, reconnaissables à leur émoji : ❌ erreur (échec, ou donnée de l'élève perdue), ⚠️ avertissement (résultat dégradé, rien de perdu), information (tout autre émoji) et 🔍 diagnostic. Plusieurs erreurs signalées comme de simples informations sont devenues des erreurs
+- La console du panneau n'affiche plus les traces de diagnostic (`🔍 DEBUG`) ni le contenu brut de la note lue et injectée : ils vont dans le journal
+- La section des logs du rapport PDF contient toutes les étapes du traitement, de 1 à 9 (extraction, injection, jetons compris), sans le flux de Gemini, qui a sa propre section
+- La console du panneau garde les 2 000 dernières lignes : elle ne grossit plus sans limite au fil des traitements
+- Interne : `print`, `log_message()`, `report_logs` et la redirection de stdout et stderr vers la console sont remplacés par le module `logging` (`promptodys/infrastructure/logs.py`). La règle ruff `T20` interdit `print()`
+
+### Corrigé
+- Le rapport PDF perdait les logs des étapes 5 à 8 du traitement, et même le « Contenu récupéré » de l'étape 3
+- Dans la console, la réponse de Gemini était coupée au milieu des mots, une ligne par morceau reçu, depuis le 8 janvier 2026. Elle s'écrit de nouveau d'un seul tenant
+- Dans l'exécutable, les erreurs imprévues n'étaient visibles que dans la console du panneau, et perdues à sa fermeture. Elles sont enregistrées dans le journal, avec leur traceback
+
 ### Prévu
 - Tests d'intégration
 - Support export DOCX

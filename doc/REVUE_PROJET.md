@@ -274,7 +274,7 @@ Ce n'est pas un bug, mais c'est ce qui a rendu B1 et B2 possibles : l'état du b
 
 [Ligne 777](../askGeminiPrompto.py#L777). Ces logs sont copiés dans la section 3 du rapport PDF. Les six premiers caractères sont communs à toutes les clés Google, donc la fuite réelle est de quatre caractères. Faible, mais sans utilité : un simple « Clé API chargée (39 caractères) » suffit.
 
-**Statut : 🟡 partiellement résolu.** La portion loggée a été raccourcie : le log n'affiche plus que les 4 derniers caractères de la clé (`Clé API chargée (...xxxx)`) au lieu des 10 premiers, ce qui suffit à identifier la clé utilisée sans exposer de partie exploitable. Le log se trouve désormais dans `init_gemini_client()`. Pour résoudre complètement, ne logger aucun extrait (longueur de la clé uniquement).
+**Statut : ✅ résolu.** La portion loggée a été raccourcie : le log n'affiche plus que les 4 derniers caractères de la clé (`Clé API chargée (...xxxx)`) au lieu des 10 premiers, ce qui suffit à identifier la clé utilisée sans exposer de partie exploitable. Le log se trouve désormais dans `gemini_model.create_client()`. Il est gardé volontairement : quand on jongle avec plusieurs clés, il permet de savoir laquelle a servi pour un traitement (les premiers caractères, communs à toutes les clés Google, ne le permettraient pas).
 
 ### M6. Nom de fichier image non assaini à la sauvegarde
 
@@ -286,9 +286,11 @@ Ce n'est pas un bug, mais c'est ce qui a rendu B1 et B2 possibles : l'état du b
 
 `extraire_contenu_note()` ([ligne 819](../askGeminiPrompto.py#L819)) et `traitement_gemini()` ([ligne 992](../askGeminiPrompto.py#L992)) testent tous deux la présence des balises et loggent le même message. Un seul test suffirait.
 
+**Statut : ✅ résolu.** Depuis l'extraction du domaine (R5), seule `note.extract_note_content()` signale l'absence des balises ; le cas d'usage `processing.process_note()` ne la teste plus et le dit en commentaire.
+
 ### M8. Le parseur Markdown du PDF a des trous prévisibles
 
-- Les émojis sont retirés par une **liste fixe** ([ligne 591](../askGeminiPrompto.py#L591)). Tout émoji absent de la liste devient un carré noir avec Helvetica. Le prompt lui-même impose « 😉 » dans la section Avertissement, et il n'est pas dans la liste : **chaque rapport PDF contient un carré noir** dans la note corrigée. Les icônes des logs (🖼️, 🟢, ⛔, 🚫, 📌, 📡) non plus.
+- Les émojis sont retirés par une **liste fixe** ([ligne 591](../askGeminiPrompto.py#L591)). Tout émoji absent de la liste devient un carré noir avec Helvetica. Le prompt lui-même impose « 😉 » dans la section Avertissement, et il n'est pas dans la liste : **chaque rapport PDF contient un carré noir** dans la note corrigée. Les icônes des logs (🖼️, 🟢, ⛔, 🚫, 📌, 📡) non plus. (R7 a ajouté ✂️, l'émoji de l'étape 6, à la liste : le problème de fond reste.)
 - L'italique en ligne est détecté par `\*([^*]+)\*` ([ligne 661](../askGeminiPrompto.py#L661)), ce qui abîme les formules du type `$a*b*c$` et les multiplications dans les notes de maths.
 - Les listes numérotées (`1)`, `1.`) ne sont pas reconnues et sortent en texte brut.
 
@@ -297,6 +299,8 @@ Ce n'est pas un bug, mais c'est ce qui a rendu B1 et B2 possibles : l'état du b
 ### M9. La console de logs Tkinter grossit sans limite
 
 `update_streaming_text()` insère sans jamais purger. Chaque morceau de streaming ajoute une ligne. Sur une session d'une après-midi avec plusieurs traitements, le widget `Text` accumule des centaines de kilo-octets et ralentit. Une purge au-delà de 2 000 lignes règle le problème en trois lignes.
+
+**Statut : ✅ résolu** avec R7. La console reçoit les logs par une file relevée toutes les 100 ms et supprime les lignes les plus anciennes au-delà de 2 000 (`CONSOLE_MAX_LINES` dans `promptodys/presentation/control_panel.py`). Les morceaux du flux ne font plus une ligne chacun : ils s'écrivent à la suite (`log_marks.FRAGMENT`).
 
 ### M10. `root.after()` appelé depuis des threads secondaires
 
@@ -393,7 +397,7 @@ Ce sont des propositions, pas des défauts. Elles ne sont pas demandées et rest
 | A2 | Lire la clé dans la variable d'environnement `GEMINI_API_KEY` en priorité, fichier en secours | Plus de clé sur disque pour qui le souhaite, compatible avec la pratique courante | Faible |
 | A3 | Regrouper modèle, `thinking_budget`, température, port, dimensions de fenêtre en constantes de tête de fichier (ou dans `config.yaml` qui existe déjà) | Changer de modèle sans chercher dans 1 784 lignes | Faible. 🟡 En partie fait : `GEMINI_MODEL` et `GEMINI_THINKING_LEVEL` sont des constantes (commit `3339731`) ; port et dimensions de fenêtre restent en dur |
 | A4 | Nommer le rapport PDF d'après le document courant (`rapport_MonCours_20261012_1530.pdf`) | Retrouver un rapport parmi cinquante | Faible |
-| A5 | Journal sur disque via le module `logging` (fichier `promptodys.log` avec rotation) | Diagnostiquer un problème chez un utilisateur sans lui demander de copier la console | Faible |
+| A5 | Journal sur disque via le module `logging` (fichier `promptodys.log` avec rotation) | Diagnostiquer un problème chez un utilisateur sans lui demander de copier la console | Faible. ✅ Fait avec R7 : `logs/promptodys.log`, à côté de l'exécutable, 1 Mo × 3, DEBUG compris |
 | A6 | Afficher le coût estimé d'un traitement à partir des tokens | Sensibiliser à la consommation | Faible |
 | A7 | Proposer la sauvegarde avant de fermer si l'éditeur est ouvert, au lieu du seul avertissement | Moins de notes perdues | Moyen |
 | A8 | Tester la clé API au démarrage (un appel `count_tokens` léger) et afficher un message clair | Évite le scénario B2 et guide le premier lancement | Faible |
@@ -465,7 +469,7 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | 6 | `askGeminiPrompto.py` | ✅ Fait : taille calculée depuis le contenu (hauteur plafonnée à 90 % de l'écran), défilement vertical | B4 |
 | 7 | `askGeminiPrompto.py` | ✅ Fait : `--disable-web-security` retiré ; port 8080 gardé (stockage de Chrome) mais vérifié avant d'ouvrir Chrome, popup si l'ouverture échoue, état de l'éditeur suivi par les signaux de React | B5, B7 |
 | 8 | `askGeminiPrompto.py` | `http_options` avec timeout, fermeture du stream à l'abandon | B6 |
-| 9 | `askGeminiPrompto.py` | 🟡 En partie fait : imports morts, `menu_console` et compagnie, `historique_llm` retirés. `ruff` est propre (M3). Restent : `basename` sur le nom d'image ; log de clé sans extrait | M1, M2, M3, M5, M6, M7 |
+| 9 | `askGeminiPrompto.py` | 🟡 En partie fait : imports morts, `menu_console` et compagnie, `historique_llm` retirés. `ruff` est propre (M3). Restent : `basename` sur le nom d'image ; log de clé sans extrait (depuis : `basename` fait avec M6, log de clé gardé volontairement, voir M5) | M1, M2, M3, M5, M6, M7 |
 | 10 | `build_web/static/` | 🟡 En partie fait : trois vieux bundles supprimés. Reste : exclure les `.map` du spec | D1 |
 | 11 | `requirements.txt` | ✅ Fait : remplacé par `pyproject.toml` + `uv.lock` | D2 |
 | 12 | `README.md`, `CONTRIBUTING.md`, `BUILD_STATUS.md`, `GeminiKey.txt.template`, `promptodys.prompt` | 🟡 En partie fait : corrections listées en D3, voir la colonne Statut | D3 |
@@ -506,11 +510,11 @@ Chaque lot est un commit. Chaque étape attend un GO et s'accompagne d'une mise 
 | M2 | ✅ Résolu | Code mort (menu console, historique, `web_folder_global`) | Trivial | 1 |
 | M3 | ✅ Résolu | `except:` nus, f-strings vides (`except` ciblés, `ruff check` propre) | Trivial | 1 |
 | M4 | ✅ Résolu | Fichier monolithique, douze globales (paquet en trois couches, plus de `global`) | Moyen | 3 |
-| M5 | 🟡 Partiellement résolu | Extrait de clé dans les logs et le PDF (raccourci aux 4 derniers caractères) | Trivial | 1 |
+| M5 | ✅ Résolu | Extrait de clé dans les logs et le PDF (raccourci aux 4 derniers caractères, gardé volontairement pour savoir quelle clé a servi) | Trivial | 1 |
 | M6 | ✅ Résolu | Nom d'image non assaini (`basename`, nom inutilisable ignoré) | Trivial | 1 |
-| M7 | 🟡 Mineur | Double avertissement NOTE | Trivial | 1 |
+| M7 | ✅ Résolu | Double avertissement NOTE (un seul signalement, dans `extract_note_content()`) | Trivial | 1 |
 | M8 | 🟡 Mineur | Parseur PDF : émojis (carré noir garanti), italique vs maths, listes numérotées | Faible | 1 ou 4 |
-| M9 | 🟡 Mineur | Console Tk sans purge | Trivial | 1 |
+| M9 | ✅ Résolu | Console Tk sans purge (purge au-delà de 2 000 lignes) | Trivial | 1 |
 | M10 | 🟡 Mineur | `root.after` depuis threads | Faible | si symptôme |
 | M11 | 🟡 Partiellement résolu | `os._exit`, Chrome reste ouvert (l'éditeur est fermé avec le panneau ; `os._exit` conservé) | Faible | 1 |
 | M12 | ✅ Résolu | Effets de bord à l'import (un second ajouté : dossier du profil Chrome) (dossiers et réglage DPI déplacés dans `main()`) | Trivial | 2 |

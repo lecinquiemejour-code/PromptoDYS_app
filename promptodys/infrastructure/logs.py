@@ -160,7 +160,7 @@ def _log_uncaught_thread_exception(args: threading.ExceptHookArgs) -> None:
 
 
 class ReportLogCollector(logging.Handler):
-    """Garde les logs d'un traitement IA pour la section « Log du traitement » du rapport PDF.
+    """Garde les logs d'un traitement IA pour la section « Log Complet du Traitement IA » du rapport PDF.
 
     S'utilise avec with : accroché au logger du paquet à l'entrée, retiré à la sortie.
     Ne garde que les logs du thread qui l'a créé (celui du traitement), à partir d'INFO,

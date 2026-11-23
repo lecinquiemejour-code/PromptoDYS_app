@@ -231,7 +231,7 @@ Aucun test ne crée de fenêtre Tk : `tests/presentation/test_control_panel.py` 
 - **Construction et boucle séparées** : `ControlPanel(...)` construit la fenêtre, cachée ; `run()` redirige stdout et stderr, affiche la fenêtre et lance la boucle.
 - **Réglage DPI** : `if sys.platform == "win32"` au lieu d'un `try/except ImportError`, ce que pyright comprend.
 
-Les traces `🔍 DEBUG` du bouton « Sauvegarder » citent encore d'anciens noms de variables (`btn_sauvegarder`, `editeur_lance`) : elles seront supprimées ou passées au niveau `DEBUG` avec R7.
+Les traces `🔍 DEBUG` du bouton « Sauvegarder » citaient encore d'anciens noms de variables (`btn_sauvegarder`, `editeur_lance`). ✅ Fait avec R7 : elles sont au niveau `DEBUG`, sous les noms actuels (`editor_open`, `document_path`).
 
 ---
 
@@ -256,6 +256,15 @@ Les dix `global` disparaissent au fil du découpage, mais il faut décider par q
 ## 8. Priorité 5 : moderniser les idiomes
 
 **R7. Journalisation.** `print`, `log_message`, `logs_complets` et `RedirectText` ([l. 88](../askGeminiPrompto.py#L88)) font quatre fois le même travail. Depuis R5 étape 3, `log_message` et `report_logs` (l'ancien `logs_complets`) sont dans `promptodys/app.py`, `RedirectText` dans `promptodys/presentation/control_panel.py`, et les appels à `root.after` venant d'autres threads passent tous par `PanelController._in_ui_thread()`. Les remplacer par le module `logging`, avec trois handlers : un fichier avec rotation (A5), la console Tkinter via une `queue.Queue` lue par `root.after` (règle aussi M9 et M10), et un handler mémoire qui alimente le rapport PDF. Supprimer ou passer en niveau `DEBUG` les traces `🔍 DEBUG` de `save_document` ([l. 254-272](../askGeminiPrompto.py#L254-L272)) et `load_document` ([l. 398-415](../askGeminiPrompto.py#L398-L415)).
+
+✅ Fait (branche `refactor/logging`). Le module `promptodys/infrastructure/logs.py` remplace `print`, `log_message`, `report_logs`, `LogMessageHandler` et `RedirectText` :
+- `logs.configure()`, appelée par `main()`, branche les destinations : un fichier `logs/promptodys.log` avec rotation (1 Mo × 3, A5), la console Tkinter par une `queue.Queue` relevée toutes les 100 ms par le thread de l'interface, avec purge au-delà de 2 000 lignes (M9), et le terminal en développement ;
+- le handler mémoire prévu est `ReportLogCollector`, accroché le temps de `run_processing()` : il garde les logs du thread du traitement, à partir d'INFO, sans le flux de l'IA. Le rapport contient désormais les étapes 1 à 9, au lieu de 1 à 4 ;
+- quatre niveaux, calés sur les émojis (❌ ERROR, ⚠️ WARNING, 🔍 DEBUG, les autres INFO), règle écrite dans CONTRIBUTING.md ; plus aucun `print` (règle ruff `T20`) ;
+- les exceptions non rattrapées (thread principal, autres threads, rappels Tk) et ce qui est écrit sur stderr passent par les logs, visibles dans le fichier même dans l'exécutable sans console ;
+- la mise en page passe par des marques (`log_marks.SECTION`, `log_marks.FRAGMENT`) au lieu de `\n` dans les messages.
+
+Écarts au plan : le terminal reçoit aussi le DEBUG (il n'existe qu'en développement) ; **M10 n'est pas traité** : `PanelController._in_ui_thread()` appelle toujours `root.after` depuis d'autres threads, à reprendre dans une branche à part. Seule la console, qui recevait les logs de tous les threads, passe désormais par une file.
 
 **R8. Rapport PDF.** Aujourd'hui le programme génère du Markdown ([l. 476-533](../askGeminiPrompto.py#L476-L533)) puis le reparse avec des expressions régulières ([l. 536-684](../askGeminiPrompto.py#L536-L684)) pour obtenir des éléments ReportLab. Construire directement les éléments depuis les données supprime le reparsage, la liste fixe d'émojis et le carré noir du constat M8. Avec une police Unicode (OpenDyslexic ou Lexend, déjà dans `build_web/fonts/`), les rapports deviennent lisibles par le public cible (A1).
 
