@@ -32,7 +32,7 @@ def prepare_save_path(chosen_path: str) -> tuple[str, str]:
         parent = os.path.dirname(save_dir)
         if parent == save_dir:  # racine du disque : on ne peut plus remonter
             break
-        _logger.warning(f"⚠️ Anti-récursion: save_dir '{save_dir}' se termine par '{doc_name}' → on remonte")
+        _logger.debug(f"🔍 Anti-récursion: save_dir '{save_dir}' se termine par '{doc_name}' → on remonte")
         save_dir = parent
     return save_dir, doc_name
 

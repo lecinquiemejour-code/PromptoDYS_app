@@ -1,8 +1,10 @@
+import logging
 import threading
 from datetime import date
 
+from promptodys.domain import log_marks
 from promptodys.domain.ports import AIModelError, AIChunk
-from promptodys.domain.processing import ProcessingStatus, process_note
+from promptodys.domain.processing import STREAM_LOGGER_NAME, ProcessingStatus, process_note
 
 TEMPLATE = "Le [DATE], corrige :\n[TEXTE]"
 TODAY = date(2026, 11, 2)
@@ -37,12 +39,36 @@ def test_process_note_completed(fake_editor, fake_model):
     assert result.token_stats == {"input": 10, "output": 20, "thinking": 5, "total": 35}
 
 
-def test_process_note_step_logs_cover_preparation_only(fake_editor, fake_model):
-    """Les logs gardés pour le rapport sont ceux de la préparation, pas le flux de l'IA."""
-    result = _process(fake_editor(markdown="Note"), fake_model(ANSWER))
-    assert any("ÉTAPE 3" in log for log in result.step_logs)
-    assert any("ÉTAPE 4" in log for log in result.step_logs)
-    assert not any("Note corrigée" in log for log in result.step_logs)
+def test_process_note_logs_ai_stream_on_its_own_logger(fake_editor, fake_model, caplog):
+    """Les morceaux du flux passent par le logger du flux (exclu du rapport), les étapes par celui du module."""
+    caplog.set_level(logging.INFO, logger="promptodys")
+    _process(fake_editor(markdown="Note"), fake_model(ANSWER))
+
+    stream = [r.getMessage() for r in caplog.records if r.name == STREAM_LOGGER_NAME]
+    assert stream == ["💭 je réfléchis", "<NOTE>Note ", "corrigée</NOTE>\nDébrief : 1 faute"]
+    steps = [r.getMessage() for r in caplog.records if r.name == "promptodys.domain.processing"]
+    assert any("ÉTAPE 3" in message for message in steps)
+    assert not any("Note corrigée" in message for message in steps)
+
+
+def test_process_note_marks_answer_chunks_as_fragments(fake_editor, fake_model, caplog):
+    """Les morceaux de la réponse portent FRAGMENT (collés bout à bout dans la console), pas ceux de la réflexion."""
+    caplog.set_level(logging.INFO, logger="promptodys")
+    _process(fake_editor(markdown="Note"), fake_model(ANSWER))
+
+    stream = [r for r in caplog.records if r.name == STREAM_LOGGER_NAME]
+    assert [log_marks.is_fragment(r) for r in stream] == [False, True, True]
+
+
+def test_process_note_marks_steps_as_sections(fake_editor, fake_model, caplog):
+    """Les titres d'étape portent la marque SECTION (ligne vide dans la console) au lieu d'un \\n."""
+    caplog.set_level(logging.INFO, logger="promptodys")
+    _process(fake_editor(markdown="Note"), fake_model(ANSWER))
+
+    [step_3] = [r for r in caplog.records if "ÉTAPE 3" in r.getMessage()]
+    assert log_marks.is_section(step_3)
+    assert step_3.getMessage() == "📖 ÉTAPE 3: Lecture du contenu éditeur..."
+    assert not any(r.getMessage().startswith("\n") for r in caplog.records)
 
 
 def test_process_note_without_note_tags_uses_whole_answer(fake_editor, fake_model):
@@ -86,7 +112,7 @@ def test_process_note_ai_error_fails_without_writing(fake_editor, fake_model, ca
     result = _process(editor, fake_model(ANSWER[:2], error=AIModelError("Erreur API Gemini: quota")))
     assert result.status is ProcessingStatus.FAILED
     assert editor.writes == []
-    assert "\n❌ ÉCHEC: Erreur API Gemini: quota" in caplog.messages
+    assert "❌ ÉCHEC: Erreur API Gemini: quota" in caplog.messages
 
 
 def test_process_note_unexpected_error_fails(fake_editor, fake_model):

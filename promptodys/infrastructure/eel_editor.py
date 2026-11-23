@@ -16,7 +16,6 @@ import mimetypes
 import socket
 import sys
 import time
-import traceback
 from collections.abc import Callable
 from typing import Any
 
@@ -46,7 +45,7 @@ def set_event_handlers(on_open: Callable[[], None], on_close: Callable[[], None]
 @eel.expose
 def on_editor_open() -> None:
     """Appelé par React quand l'éditeur est monté"""
-    print("✅ Éditeur ouvert (notifié par React)")
+    _logger.info("✅ Éditeur ouvert (notifié par React)")
     if _on_open is not None:
         _on_open()
 
@@ -54,7 +53,7 @@ def on_editor_open() -> None:
 @eel.expose
 def on_editor_close() -> None:
     """Appelé par React avant la fermeture de la fenêtre"""
-    print("🔴 Éditeur fermé (notifié par React)")
+    _logger.info("🔴 Éditeur fermé (notifié par React)")
     if _on_close is not None:
         _on_close()
 
@@ -93,7 +92,7 @@ def start(port: int, chrome_profile_dir: str) -> None:
             block=True,
         )
     except Exception as e:
-        _logger.info(f"❌ Erreur lancement éditeur: {e}")
+        _logger.warning(f"⚠️ Chrome n'a pas démarré ({e}) : ouverture dans le navigateur par défaut")
         # Mode de secours : Eel 0.18 ne connaît pas « chrome-app » et ouvre le navigateur par défaut
         eel.start(
             "index.html",
@@ -175,14 +174,8 @@ class EelWindow:
 
 
 def _show_content(content: str, title: str) -> None:
-    """Affiche le contenu de l'éditeur de manière formatée"""
-    print(f"\n{title}")
-    print("=" * 50)
-    if content.strip():
-        print(content)
-    else:
-        print("📝 (Éditeur vide)")
-    print("=" * 50)
+    """Contenu complet de l'éditeur, en DEBUG (fichier de log et terminal) : il est déjà dans le rapport"""
+    _logger.debug(f"🔍 {title}\n{'=' * 50}\n{content if content.strip() else '📝 (Éditeur vide)'}\n{'=' * 50}")
 
 
 class EelEditor(ports.Editor):
@@ -192,9 +185,9 @@ class EelEditor(ports.Editor):
     def read_markdown(self) -> str:
         try:
             content: str = _js.readMarkdown()()
-            print(f"✅ SUCCÈS: Contenu récupéré ({len(content)} caractères)")
+            _logger.info(f"✅ SUCCÈS: Contenu récupéré ({len(content)} caractères)")
         except Exception as e:
-            print(f"❌ ÉCHEC: Erreur lecture: {e}")
+            _logger.error(f"❌ ÉCHEC: Erreur lecture: {e}")
             content = ""
         _show_content(content, "📄 CONTENU LU DEPUIS L'ÉDITEUR")
         return content
@@ -203,43 +196,42 @@ class EelEditor(ports.Editor):
         _show_content(markdown, "📄 CONTENU À INJECTER DANS L'ÉDITEUR")
         try:
             _js.writeMarkdown(markdown)
-            print(f"✅ SUCCÈS: Contenu injecté ({len(markdown)} caractères)")
+            _logger.info(f"✅ SUCCÈS: Contenu injecté ({len(markdown)} caractères)")
             return True
         except Exception as e:
-            print(f"❌ ÉCHEC: Erreur écriture: {e}")
+            _logger.error(f"❌ ÉCHEC: Erreur écriture: {e}")
             return False
 
     def read_document(self) -> ports.Document | None:
         """Document de l'éditeur (texte + images), None si l'éditeur n'a rien renvoyé"""
-        print("🔍 DEBUG: Appel eel.readDocumentData()()...")
+        _logger.debug("🔍 Appel eel.readDocumentData()()...")
         try:
             data = _js.readDocumentData()()
-            print(f"🔍 DEBUG readDocumentData retour → type={type(data).__name__}")
+            _logger.debug(f"🔍 readDocumentData retour → type={type(data).__name__}")
             if data is None:
-                print("🔍 DEBUG readDocumentData → None (la fonction JS retourne undefined ou null)")
+                _logger.debug("🔍 readDocumentData → None (la fonction JS retourne undefined ou null)")
             elif isinstance(data, dict):
-                print(f"🔍 DEBUG readDocumentData → dict avec clés: {list(data.keys())}")
+                _logger.debug(f"🔍 readDocumentData → dict avec clés: {list(data.keys())}")
                 if "markdown" in data:
-                    print(f"🔍 DEBUG   markdown: {len(data['markdown'])} caractères")
+                    _logger.debug(f"🔍   markdown: {len(data['markdown'])} caractères")
                 if "images" in data:
-                    print(f"🔍 DEBUG   images: {len(data['images'])} image(s)")
+                    _logger.debug(f"🔍   images: {len(data['images'])} image(s)")
             elif isinstance(data, str):
-                print(f"🔍 DEBUG readDocumentData → string ({len(data)} car.): {repr(data)[:200]}")
+                _logger.debug(f"🔍 readDocumentData → string ({len(data)} car.): {repr(data)[:200]}")
             elif isinstance(data, bool):
-                print(f"🔍 DEBUG readDocumentData → bool: {data}")
+                _logger.debug(f"🔍 readDocumentData → bool: {data}")
             else:
-                print(f"🔍 DEBUG readDocumentData → {type(data).__name__}: {repr(data)[:500]}")
+                _logger.debug(f"🔍 readDocumentData → {type(data).__name__}: {repr(data)[:500]}")
         except Exception as e:
-            print(f"❌ SAUVEGARDE: Erreur appel readDocumentData: {type(e).__name__}: {e}")
-            traceback.print_exc()
+            _logger.error(f"❌ SAUVEGARDE: Erreur appel readDocumentData: {type(e).__name__}: {e}", exc_info=True)
             return None
 
         if not data or not isinstance(data, dict):
-            print(f"❌ SAUVEGARDE: Aucune donnée exploitable reçue de l'éditeur ({repr(data)[:200]})")
+            _logger.error(f"❌ SAUVEGARDE: Aucune donnée exploitable reçue de l'éditeur ({repr(data)[:200]})")
             return None
 
-        print(f"📄 SAUVEGARDE: Markdown reçu ({len(data.get('markdown', ''))} caractères)")
-        print(f"🖼️ SAUVEGARDE: {len(data.get('images', []))} image(s) reçue(s)")
+        _logger.info(f"📄 SAUVEGARDE: Markdown reçu ({len(data.get('markdown', ''))} caractères)")
+        _logger.info(f"🖼️ SAUVEGARDE: {len(data.get('images', []))} image(s) reçue(s)")
 
         images: list[ports.Image] = []
         for image in data.get("images", []):
@@ -251,7 +243,7 @@ class EelEditor(ports.Editor):
                     )
                 )
             except Exception as e:
-                print(f"  ❌ Erreur image '{image.get('filename')}': {e}")
+                _logger.error(f"  ❌ Erreur image '{image.get('filename')}': {e}")
         return ports.Document(markdown=data.get("markdown", ""), images=images)
 
     def write_document(self, document: ports.Document) -> bool:
@@ -266,31 +258,32 @@ class EelEditor(ports.Editor):
         ]
         data_to_send = {"markdown": document.markdown, "images": images_to_send}
         nb_car, nb_images = len(document.markdown), len(images_to_send)
-        print(f"📤 OUVERTURE: Envoi à l'éditeur ({nb_car} car. + {nb_images} image(s))...")
-        print(f"🔍 DEBUG: Appel eel.writeDocumentData() avec {nb_car} car. + {nb_images} image(s)...")
-        print(f"🔍 DEBUG: data_to_send → clés={list(data_to_send.keys())}")
-        print(f"🔍 DEBUG:   markdown: {nb_car} car., début: {repr(document.markdown[:100])}")
-        print(f"🔍 DEBUG:   images: {nb_images} élément(s)")
+        _logger.info(f"📤 OUVERTURE: Envoi à l'éditeur ({nb_car} car. + {nb_images} image(s))...")
+        _logger.debug(f"🔍 Appel eel.writeDocumentData() avec {nb_car} car. + {nb_images} image(s)...")
+        _logger.debug(f"🔍 data_to_send → clés={list(data_to_send.keys())}")
+        _logger.debug(f"🔍   markdown: {nb_car} car., début: {repr(document.markdown[:100])}")
+        _logger.debug(f"🔍   images: {nb_images} élément(s)")
         for i, img in enumerate(images_to_send):
-            print(
-                f"🔍 DEBUG:   image[{i}]: filename={img['filename']}, mimeType={img['mimeType']}, "
+            _logger.debug(
+                f"🔍   image[{i}]: filename={img['filename']}, mimeType={img['mimeType']}, "
                 f"data={len(img['data'])} car. base64"
             )
 
         try:
             result = _js.writeDocumentData(data_to_send)()
-            print(f"🔍 DEBUG writeDocumentData retour → type={type(result).__name__}, valeur={repr(result)}")
+            _logger.debug(f"🔍 writeDocumentData retour → type={type(result).__name__}, valeur={repr(result)}")
             if result is None:
-                print("✅ OUVERTURE TERMINÉE: document chargé (retour: None/undefined — normal si JS ne retourne rien)")
+                _logger.info(
+                    "✅ OUVERTURE TERMINÉE: document chargé (retour: None/undefined — normal si JS ne retourne rien)"
+                )
             elif result:
-                print("✅ OUVERTURE TERMINÉE: document chargé dans l'éditeur")
+                _logger.info("✅ OUVERTURE TERMINÉE: document chargé dans l'éditeur")
             else:
-                print(
+                _logger.warning(
                     f"⚠️ OUVERTURE: writeDocumentData a retourné {repr(result)} "
                     "(le document peut quand même être chargé)"
                 )
             return True
         except Exception as e:
-            print(f"❌ OUVERTURE: Erreur appel writeDocumentData: {type(e).__name__}: {e}")
-            traceback.print_exc()
+            _logger.error(f"❌ OUVERTURE: Erreur appel writeDocumentData: {type(e).__name__}: {e}", exc_info=True)
             return False

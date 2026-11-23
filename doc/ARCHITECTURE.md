@@ -82,14 +82,38 @@ Le code Python est dans le paquet `promptodys/`, en trois couches et un module d
 
 | Couche | Contenu | État |
 |---|---|---|
-| `promptodys/domain/` | Règles métier et cas d'usage, sans Tk, Eel, Gemini ni reportlab : `note.py` (prompt, extraction de la réponse, note d'origine), `report.py` (contenu du rapport), `documents.py` (chemins de sauvegarde, cas d'usage sauvegarder et ouvrir), `processing.py` (cas d'usage du traitement IA), `ports.py` (ports `Editor`, `AIModel`, `DocumentStore` et données échangées) | Fait |
-| `promptodys/infrastructure/` | Adaptateurs des ports et accès au monde extérieur : `eel_editor.py` (adaptateur `EelEditor`, fenêtre de l'éditeur, événements de React, port du serveur), `gemini_model.py` (`GeminiModel`, client Gemini), `disk_document_store.py` (`DiskDocumentStore`), `pdf_report.py` (rapport PDF ReportLab), `config.py` (modèle Gemini, chemins, port, clé API, modèle de prompt) | Fait |
-| `promptodys/presentation/` | `control_panel.py` : vue Tkinter du panneau de contrôle (`ControlPanel`), `RedirectText` (stdout et stderr vers la console du panneau). `panel_controller.py` : logique du panneau (`PanelController`), `PanelView` (ce que le contrôleur demande à la fenêtre), `EditorWindow` (ce que le panneau attend de la fenêtre de l'éditeur) ; n'importe pas Tk (contrat import-linter). `editor_state.py` : `EditorState`, l'état de l'éditeur suivi par le panneau (ouvert, en cours d'ouverture, document courant). N'importe ni l'infrastructure, ni Eel, Gemini ou reportlab | Fait |
-| `promptodys/app.py` | Assemblage, hors des couches : `main()`, `run_processing()` (traitement IA, étapes 1, 2 et 9), journalisation provisoire | Fait |
+| `promptodys/domain/` | Règles métier et cas d'usage, sans Tk, Eel, Gemini ni reportlab : `note.py` (prompt, extraction de la réponse, note d'origine), `report.py` (contenu du rapport), `documents.py` (chemins de sauvegarde, cas d'usage sauvegarder et ouvrir), `processing.py` (cas d'usage du traitement IA), `ports.py` (ports `Editor`, `AIModel`, `DocumentStore` et données échangées), `log_marks.py` (marques de mise en page des logs, voir [Journalisation](#journalisation)) | Fait |
+| `promptodys/infrastructure/` | Adaptateurs des ports et accès au monde extérieur : `eel_editor.py` (adaptateur `EelEditor`, fenêtre de l'éditeur, événements de React, port du serveur), `gemini_model.py` (`GeminiModel`, client Gemini), `disk_document_store.py` (`DiskDocumentStore`), `pdf_report.py` (rapport PDF ReportLab), `config.py` (modèle Gemini, chemins, port, clé API, modèle de prompt), `logs.py` (destinations des logs, collecteur du rapport PDF) | Fait |
+| `promptodys/presentation/` | `control_panel.py` : vue Tkinter du panneau de contrôle (`ControlPanel`), dont la console affiche les logs relevés dans une file. `panel_controller.py` : logique du panneau (`PanelController`), `PanelView` (ce que le contrôleur demande à la fenêtre), `EditorWindow` (ce que le panneau attend de la fenêtre de l'éditeur) ; n'importe pas Tk (contrat import-linter). `editor_state.py` : `EditorState`, l'état de l'éditeur suivi par le panneau (ouvert, en cours d'ouverture, document courant). N'importe ni l'infrastructure, ni Eel, Gemini ou reportlab | Fait |
+| `promptodys/app.py` | Assemblage, hors des couches : `main()`, `run_processing()` (traitement IA, étapes 1, 2 et 9) | Fait |
 
 Le point d'entrée est `main()` dans [promptodys/app.py](../promptodys/app.py). On le lance par `uv run python askGeminiPrompto.py`, enveloppe gardée pour [PromptoDYS.spec](../PromptoDYS.spec), la release et la documentation, ou par `uv run python -m promptodys`.
 
 Les adaptateurs héritent explicitement de leur port (`class EelEditor(ports.Editor)`), et pyright vérifie leur conformité. `main()` les instancie et les passe au contrôleur du panneau (`PanelController`), qui les transmet aux cas d'usage du domaine. `main()` crée aussi la vue (`ControlPanel`), la passe au contrôleur et lui donne le contrôleur avec `set_controller()` : les boutons de la vue le lisent au moment du clic. La fenêtre de l'éditeur arrive au contrôleur sous la forme d'un `EelWindow`, que pyright confronte au Protocol `EditorWindow` de la présentation sans que l'infrastructure ait à l'importer. Les signaux d'ouverture et de fermeture envoyés par React arrivent dans `eel_editor`, qui les transmet à `PanelController.on_editor_open()` et `on_editor_close()`, enregistrées par `main()` avec `set_event_handlers()` : l'infrastructure ne touche jamais à l'interface. Ces signaux arrivent sur un thread d'Eel ; le contrôleur les transmet par `_in_ui_thread()` à son `EditorState`, que seul le thread de l'interface modifie. Un `threading.Event` y dit si l'éditeur est ouvert, et l'ouverture d'un document l'attend depuis son thread avec `wait_until_open()` avant de charger quoi que ce soit. Chaque lancement de l'éditeur reçoit un jeton : la fin tardive d'un lancement remplacé est ignorée.
+
+### Journalisation
+
+Le code appelle seulement `_logger.debug/info/warning/error` (`_logger = logging.getLogger(__name__)`, aucun `print`). C'est `logs.configure()` ([promptodys/infrastructure/logs.py](../promptodys/infrastructure/logs.py)), appelée une fois par `main()` avant le premier log, qui branche les destinations. Le choix du niveau suit la règle de [CONTRIBUTING.md](../CONTRIBUTING.md#logs).
+
+| Niveau | Console du panneau | Terminal (dev) | Fichier `logs/promptodys.log` | Rapport PDF |
+|---|---|---|---|---|
+| DEBUG | — | oui | oui | — |
+| INFO, WARNING | oui | oui | oui | oui, pendant un traitement IA |
+| ERROR | oui, message seul | oui | oui, avec traceback | oui, pendant un traitement IA |
+| bibliothèques | — | — | à partir de WARNING | — |
+
+- **Fichier** : `logs/promptodys.log`, à côté de l'exécutable (`config.LOGS_DIR`). Au-delà de 1 Mo, il est renommé en `.1` et un nouveau commence ; trois anciens fichiers sont gardés. Il reçoit tout, DEBUG compris (dont le contenu complet de la note lue et injectée), avec l'heure, le niveau et le logger : c'est le fichier à demander pour diagnostiquer un problème chez un utilisateur.
+- **Console du panneau** : un `QueueHandler` dépose les logs dans une `queue.Queue`. Le thread de l'interface la relève toutes les 100 ms (`ControlPanel._poll_log_queue`, par `root.after`) : les threads du traitement, d'Eel et de la sauvegarde ne touchent jamais au widget. Au-delà de 2 000 lignes, les plus anciennes sont supprimées.
+- **Terminal** : n'existe qu'en développement (l'exécutable n'a pas de console), d'où le DEBUG.
+- **Rapport PDF** : pendant `run_processing()`, un `ReportLogCollector` est accroché le temps du traitement. Il ne garde que les logs du thread du traitement, à partir d'INFO, sans les morceaux du flux de l'IA (logger `processing.STREAM_LOGGER_NAME`), qui ont leur propre section dans le rapport. Ils forment la section « Log Complet du Traitement IA » (étapes 1 à 9).
+- **Erreurs imprévues** : `sys.excepthook`, `threading.excepthook` et `report_callback_exception` (rappels Tk) loggent les exceptions non rattrapées en ERROR avec leur traceback. `sys.stderr` est remplacé par un flux qui logge chaque ligne en ERROR (logger `promptodys.stderr`) : ce qu'écrivent eel ou gevent reste visible dans l'exécutable. Ctrl+C dans le terminal n'est pas une erreur : une ligne INFO, et le traceback sur le vrai terminal.
+
+**Mise en page.** Un message ne contient pas de retour à la ligne de mise en page : le code le marque avec `extra=` ([promptodys/domain/log_marks.py](../promptodys/domain/log_marks.py), dans le domaine pour que toutes les couches l'importent), et chaque destination décide.
+
+| Marque | Sens | Console | Rapport PDF | Fichier, terminal |
+|---|---|---|---|---|
+| `SECTION` | Ouvre une partie (étape, démarrage, abandon) | ligne vide avant | ligne vide avant | tel quel |
+| `FRAGMENT` | Morceau d'un texte reçu par bouts (réponse de l'IA) | à la suite du précédent | (flux exclu) | une ligne par morceau |
 
 ---
 
@@ -328,7 +352,7 @@ Le résultat est `dist/PromptoDYS.exe`. Voir aussi [README_ANTIVIRUS.md](../READ
 | Fichier | Rôle |
 |---|---|
 | [askGeminiPrompto.py](../askGeminiPrompto.py) | Point d'entrée historique : simple enveloppe de `promptodys.app.main()` |
-| [promptodys/app.py](../promptodys/app.py) | Assemblage des couches dans `main()`, traitement IA `run_processing()`, journalisation provisoire |
+| [promptodys/app.py](../promptodys/app.py) | Assemblage des couches dans `main()` (dont `logs.configure()`), traitement IA `run_processing()` |
 | [promptodys/domain/](../promptodys/domain/) | Couche domaine : règles métier, cas d'usage et ports (voir [§2](#organisation-du-code-python)) |
 | [promptodys/infrastructure/](../promptodys/infrastructure/) | Couche infrastructure : adaptateurs Eel, Gemini, disque et PDF, configuration |
 | [promptodys/presentation/](../promptodys/presentation/) | Couche présentation : panneau de contrôle Tkinter |

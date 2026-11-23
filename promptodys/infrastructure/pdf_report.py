@@ -16,7 +16,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Flowable, Paragraph, SimpleDocTemplate, Spacer
 
-from promptodys.domain import note, ports, report
+from promptodys.domain import log_marks, note, ports, report
 from promptodys.infrastructure import config
 
 _logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ def clean_html_tags(text: str) -> str:
     text = re.sub(r"</span>", "", text)
 
     # Supprimer seulement les émojis problématiques pour reportlab
-    text = re.sub(r"[🎉🎯🔧📊📝📄✅❌⚙️🚀🔍✏️🧠🔢💾🎮📋💡🤖📖🔗🪟📁⏳🔄💭]", "", text)
+    text = re.sub(r"[🎉🎯🔧📊📝📄✅❌⚙️🚀🔍✂️✏️🧠🔢💾🎮📋💡🤖📖🔗🪟📁⏳🔄💭]", "", text)
 
     # Nettoyer les caractères spéciaux
     text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -185,7 +185,7 @@ def generate_pdf(markdown: str, pdf_path: str) -> str | None:
         return pdf_path
 
     except Exception as e:
-        _logger.info(f"❌ ÉCHEC: Erreur génération PDF → {e}")
+        _logger.error(f"❌ ÉCHEC: Erreur génération PDF → {e}", exc_info=True)
         _logger.info("💡 INFO: Tentative d'archivage PDF échouée")
         return None
 
@@ -201,7 +201,7 @@ def save_report(
     """Sauvegarde le rapport complet de la session en PDF, dans reports/.
     Renvoie le chemin du PDF, None si rien n'a été produit"""
     if not processed_note or not processed_note.strip():
-        _logger.info("⚠️ ATTENTION: Aucun contenu traité à sauvegarder")
+        _logger.error("❌ ÉCHEC: Aucun contenu traité à sauvegarder, pas de rapport PDF")
         return None
 
     # Créer le dossier reports s'il n'existe pas
@@ -231,12 +231,12 @@ def save_report(
     pdf_path = generate_pdf(markdown, pdf_path)
 
     # Bilan final
-    _logger.info("\n📊 BILAN SAUVEGARDE PDF:")
+    _logger.info("📊 BILAN SAUVEGARDE PDF:", extra=log_marks.SECTION)
     _logger.info("=" * 30)
     if pdf_path:
         _logger.info(f"✅ PDF      : {os.path.basename(pdf_path)}")
     else:
-        _logger.info("❌ PDF      : ÉCHEC")
+        _logger.error("❌ PDF      : ÉCHEC")
     _logger.info("=" * 30)
 
     return pdf_path

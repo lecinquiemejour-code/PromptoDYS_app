@@ -298,7 +298,7 @@ def traitement_gemini():
     """Traitement IA Gemini : lecture → prompt → stream → injection."""
     client = init_gemini_client()
     if not client:
-        log_message("❌ ÉCHEC: Impossible d'initialiser Gemini")
+        _logger.error("❌ ÉCHEC: Impossible d'initialiser Gemini")
         return
 
     # ... reste du code ...
@@ -321,6 +321,7 @@ def TraitementGemini():
 | `B` | Bugs probables (flake8-bugbear) |
 | `UP` | Syntaxe Python à moderniser |
 | `SIM` | Code simplifiable |
+| `T20` | `print()` oubliés : les messages passent par `logging` (voir « Logs » ci-dessous) |
 
 ```bash
 uv run ruff check         # signale les problèmes
@@ -370,7 +371,7 @@ uv run pyright   # signale les erreurs de type du paquet promptodys/
 
 Lancez-le toujours par `uv run` : uv active `.venv`, où pyright trouve l'interpréteur (Python 3.14) et les bibliothèques du projet. La CI échoue si pyright signale une erreur.
 
-En mode strict, les conteneurs vides doivent porter leur type : `field(default_factory=list[Image])` et non `field(default_factory=list)`, `step_logs: list[str] = []` et non `step_logs = []`.
+En mode strict, les conteneurs vides doivent porter leur type : `field(default_factory=list[Image])` et non `field(default_factory=list)`, `messages: list[str] = []` et non `messages = []`.
 
 ### Règles générales
 
@@ -379,20 +380,45 @@ En mode strict, les conteneurs vides doivent porter leur type : `field(default_f
 3. **Noms de variables** : `snake_case` pour Python, `camelCase` pour JavaScript
 4. **Noms de fonctions** : Descriptifs ; en anglais dans le paquet `promptodys/` (modules, classes, fonctions, attributs), messages, docstrings et commentaires en français
 5. **Commentaires** : Expliquer le "pourquoi", pas le "quoi"
-6. **Logs** : utiliser le module `logging` avec un logger privé au module, `_logger = logging.getLogger(__name__)`, et des préfixes à emojis pour la lisibilité : `main()` les renvoie vers la console et le rapport. `log_message()`, provisoire, ne sert plus que dans `promptodys/app.py`, jusqu'à R7
+6. **Logs** : utiliser le module `logging` avec un logger privé au module, `_logger = logging.getLogger(__name__)`, jamais `print()` (règle ruff `T20`). Le niveau et l'émoji suivent la règle de la section « Logs » ci-dessous ; le code ne choisit pas où va le message, c'est `logs.configure()` qui en décide
 7. **Imports du paquet** : importer le module, pas ses fonctions : `from promptodys.domain import note`, puis `note.extract_note_content(...)`. L'appel montre d'où vient la fonction, et un test peut la remplacer avec `monkeypatch.setattr(note, ...)`. Seuls les tests d'un module importent directement les fonctions qu'ils testent
 8. **Noms privés** : préfixer par `_` ce qui ne sert qu'au module (`_logger`, regex compilées comme `_BOLD_MARKER_PATTERN`). Une regex compilée porte le suffixe `_PATTERN`
 9. **Ports du domaine** : un adaptateur hérite explicitement du `Protocol` qu'il implémente (`class EelEditor(ports.Editor)`). Les faux des tests n'en héritent pas : une méthode manquante y lève `AttributeError` dès son appel
 
-### Structure des logs
+### Logs
+
+**Le niveau d'abord, l'émoji ensuite.** Chaque niveau a son émoji, ce qui permet de reconnaître un message d'un coup d'œil dans la console :
+
+| Niveau | Émoji | Quand |
+|---|---|---|
+| `error` | ❌ | L'opération demandée n'a pas abouti (clé absente, flux Gemini en échec, PDF non créé, port pris...), **ou une donnée de l'élève est perdue**, même si le reste a réussi (image non écrite ou illisible) |
+| `warning` | ⚠️ | L'opération continue, son résultat est dégradé ou à vérifier, mais rien n'est perdu (balises `<NOTE>` absentes, icône non chargée, statistiques de jetons indisponibles) |
+| `info` | tout autre émoji (✅, 📖, 💾...) | Déroulement normal et actions de l'élève, y compris les annulations et les refus qu'une popup explique déjà (abandon du traitement, nom de document refusé) |
+| `debug` | 🔍 | Détails pour diagnostiquer : types de retour JavaScript, chemins intermédiaires, contenu complet de la note lue et injectée (voulu : le fichier de log sert au dépannage) |
+
+Pas de `critical` dans le paquet. Une erreur rattrapée dont la cause est imprévue garde son traceback pour le fichier de log : `_logger.error("❌ ...", exc_info=True)`.
+
+**Où va chaque message.** Le code appelle seulement `_logger.debug/info/warning/error` ; `logs.configure()` ([promptodys/infrastructure/logs.py](promptodys/infrastructure/logs.py)), appelée une fois par `main()`, branche les destinations :
+
+| Niveau | Console du panneau | Terminal (dev) | Fichier `logs/promptodys.log` | Rapport PDF |
+|---|---|---|---|---|
+| `debug` | — | oui | oui | — |
+| `info`, `warning` | oui | oui | oui | oui, pendant un traitement IA |
+| `error` | oui, message seul | oui | oui, avec traceback | oui, pendant un traitement IA |
+| bibliothèques (google-genai, eel...) | — | — | à partir de `warning` | — |
+
+**Mise en page : des marques, pas de `\n`.** Un message dit ce qui se passe ; sa mise en page revient à la destination. Au lieu de glisser des retours à la ligne dans le texte, on le marque avec `extra=` ([promptodys/domain/log_marks.py](promptodys/domain/log_marks.py)) :
 
 ```python
-# Format standard
-_logger.info("🔧 ÉTAPE: Description de l'étape...")
-_logger.info("✅ SUCCÈS: Opération réussie")
-_logger.info("❌ ÉCHEC: Erreur détectée")
-_logger.info("⚠️ ATTENTION: Avertissement important")
-_logger.info("💡 INFO: Information complémentaire")
+from promptodys.domain import log_marks
+
+# Ouvre une nouvelle partie : ligne vide avant, dans la console et le rapport PDF
+_logger.info("📖 ÉTAPE 3: Lecture du contenu éditeur...", extra=log_marks.SECTION)
+_logger.info("✅ SUCCÈS: Contenu récupéré (912 caractères)")
+_logger.error(f"❌ ÉCHEC: Erreur lecture: {e}")
+
+# Morceau d'un texte reçu par bouts : écrit à la suite du précédent dans la console
+_stream_logger.info(chunk.text, extra=log_marks.FRAGMENT)
 ```
 
 ---
@@ -465,12 +491,12 @@ uv run pytest
 | `infrastructure/test_disk_document_store.py` | `DiskDocumentStore` sur un vrai disque (dossier temporaire) |
 | `infrastructure/test_eel_editor.py` | Adaptateur `EelEditor` et `EelWindow` (Eel simulé), événements de React, port du serveur |
 | `infrastructure/test_gemini_model.py` | Adaptateur `GeminiModel` (Gemini simulé) |
+| `infrastructure/test_logs.py` | Destinations de chaque niveau (console, terminal, fichier), stderr et exceptions non rattrapées redirigées vers les logs, Ctrl+C, collecteur des logs du rapport PDF |
 | `infrastructure/test_pdf_report.py` | Rapport PDF ReportLab |
 | `presentation/test_editor_state.py` | État de l'éditeur : transitions, jeton de lancement, modifications refusées hors du thread de l'interface, attente de l'ouverture |
 | `presentation/test_panel_controller.py` | Logique du panneau, avec une vue, un éditeur, une fenêtre et un traitement simulés : double clic, port occupé, ouverture et sauvegarde d'un document, traitement IA et son abandon, fermeture |
-| `test_app.py` | Assemblage du traitement IA, `run_processing()` (étapes, rapport, abandon) avec Gemini, l'éditeur et le PDF simulés |
+| `test_app.py` | Assemblage du traitement IA, `run_processing()` (étapes, section des logs du rapport, abandon) avec Gemini, l'éditeur et le PDF simulés |
 | `test_import.py` | Importer `askGeminiPrompto.py`, une couche ou le module d'assemblage ne crée aucun dossier (ni fenêtre, pour la présentation) |
-| `test_logs.py` | Les logs du paquet arrivent dans la console et le rapport |
 
 `pyproject.toml` (section `[tool.pytest.ini_options]`) rend `askGeminiPrompto.py` et le paquet `promptodys/` importables depuis `tests/`, et pytest-timeout fait échouer au bout de 10 s un test qui boucle, au lieu de figer pytest.
 
