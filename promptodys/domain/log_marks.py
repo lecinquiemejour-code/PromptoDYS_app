@@ -6,8 +6,8 @@ l'affichage, le code marque le message au lieu d'y glisser des retours à la lig
     _logger.info("📖 ÉTAPE 3: Lecture du contenu éditeur...", extra=log_marks.SECTION)
 
 SECTION : le message ouvre une nouvelle partie (étape du traitement, démarrage, abandon...).
-La console du panneau insère une ligne vide avant lui ; le fichier de log et le rapport PDF
-l'écrivent tel quel.
+La console du panneau et le rapport PDF insèrent une ligne vide avant lui ; le fichier de log
+l'écrit tel quel.
 
 Dans le domaine pour que toutes les couches puissent l'importer.
 """

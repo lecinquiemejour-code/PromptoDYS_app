@@ -195,6 +195,20 @@ def test_collector_keeps_info_and_above_of_its_thread(caplog):
     assert collector.messages == ["✅ étape", "⚠️ attention", "❌ échec"]
 
 
+def test_collector_adds_blank_line_before_sections(caplog):
+    """Comme la console, le rapport aère : ligne vide avant une section, sauf en tête du rapport."""
+    caplog.set_level(logging.INFO, logger="promptodys")
+    logger = logging.getLogger("promptodys.app")
+
+    with logs.ReportLogCollector() as collector:
+        logger.info("🤖 DÉMARRAGE", extra=log_marks.SECTION)
+        logger.info("🔑 ÉTAPE 1", extra=log_marks.SECTION)
+        logger.info("✅ succès")
+        logger.info("📋 ÉTAPE 2", extra=log_marks.SECTION)
+
+    assert collector.messages == ["🤖 DÉMARRAGE", "", "🔑 ÉTAPE 1", "✅ succès", "", "📋 ÉTAPE 2"]
+
+
 def test_collector_ignores_ai_stream(caplog):
     caplog.set_level(logging.INFO, logger="promptodys")
 

@@ -24,7 +24,7 @@ import traceback
 from types import TracebackType
 from typing import Self, TextIO
 
-from promptodys.domain import processing
+from promptodys.domain import log_marks, processing
 
 PACKAGE_LOGGER_NAME = "promptodys"
 STDERR_LOGGER_NAME = "promptodys.stderr"
@@ -165,6 +165,7 @@ class ReportLogCollector(logging.Handler):
     S'utilise avec with : accroché au logger du paquet à l'entrée, retiré à la sortie.
     Ne garde que les logs du thread qui l'a créé (celui du traitement), à partir d'INFO,
     sans les morceaux du flux de l'IA, qui ont leur propre section dans le rapport.
+    Comme la console, ajoute une ligne vide ("") avant un message marqué log_marks.SECTION.
     """
 
     def __init__(self) -> None:
@@ -175,6 +176,8 @@ class ReportLogCollector(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         if record.thread != self._thread or record.name == processing.STREAM_LOGGER_NAME:
             return
+        if log_marks.is_section(record) and self.messages:
+            self.messages.append("")
         self.messages.append(record.getMessage())
 
     def __enter__(self) -> Self:
