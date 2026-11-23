@@ -34,7 +34,7 @@ def clean_html_tags(text: str) -> str:
     text = re.sub(r"</span>", "", text)
 
     # Supprimer seulement les émojis problématiques pour reportlab
-    text = re.sub(r"[🎉🎯🔧📊📝📄✅❌⚙️🚀🔍✏️🧠🔢💾🎮📋💡🤖📖🔗🪟📁⏳🔄💭]", "", text)
+    text = re.sub(r"[🎉🎯🔧📊📝📄✅❌⚙️🚀🔍✂️✏️🧠🔢💾🎮📋💡🤖📖🔗🪟📁⏳🔄💭]", "", text)
 
     # Nettoyer les caractères spéciaux
     text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

@@ -111,7 +111,7 @@ def process_note(
     _logger.info("✅ SUCCÈS: Réponse Gemini complète reçue")
 
     # 6. Extraire la note corrigée (sans balises <NOTE>, extract_note_content le signale elle-même)
-    _logger.info("🔍 ÉTAPE 6: Extraction du contenu traité...", extra=log_marks.SECTION)
+    _logger.info("✂️ ÉTAPE 6: Extraction du contenu traité...", extra=log_marks.SECTION)
     processed_note = note.extract_note_content(answer)
     if note.has_note_tags(answer):
         _logger.info("✅ SUCCÈS: Balises <NOTE> détectées et contenu extrait")

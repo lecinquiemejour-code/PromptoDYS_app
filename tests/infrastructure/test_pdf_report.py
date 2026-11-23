@@ -14,8 +14,8 @@ def test_clean_html_tags_supprime_span():
 
 def test_clean_html_tags_supprime_emojis():
     """Les émojis que reportlab ne sait pas afficher sont retirés."""
-    resultat = pdf_report.clean_html_tags("✅ Fait 🚀 vite 📝")
-    assert not any(emoji in resultat for emoji in "✅🚀📝")
+    resultat = pdf_report.clean_html_tags("✅ Fait 🚀 vite 📝 ✂️")
+    assert not any(emoji in resultat for emoji in "✅🚀📝✂\ufe0f")
     assert "Fait" in resultat and "vite" in resultat
 
 
