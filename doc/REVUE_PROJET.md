@@ -6,7 +6,7 @@
 >
 > **Aucune modification de code n'a été faite.** Ce document est un constat et un plan ; chaque correction attend un GO.
 >
-> **Mise à jour du 20/10/2026** (commit `b873d32`) : le statut de chaque constat traité depuis la revue est indiqué sous son titre et dans le [tableau récapitulatif](#11-tableau-récapitulatif). Résolus : C1, B7, M2, D2. Partiellement résolus : M1, M5, D3, D4, D5. Les numéros de ligne cités renvoient toujours au commit `9e62040` et ont pu bouger depuis.
+> **Mise à jour du 23/11/2026** : le statut de chaque constat traité depuis la revue est indiqué sous son titre et dans le [tableau récapitulatif](#11-tableau-récapitulatif). Résolus : C1, C2, B1 à B9, M1 à M7, M9, M12, D2, D6. Partiellement résolus : M11, D1, D3, D4, D5. Restent ouverts : M8, M10. Les numéros de ligne cités renvoient toujours au commit `9e62040` et ont pu bouger depuis (le code est maintenant dans le paquet `promptodys/`).
 
 ---
 
@@ -33,10 +33,10 @@ Le projet fonctionne et rend un vrai service. Le cœur du produit (lecture de la
 Les cinq priorités, dans l'ordre :
 
 1. **La clé API Gemini a été distribuée en clair** dans les deux archives de distribution (`PromptoDYS_v1.1.zip` et `promptoDYS_v1.2.zip`) et elle est en plus embarquée dans l'exécutable par le fichier spec. Elle doit être révoquée et régénérée. ✅ Fait le 20/10/2026.
-2. **Le bouton "Traiter la prise de note" se bloque définitivement** quand le fichier de clé est absent : enchaînement de deux bugs (retour anticipé sans remise à zéro, puis plantage du failsafe sur une option Tkinter invalide). C'est exactement le scénario d'un nouvel utilisateur.
+2. **Le bouton "Traiter la prise de note" se bloque définitivement** quand le fichier de clé est absent : enchaînement de deux bugs (retour anticipé sans remise à zéro, puis plantage du failsafe sur une option Tkinter invalide). C'est exactement le scénario d'un nouvel utilisateur. ✅ Fait le 28/10/2026.
 3. **La fenêtre de contrôle fait 1100 px de haut** avec un minimum à 1000 px : sur un portable d'élève en 1366×768, le bas de la fenêtre (console, bouton Quitter) est hors écran. ✅ Fait le 30/10/2026.
-4. **Le code lit `GeminiKey.txt`, `promptodys.prompt` et écrit `reports/` dans le dossier courant**, pas dans le dossier de l'exécutable. Lancé depuis un raccourci, l'application ne trouve plus son prompt.
-5. **Le dépôt transporte des fichiers morts** : trois anciens bundles React (environ 3,5 Mo) qui gonflent l'exécutable, un `requirements.txt` en UTF-16 illisible sur GitHub, et une documentation en partie obsolète (commande d'installation incomplète, menu console disparu).
+4. **Le code lit `GeminiKey.txt`, `promptodys.prompt` et écrit `reports/` dans le dossier courant**, pas dans le dossier de l'exécutable. Lancé depuis un raccourci, l'application ne trouve plus son prompt. ✅ Fait le 29/10/2026.
+5. **Le dépôt transporte des fichiers morts** : trois anciens bundles React (environ 3,5 Mo) qui gonflent l'exécutable, un `requirements.txt` en UTF-16 illisible sur GitHub, et une documentation en partie obsolète (commande d'installation incomplète, menu console disparu). 🟡 En partie fait : bundles morts supprimés, `requirements.txt` remplacé par uv, installation et README corrigés ; restent les `.map` dans l'exe et une partie de la documentation (D1, D3).
 
 ---
 
@@ -72,7 +72,7 @@ En plus, [PromptoDYS.spec:13](../PromptoDYS.spec#L13) embarque `GeminiKey.txt` *
 **Pistes.**
 1. Révoquer la clé actuelle dans Google AI Studio et en créer une nouvelle. C'est à faire quoi qu'il arrive, et tout de suite.
 2. Retirer la ligne `('GeminiKey.txt', '.')` du spec.
-3. Ne plus jamais inclure de clé dans une archive : livrer un `GeminiKey.txt` vide ou un `GeminiKey.example.txt`, et laisser l'utilisateur créer le sien (c'est déjà ce que dit `BUILD_v1.2.0_SUCCESS.md`, mais l'archive ne le respecte pas).
+3. Ne plus jamais inclure de clé dans une archive : livrer un `GeminiKey.txt` vide ou un `GeminiKey.example.txt`, et laisser l'utilisateur créer le sien (c'est déjà ce que dit `BUILD_v1.2.0_SUCCESS.md`, supprimé depuis, mais l'archive ne le respecte pas).
 
 **Effort.** Faible. Une ligne dans le spec, une régénération de clé, un nettoyage des archives.
 
@@ -354,6 +354,7 @@ Signature d'un `pip freeze > requirements.txt` sous PowerShell 5. `pip` le lit g
 | README.md | Décrit un « menu console avec 3 options » qui n'existe plus, une structure avec `/REPORTS` et `data/` (le code écrit `reports/`, `data/` n'est utilisé nulle part), « 848 lignes » (il y en a 1 784), « Python 3.8+ » alors que le build se fait en 3.13. | 🟡 Partiel : menu console, nombre de lignes et version de Python corrigés ; la structure liste encore `data/` |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Parle de la branche `main`, le dépôt utilise `master`. Le remote `upstream` pointe sur `ORIGINAL_OWNER/PromptoDYS`, un reste de gabarit. | ❌ À faire |
 | `BUILD_STATUS.md` | Décrivait un problème Python 3.10.0 résolu depuis, et contredisait `BUILD_v1.2.0_SUCCESS.md`. | ✅ Supprimé |
+| `BUILD_v1.2.0_SUCCESS.md` | Compte rendu du build local de la v1.2.0 (janvier 2026) : Python 3.13, taille et hash d'un exe qui n'est plus distribué, `prompto.dys` personnalisable, métadonnées Windows annoncées mais désactivées dans le spec, cases « à tester » jamais cochées. Le build passe désormais par la CI. | ✅ Supprimé (historique dans CHANGELOG.md et git) |
 | [README_ANTIVIRUS.md](../README_ANTIVIRUS.md) | Lien VirusTotal « [À ajouter après build] » depuis janvier. | ❌ À faire |
 | `.env.template` | Le nom suggère un fichier `.env`, c'est en fait le gabarit de `GeminiKey.txt`. `GeminiKey.example.txt` serait plus clair. | ✅ Résolu : renommé en [GeminiKey.txt.template](../GeminiKey.txt.template), visible même avec les extensions masquées dans Windows, et livré avec la notice [LISEZMOI.txt](../LISEZMOI.txt) |
 | [CHANGELOG.md](../CHANGELOG.md) 1.2.0 | Annonce « Métadonnées Windows complètes », mais la ligne `version='version_info.txt'` est **commentée** dans le spec. L'exe n'a donc pas de métadonnées, ce qui aggrave les faux positifs antivirus que le même changelog prétend réduire. | ❌ À faire |
