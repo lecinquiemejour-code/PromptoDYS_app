@@ -370,10 +370,7 @@ class PanelController:
             self._view.show_status("🚫 Traitement annulé")
             return
 
-        # VÉRIFICATION 1: Connexion internet - SUPPRIMÉE
-        _logger.info("🔍 VÉRIFICATION PRÉ-TRAITEMENT IA...", extra=log_marks.SECTION)
-
-        # VÉRIFICATION 2: Éditeur ouvert
+        # L'éditeur doit être ouvert
         if not self._editor_state.is_open:
             _logger.info("🤖 Traitement impossible : l'éditeur n'est pas ouvert")
             self._view.show_warning(
