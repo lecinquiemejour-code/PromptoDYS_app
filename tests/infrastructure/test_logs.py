@@ -142,6 +142,22 @@ def test_uncaught_exception_is_logged(configured):
     assert "Traceback" in configured.file_text()
 
 
+def test_keyboard_interrupt_is_not_an_error(configured, monkeypatch):
+    """Ctrl+C dans le terminal : une ligne INFO, le traceback sur le vrai terminal, aucun ERROR."""
+    real_terminal = io.StringIO()
+    monkeypatch.setattr(sys, "__stderr__", real_terminal)
+    # Comme dans l'application : sys.stderr est le flux de configure(), pas celui de pytest
+    monkeypatch.setattr(sys, "stderr", configured.stderr_stream)
+    try:
+        raise KeyboardInterrupt
+    except KeyboardInterrupt as e:
+        sys.excepthook(KeyboardInterrupt, e, e.__traceback__)
+
+    assert configured.console_messages() == ["⌨️ Arrêt demandé par Ctrl+C"]
+    assert "ERROR" not in configured.file_text()
+    assert "Traceback" in real_terminal.getvalue()
+
+
 def test_uncaught_thread_exception_is_logged(configured):
     def fail():
         raise ValueError("boum")

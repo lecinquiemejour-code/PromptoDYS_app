@@ -20,6 +20,7 @@ import os
 import queue
 import sys
 import threading
+import traceback
 from types import TracebackType
 from typing import Self, TextIO
 
@@ -134,7 +135,11 @@ def configure(
 def _log_uncaught_exception(exc_type: type[BaseException], exc: BaseException, tb: TracebackType | None) -> None:
     """Exception non rattrapée du thread principal"""
     if issubclass(exc_type, KeyboardInterrupt):
-        sys.__excepthook__(exc_type, exc, tb)
+        # Ctrl+C dans le terminal (dev) : arrêt voulu, pas une erreur. Le traceback va sur le vrai
+        # terminal ; sys.stderr le transformerait en logs ERROR
+        logging.getLogger(PACKAGE_LOGGER_NAME).info("⌨️ Arrêt demandé par Ctrl+C")
+        if sys.__stderr__ is not None:
+            traceback.print_exception(exc_type, exc, tb, file=sys.__stderr__)
         return
     logging.getLogger(PACKAGE_LOGGER_NAME).error(
         f"❌ Erreur inattendue : {exc_type.__name__}: {exc}", exc_info=(exc_type, exc, tb)
