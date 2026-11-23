@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from promptodys.domain import processing
+from promptodys.domain import log_marks, processing
 from promptodys.infrastructure import logs
 
 
@@ -33,6 +33,9 @@ def configured(tmp_path, monkeypatch):
 
     class Configured:
         stderr_stream = stderr
+
+        def __init__(self):
+            self.console = console
 
         def console_messages(self):
             messages = []
@@ -81,6 +84,18 @@ def test_info_warning_error_go_everywhere(configured):
     assert "WARNING promptodys.app : ⚠️ attention" in file_text
     assert "ERROR promptodys.app : ❌ erreur" in file_text
     assert "ERROR   ❌ erreur" in configured.terminal_text()
+
+
+def test_console_receives_section_mark(configured):
+    """La marque SECTION arrive jusqu'à la console, qui s'en sert pour insérer une ligne vide."""
+    logging.getLogger("promptodys.app").info("📋 ÉTAPE 2", extra=log_marks.SECTION)
+    logging.getLogger("promptodys.app").info("✅ suite")
+
+    records = []
+    while not configured.console.empty():
+        records.append(configured.console.get_nowait())
+    assert [log_marks.is_section(record) for record in records] == [True, False]
+    assert "INFO promptodys.app : 📋 ÉTAPE 2\n" in configured.file_text()
 
 
 def test_error_traceback_in_file_not_in_console(configured):

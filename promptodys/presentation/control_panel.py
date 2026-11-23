@@ -19,6 +19,7 @@ from tkinter import filedialog, messagebox, ttk
 
 import sv_ttk  # Thème Sun Valley (Windows 11 look)
 
+from promptodys.domain import log_marks
 from promptodys.presentation.panel_controller import PanelController
 
 _logger = logging.getLogger(__name__)
@@ -173,20 +174,24 @@ class ControlPanel:
         self._root.after(LOG_POLL_INTERVAL_MS, self._poll_log_queue)
 
     def _take_pending_logs(self) -> list[str]:
-        messages: list[str] = []
+        """Lignes à afficher pour les logs en attente. La mise en page est l'affaire de la console :
+        une ligne vide avant chaque message qui ouvre une partie (log_marks.SECTION)."""
+        lines: list[str] = []
         while True:
             try:
-                messages.append(self._log_queue.get_nowait().getMessage())
+                record = self._log_queue.get_nowait()
             except queue.Empty:
-                return messages
+                return lines
+            blank_line = "\n" if log_marks.is_section(record) else ""
+            lines.append(f"{blank_line}{record.getMessage()}\n")
 
     def _show_pending_logs(self) -> None:
-        messages = self._take_pending_logs()
-        if not messages:
+        lines = self._take_pending_logs()
+        if not lines:
             return
         console = self._console
         console.configure(state="normal")
-        console.insert("end", "".join(f"{message}\n" for message in messages))
+        console.insert("end", "".join(lines))
         # Le texte finit par un retour à la ligne : la dernière ligne, vide, ne compte pas
         line_count = int(console.index("end-1c").split(".")[0]) - 1
         excess = line_count - CONSOLE_MAX_LINES

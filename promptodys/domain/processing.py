@@ -10,7 +10,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import date
 
-from promptodys.domain import note, ports
+from promptodys.domain import log_marks, note, ports
 
 _logger = logging.getLogger(__name__)
 
@@ -53,18 +53,18 @@ def process_note(
     s'arrête à la sortie du flux sans rien écrire dans l'éditeur.
     """
     # 3. Lire le contenu de l'éditeur
-    _logger.info("\n📖 ÉTAPE 3: Lecture du contenu éditeur...")
+    _logger.info("📖 ÉTAPE 3: Lecture du contenu éditeur...", extra=log_marks.SECTION)
     original_note = editor.read_markdown()
 
     # 4. Substituer [TEXTE] et [DATE]
-    _logger.info("\n🔗 ÉTAPE 4: Préparation du prompt final...")
+    _logger.info("🔗 ÉTAPE 4: Préparation du prompt final...", extra=log_marks.SECTION)
     prompt = note.build_prompt(prompt_template, original_note, today)
     _logger.info("✅ SUCCÈS: Prompt préparé (substitution [TEXTE] et [DATE] effectuée)")
 
     result = ProcessingResult(status=ProcessingStatus.FAILED, original_note=original_note)
 
     # 5. Envoi à l'IA et réception du flux
-    _logger.info("\n🚀 ÉTAPE 5: Envoi à Gemini et traitement en cours...")
+    _logger.info("🚀 ÉTAPE 5: Envoi à Gemini et traitement en cours...", extra=log_marks.SECTION)
     _logger.info("🔄 Streaming en direct (💭 = thinking, texte normal = réponse):")
     _logger.info("-" * 60)
 
@@ -93,12 +93,12 @@ def process_note(
     except ports.AIModelError as e:
         if cancel.is_set():
             return _cancelled(result)
-        _logger.error(f"\n❌ ÉCHEC: {e}")
+        _logger.error(f"❌ ÉCHEC: {e}", extra=log_marks.SECTION)
         return result
     except Exception as e:
         if cancel.is_set():
             return _cancelled(result)
-        _logger.error(f"\n❌ ÉCHEC: Erreur inattendue: {e}", exc_info=True)
+        _logger.error(f"❌ ÉCHEC: Erreur inattendue: {e}", exc_info=True, extra=log_marks.SECTION)
         return result
 
     # Abandon par break dans la boucle, ou pendant l'attente du dernier morceau
@@ -107,11 +107,11 @@ def process_note(
         return _cancelled(result)
 
     result.ai_stream = ai_stream
-    _logger.info("\n" + "-" * 60)
+    _logger.info("-" * 60, extra=log_marks.SECTION)
     _logger.info("✅ SUCCÈS: Réponse Gemini complète reçue")
 
     # 6. Extraire la note corrigée (sans balises <NOTE>, extract_note_content le signale elle-même)
-    _logger.info("\n🔍 ÉTAPE 6: Extraction du contenu traité...")
+    _logger.info("🔍 ÉTAPE 6: Extraction du contenu traité...", extra=log_marks.SECTION)
     processed_note = note.extract_note_content(answer)
     if note.has_note_tags(answer):
         _logger.info("✅ SUCCÈS: Balises <NOTE> détectées et contenu extrait")
@@ -122,7 +122,7 @@ def process_note(
     result.correction_debrief = note.extract_correction_debrief(answer)
 
     # 7. Injecter dans l'éditeur (un échec est signalé sans faire échouer le traitement)
-    _logger.info("\n✏️ ÉTAPE 7: Injection dans l'éditeur...")
+    _logger.info("✏️ ÉTAPE 7: Injection dans l'éditeur...", extra=log_marks.SECTION)
     if not processed_note:
         _logger.error("❌ ÉCHEC: Aucun contenu à injecter")
     elif editor.write_markdown(processed_note):
@@ -131,7 +131,7 @@ def process_note(
         _logger.error("❌ ÉCHEC: Erreur lors de l'injection dans l'éditeur")
 
     # 8. Bilan des jetons
-    _logger.info("\n📊 ÉTAPE 8: Bilan final des tokens...")
+    _logger.info("📊 ÉTAPE 8: Bilan final des tokens...", extra=log_marks.SECTION)
     _log_token_stats(token_stats)
     result.token_stats = token_stats or {}
 

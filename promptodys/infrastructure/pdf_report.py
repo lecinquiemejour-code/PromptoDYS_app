@@ -16,7 +16,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Flowable, Paragraph, SimpleDocTemplate, Spacer
 
-from promptodys.domain import note, ports, report
+from promptodys.domain import log_marks, note, ports, report
 from promptodys.infrastructure import config
 
 _logger = logging.getLogger(__name__)
@@ -231,7 +231,7 @@ def save_report(
     pdf_path = generate_pdf(markdown, pdf_path)
 
     # Bilan final
-    _logger.info("\n📊 BILAN SAUVEGARDE PDF:")
+    _logger.info("📊 BILAN SAUVEGARDE PDF:", extra=log_marks.SECTION)
     _logger.info("=" * 30)
     if pdf_path:
         _logger.info(f"✅ PDF      : {os.path.basename(pdf_path)}")

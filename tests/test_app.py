@@ -60,6 +60,8 @@ def test_run_processing_completed(traitement):
     for etape in range(1, 10):
         assert f"ÉTAPE {etape}:" in logs
     assert "<NOTE>Note corrigée</NOTE>" not in logs
+    # La mise en page (lignes vides) est l'affaire de la console, pas des messages
+    assert not any(log.startswith("\n") for log in rapport["step_logs"])
 
 
 def test_run_processing_cancelled_produces_no_report(traitement):

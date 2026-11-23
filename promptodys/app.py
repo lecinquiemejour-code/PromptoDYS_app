@@ -19,7 +19,7 @@ import sys
 import threading
 from datetime import datetime
 
-from promptodys.domain import ports, processing
+from promptodys.domain import log_marks, ports, processing
 from promptodys.infrastructure import config, disk_document_store, eel_editor, gemini_model, logs, pdf_report
 from promptodys.presentation.control_panel import ControlPanel
 from promptodys.presentation.panel_controller import PanelController
@@ -41,7 +41,7 @@ def run_processing(editor: ports.Editor, cancel: threading.Event) -> bool:
     Renvoie True si le traitement est allé jusqu'au bout, False en cas d'échec ou d'abandon.
     """
     with logs.ReportLogCollector() as collector:
-        _logger.info("\n🤖 DÉMARRAGE: TRAITEMENT IA GEMINI (ANNULABLE)")
+        _logger.info("🤖 DÉMARRAGE: TRAITEMENT IA GEMINI (ANNULABLE)", extra=log_marks.SECTION)
         _logger.info("=" * 50)
 
         # 1. Initialiser le client et sa configuration
@@ -57,7 +57,7 @@ def run_processing(editor: ports.Editor, cancel: threading.Event) -> bool:
         )
 
         # 2. Lire le modèle de prompt
-        _logger.info("\n📋 ÉTAPE 2: Lecture du template promptodys.prompt...")
+        _logger.info("📋 ÉTAPE 2: Lecture du template promptodys.prompt...", extra=log_marks.SECTION)
         prompt_template = config.read_prompt_template()
         if not prompt_template:
             _logger.error("❌ ÉCHEC: Impossible de lire promptodys.prompt")
@@ -70,7 +70,7 @@ def run_processing(editor: ports.Editor, cancel: threading.Event) -> bool:
             return False
 
         # 9. Sauvegarde automatique PDF uniquement
-        _logger.info("\n💾 ÉTAPE 9: Sauvegarde automatique rapport PDF...")
+        _logger.info("💾 ÉTAPE 9: Sauvegarde automatique rapport PDF...", extra=log_marks.SECTION)
         pdf_file = pdf_report.save_report(
             original_note=result.original_note,
             # Copie : les logs de la génération du PDF elle-même n'y entrent pas
@@ -87,7 +87,7 @@ def run_processing(editor: ports.Editor, cancel: threading.Event) -> bool:
         else:
             _logger.error("❌ ÉCHEC: Sauvegarde PDF échouée")
 
-        _logger.info("\n🎉 TERMINÉ: Traitement IA Gemini avec capture complète terminé !")
+        _logger.info("🎉 TERMINÉ: Traitement IA Gemini avec capture complète terminé !", extra=log_marks.SECTION)
         return True
 
 

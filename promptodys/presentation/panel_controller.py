@@ -16,7 +16,7 @@ import time
 from collections.abc import Callable
 from typing import Protocol
 
-from promptodys.domain import documents, ports
+from promptodys.domain import documents, log_marks, ports
 from promptodys.presentation.editor_state import EditorState
 
 _logger = logging.getLogger(__name__)
@@ -363,7 +363,7 @@ class PanelController:
         # on déclenche son jeton et on libère l'interface sans l'attendre.
         # S'il se réveille plus tard, il voit son jeton déclenché et s'arrête sans rien écrire.
         if self._cancel_event is not None:
-            _logger.info("\n🚫 ABANDON: Traitement IA arrêté par l'utilisateur.")
+            _logger.info("🚫 ABANDON: Traitement IA arrêté par l'utilisateur.", extra=log_marks.SECTION)
             self._cancel_event.set()
             self._cancel_event = None
             self._view.set_processing(False)
@@ -371,7 +371,7 @@ class PanelController:
             return
 
         # VÉRIFICATION 1: Connexion internet - SUPPRIMÉE
-        _logger.info("\n🔍 VÉRIFICATION PRÉ-TRAITEMENT IA...")
+        _logger.info("🔍 VÉRIFICATION PRÉ-TRAITEMENT IA...", extra=log_marks.SECTION)
 
         # VÉRIFICATION 2: Éditeur ouvert
         if not self._editor_state.is_open:
