@@ -14,6 +14,11 @@ from promptodys.domain import note, ports
 
 _logger = logging.getLogger(__name__)
 
+# Les morceaux du flux de l'IA ont leur propre logger : affichés en direct dans la console,
+# ils ne sont pas repris dans la section des logs du rapport, qui a déjà une section pour le flux
+STREAM_LOGGER_NAME = __name__ + ".stream"
+_stream_logger = logging.getLogger(STREAM_LOGGER_NAME)
+
 
 class ProcessingStatus(enum.Enum):
     COMPLETED = "completed"  # note corrigée et injectée (ou injection tentée)
@@ -87,10 +92,10 @@ def process_note(
                 continue
             if chunk.thought:
                 thinking_text = f"💭 {chunk.text}"
-                _logger.info(thinking_text)
+                _stream_logger.info(thinking_text)
                 ai_stream += thinking_text + "\n"
             else:
-                _logger.info(chunk.text)
+                _stream_logger.info(chunk.text)
                 answer += chunk.text
                 ai_stream += chunk.text
     # Après un abandon, une erreur de connexion n'est pas un échec à signaler
