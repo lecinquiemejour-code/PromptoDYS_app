@@ -114,7 +114,15 @@ Message « Aucune clé API trouvée dans GeminiKey.txt »
   -> Le fichier est vide ou ne contient que des lignes qui commencent par #.
      Ajoutez votre clé sur une ligne à part.
 
-Message d'erreur de Gemini (clé invalide, quota dépassé...)
+Message « Gemini est surchargé en ce moment »
+  -> Les serveurs de Google sont saturés. C'est passager : réessayez dans
+     quelques minutes.
+
+Message « Quota de la clé Gemini épuisé »
+  -> La clé a atteint sa limite d'utilisation. Attendez que le quota se
+     renouvelle, ou utilisez une autre clé.
+
+Autre message d'erreur de Gemini (clé invalide...)
   -> Vérifiez que la clé est complète et toujours active dans
      https://aistudio.google.com/apikey
 

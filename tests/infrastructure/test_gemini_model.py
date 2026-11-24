@@ -1,5 +1,6 @@
 """GeminiModel et create_client, sans réseau : SDK google-genai simulé."""
 
+import logging
 from types import SimpleNamespace
 
 import google.genai.errors as genai_errors
@@ -49,14 +50,30 @@ def _stream_raising(error):
 @pytest.mark.parametrize(
     ("error", "message"),
     [
-        (genai_errors.ServerError(503, {"error": {"message": "surcharge"}}), "Erreur serveur Gemini"),
-        (genai_errors.ClientError(429, {"error": {"message": "quota"}}), "Erreur API Gemini"),
+        (genai_errors.ServerError(503, {"error": {"message": "surcharge"}}), "Gemini est surchargé"),
+        (genai_errors.ClientError(429, {"error": {"message": "quota"}}), "Quota de la clé Gemini épuisé"),
+        (genai_errors.ServerError(500, {"error": {"message": "panne"}}), "Erreur serveur Gemini"),
+        (genai_errors.ClientError(400, {"error": {"message": "requête"}}), "Erreur API Gemini"),
     ],
 )
 def test_gemini_model_converts_sdk_errors(error, message):
-    """Les erreurs du SDK deviennent des AIModelError, avec un message pour l'élève."""
+    """Les erreurs du SDK deviennent des AIModelError, avec un message pour l'élève : clair pour la surcharge
+    (503) et le quota épuisé (429), celui du SDK pour les autres."""
     with pytest.raises(ports.AIModelError, match=message):
         list(GeminiModel(_stream_raising(error)).stream("prompt"))
+
+
+def test_gemini_model_logs_sdk_error_in_debug(caplog):
+    """Le détail technique du SDK va en DEBUG (fichier de log), pas dans le message affiché à l'élève."""
+    caplog.set_level(logging.DEBUG, logger="promptodys")
+    error = genai_errors.ServerError(503, {"error": {"message": "surcharge", "status": "UNAVAILABLE"}})
+
+    with pytest.raises(ports.AIModelError) as raised:
+        list(GeminiModel(_stream_raising(error)).stream("prompt"))
+
+    assert "surcharge" not in str(raised.value)
+    [record] = [r for r in caplog.records if r.levelno == logging.DEBUG]
+    assert "503 UNAVAILABLE" in record.getMessage() and "surcharge" in record.getMessage()
 
 
 def _key_file(tmp_path, monkeypatch, content):

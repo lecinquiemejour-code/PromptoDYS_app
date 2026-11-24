@@ -18,6 +18,7 @@ et la numérotation suit le sens du [Semantic Versioning](https://semver.org/lan
 - La console du panneau n'affiche plus les traces de diagnostic (`🔍 DEBUG`) ni le contenu brut de la note lue et injectée : ils vont dans le journal
 - La section des logs du rapport PDF contient toutes les étapes du traitement, de 1 à 9 (extraction, injection, jetons compris), sans le flux de Gemini, qui a sa propre section
 - La console du panneau garde les 2 000 dernières lignes : elle ne grossit plus sans limite au fil des traitements
+- Quand Gemini est surchargé (erreur 503) ou que le quota de la clé est épuisé (erreur 429, `RESOURCE_EXHAUSTED`), la console affiche un message clair en français au lieu de la réponse technique de Gemini, en anglais. Cette réponse reste dans le journal `logs/promptodys.log`
 - Interne : `print`, `log_message()`, `report_logs` et la redirection de stdout et stderr vers la console sont remplacés par le module `logging` (`promptodys/infrastructure/logs.py`). La règle ruff `T20` interdit `print()`
 
 ### Corrigé
