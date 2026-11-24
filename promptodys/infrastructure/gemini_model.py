@@ -12,6 +12,12 @@ from promptodys.infrastructure import config
 
 _logger = logging.getLogger(__name__)
 
+# Messages pour l'élève selon le code HTTP de Gemini ; les autres erreurs gardent le message du SDK
+_USER_MESSAGES = {
+    503: "Gemini est surchargé en ce moment. Réessayez dans quelques minutes.",
+    429: "Quota de la clé Gemini épuisé (RESOURCE_EXHAUSTED). Réessayez plus tard, ou utilisez une autre clé.",
+}
+
 
 def create_client() -> genai.Client | None:
     """Client Gemini authentifié par la clé de GeminiKey.txt. None si la clé manque ou est invalide"""
@@ -32,6 +38,15 @@ def create_client() -> genai.Client | None:
     except Exception as e:
         _logger.error(f"❌ ÉCHEC: Erreur initialisation Gemini: {e}")
         return None
+
+
+def _user_message(error: genai_errors.APIError) -> str:
+    """Message de l'AIModelError, affiché à l'élève"""
+    if error.code in _USER_MESSAGES:
+        return _USER_MESSAGES[error.code]
+    if isinstance(error, genai_errors.ServerError):
+        return f"Erreur serveur Gemini: {error}"
+    return f"Erreur API Gemini: {error}"
 
 
 class GeminiModel(ports.AIModel):
@@ -62,10 +77,10 @@ class GeminiModel(ports.AIModel):
                 for part in response.candidates[0].content.parts:
                     if part.text:
                         yield ports.AIChunk(text=part.text, thought=bool(part.thought))
-        except genai_errors.ServerError as e:
-            raise ports.AIModelError(f"Erreur serveur Gemini: {e}") from e
         except genai_errors.APIError as e:
-            raise ports.AIModelError(f"Erreur API Gemini: {e}") from e
+            # Le détail (code, statut, réponse JSON en anglais) reste dans le fichier de log
+            _logger.debug(f"🔍 Erreur Gemini : {e}")
+            raise ports.AIModelError(_user_message(e)) from e
 
         usage = getattr(last_response, "usage_metadata", None)
         if usage:
